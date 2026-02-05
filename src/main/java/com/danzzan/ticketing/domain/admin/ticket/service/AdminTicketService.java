@@ -1,0 +1,9 @@
+package com.danzzan.ticketing.domain.admin.ticket.service;
+
+import com.danzzan.ticketing.domain.admin.ticket.dto.IssueTicketResponseDTO;
+import com.danzzan.ticketing.domain.admin.ticket.dto.TicketSearchResponseDTO;
+
+public interface AdminTicketService {
+    TicketSearchResponseDTO searchTicketByStudentId(Long eventId, String studentId);
+    IssueTicketResponseDTO issueTicket(Long eventId, Long ticketId, String note);
+}

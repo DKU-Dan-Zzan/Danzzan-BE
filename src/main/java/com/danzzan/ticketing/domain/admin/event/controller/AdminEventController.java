@@ -3,6 +3,13 @@ package com.danzzan.ticketing.domain.admin.event.controller;
 import com.danzzan.ticketing.global.model.ApiResponse;
 import com.danzzan.ticketing.domain.admin.event.dto.EventListResponseDTO;
 import com.danzzan.ticketing.domain.admin.event.dto.EventStatsResponseDTO;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -14,10 +21,57 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RestController
 @RequestMapping("/api/admin")
+@Tag(name = "관리자 공연", description = "관리자 공연/운영 관련 API")
 public interface AdminEventController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/events")
+    @Operation(
+            summary = "팔찌 배부 대상 공연 목록 조회",
+            description = "JWT 인증이 필요한 관리자 전용 목록 조회 API"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "목록 조회 성공",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiResponse.class),
+                            examples = @ExampleObject(
+                                    name = "success",
+                                    value = """
+                                            {
+                                              "success": true,
+                                              "data": {
+                                                "events": [
+                                                  {
+                                                    "eventId": 2,
+                                                    "title": "5월 13일 공연 팔찌 배부",
+                                                    "dayLabel": "DAY 2",
+                                                    "eventDate": "2026-05-13",
+                                                    "ticketingStatus": "OPEN",
+                                                    "totalCapacity": 5000
+                                                  },
+                                                  {
+                                                    "eventId": 3,
+                                                    "title": "5월 14일 공연 팔찌 배부",
+                                                    "dayLabel": "DAY 3",
+                                                    "eventDate": "2026-05-14",
+                                                    "ticketingStatus": "READY",
+                                                    "totalCapacity": 5000
+                                                  }
+                                                ]
+                                              },
+                                              "error": null
+                                            }
+                                            """
+                            )
+                    )
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음")
+    })
     ApiResponse<EventListResponseDTO> listEvents();
 
     @PreAuthorize("hasRole('ADMIN')")

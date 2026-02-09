@@ -1,7 +1,9 @@
 package com.danzzan.ticketing.global.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,6 +16,12 @@ public class SwaggerConfig {
                 .info(new Info()
                         .title("DANSPOT Ticketing API")
                         .description("단국대학교 축제 티켓팅 서비스 API")
-                        .version("v1.0.0"));
+                        .version("v1.0.0"))
+                .components(new Components()
+                        .addSecuritySchemes("bearerAuth",   //Swagger에 Bearer 인증 스키마 등록
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")));
     }
 }

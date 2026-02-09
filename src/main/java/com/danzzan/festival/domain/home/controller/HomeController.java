@@ -1,3 +1,12 @@
+package com.danzzan.festival.domain.home.controller;
+
+import com.danzzan.festival.domain.home.model.dto.HomeImageDto;
+import com.danzzan.festival.domain.home.service.HomeService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/home")
@@ -5,7 +14,7 @@ public class HomeController {
     private final HomeService homeService;
 
     @GetMapping("/images")
-    public List<HimeImageDto> getHomeImages() {
+    public List<HomeImageDto> getHomeImages() {
         return homeService.getHomeImages();
     }
 }

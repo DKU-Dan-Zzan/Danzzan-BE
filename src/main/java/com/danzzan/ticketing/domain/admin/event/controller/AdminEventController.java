@@ -3,6 +3,7 @@ package com.danzzan.ticketing.domain.admin.event.controller;
 import com.danzzan.ticketing.global.model.ApiResponse;
 import com.danzzan.ticketing.domain.admin.event.dto.EventListResponseDTO;
 import com.danzzan.ticketing.domain.admin.event.dto.EventStatsResponseDTO;
+import com.danzzan.ticketing.domain.admin.event.service.AdminEventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin")
 @Tag(name = "관리자 공연", description = "관리자 공연/운영 관련 API")
-public interface AdminEventController {
+@RequiredArgsConstructor
+public class AdminEventController {
+
+    private final AdminEventService adminEventService;
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/events")
@@ -72,9 +77,13 @@ public interface AdminEventController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "권한 없음")
     })
-    ApiResponse<EventListResponseDTO> listEvents();
+    public ApiResponse<EventListResponseDTO> listEvents() {
+        return ApiResponse.success(adminEventService.listEvents());
+    }
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/events/{eventId}/stats")
-    ApiResponse<EventStatsResponseDTO> getEventStats(@NotNull @PathVariable Long eventId);
+    public ApiResponse<EventStatsResponseDTO> getEventStats(@NotNull @PathVariable Long eventId) {
+        return ApiResponse.success(adminEventService.getEventStats(eventId));
+    }
 }

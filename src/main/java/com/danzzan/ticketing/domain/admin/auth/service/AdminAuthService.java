@@ -7,6 +7,6 @@ import com.danzzan.ticketing.domain.admin.auth.dto.AdminMeResponseDTO;
 
 public interface AdminAuthService {
     AdminLoginResponseDTO login(AdminLoginRequestDTO request);
-    AdminMeResponseDTO me();
-    AdminLogoutResponseDTO logout();
+    AdminMeResponseDTO me(String accessToken);
+    AdminLogoutResponseDTO logout(String accessToken);
 }

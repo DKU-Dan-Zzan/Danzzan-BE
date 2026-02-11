@@ -23,7 +23,7 @@ public class CorsConfig {
         ));
 
         // 모든 HTTP 메서드 허용
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
         // 모든 헤더 허용
         config.setAllowedHeaders(List.of("*"));

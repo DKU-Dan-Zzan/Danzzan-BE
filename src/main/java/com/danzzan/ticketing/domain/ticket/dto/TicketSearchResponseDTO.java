@@ -1,4 +1,4 @@
-package com.danzzan.ticketing.domain.admin.ticket.dto;
+package com.danzzan.ticketing.domain.ticket.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

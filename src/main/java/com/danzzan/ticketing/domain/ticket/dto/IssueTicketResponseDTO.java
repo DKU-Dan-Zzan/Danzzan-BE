@@ -1,4 +1,4 @@
-package com.danzzan.ticketing.domain.admin.ticket.dto;
+package com.danzzan.ticketing.domain.ticket.dto;
 
 import com.danzzan.ticketing.domain.ticket.model.entity.TicketStatus;
 import io.swagger.v3.oas.annotations.media.Schema;

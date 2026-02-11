@@ -1,10 +1,10 @@
-package com.danzzan.ticketing.domain.admin.ticket.controller;
+package com.danzzan.ticketing.domain.ticket.controller;
 
 import com.danzzan.ticketing.global.model.ApiResponse;
-import com.danzzan.ticketing.domain.admin.ticket.dto.IssueTicketRequestDTO;
-import com.danzzan.ticketing.domain.admin.ticket.dto.IssueTicketResponseDTO;
-import com.danzzan.ticketing.domain.admin.ticket.dto.TicketSearchResponseDTO;
-import com.danzzan.ticketing.domain.admin.ticket.service.AdminTicketService;
+import com.danzzan.ticketing.domain.ticket.dto.IssueTicketRequestDTO;
+import com.danzzan.ticketing.domain.ticket.dto.IssueTicketResponseDTO;
+import com.danzzan.ticketing.domain.ticket.dto.TicketSearchResponseDTO;
+import com.danzzan.ticketing.domain.ticket.service.AdminTicketService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

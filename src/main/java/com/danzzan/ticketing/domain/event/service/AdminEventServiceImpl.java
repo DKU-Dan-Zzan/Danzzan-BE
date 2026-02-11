@@ -1,8 +1,8 @@
-package com.danzzan.ticketing.domain.admin.event.service;
+package com.danzzan.ticketing.domain.event.service;
 
-import com.danzzan.ticketing.domain.admin.event.dto.EventListResponseDTO;
-import com.danzzan.ticketing.domain.admin.event.dto.EventStatsResponseDTO;
-import com.danzzan.ticketing.domain.admin.event.dto.EventSummaryDTO;
+import com.danzzan.ticketing.domain.event.dto.EventListResponseDTO;
+import com.danzzan.ticketing.domain.event.dto.EventStatsResponseDTO;
+import com.danzzan.ticketing.domain.event.dto.EventSummaryDTO;
 import com.danzzan.ticketing.domain.event.exception.EventNotFoundException;
 import com.danzzan.ticketing.domain.event.model.entity.FestivalEvent;
 import com.danzzan.ticketing.domain.event.repository.FestivalEventRepository;

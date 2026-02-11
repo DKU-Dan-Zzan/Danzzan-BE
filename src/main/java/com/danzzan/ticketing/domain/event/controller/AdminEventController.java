@@ -1,9 +1,9 @@
-package com.danzzan.ticketing.domain.admin.event.controller;
+package com.danzzan.ticketing.domain.event.controller;
 
 import com.danzzan.ticketing.global.model.ApiResponse;
-import com.danzzan.ticketing.domain.admin.event.dto.EventListResponseDTO;
-import com.danzzan.ticketing.domain.admin.event.dto.EventStatsResponseDTO;
-import com.danzzan.ticketing.domain.admin.event.service.AdminEventService;
+import com.danzzan.ticketing.domain.event.dto.EventListResponseDTO;
+import com.danzzan.ticketing.domain.event.dto.EventStatsResponseDTO;
+import com.danzzan.ticketing.domain.event.service.AdminEventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;

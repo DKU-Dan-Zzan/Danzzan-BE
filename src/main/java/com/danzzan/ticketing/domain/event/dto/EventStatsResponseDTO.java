@@ -1,4 +1,4 @@
-package com.danzzan.ticketing.domain.admin.event.dto;
+package com.danzzan.ticketing.domain.event.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;

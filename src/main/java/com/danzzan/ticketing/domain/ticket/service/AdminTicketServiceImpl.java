@@ -1,10 +1,10 @@
-package com.danzzan.ticketing.domain.admin.ticket.service;
+package com.danzzan.ticketing.domain.ticket.service;
 
-import com.danzzan.ticketing.domain.admin.auth.exception.AdminAuthenticationException;
-import com.danzzan.ticketing.domain.admin.auth.exception.AdminForbiddenException;
-import com.danzzan.ticketing.domain.admin.ticket.dto.IssueTicketResponseDTO;
-import com.danzzan.ticketing.domain.admin.ticket.dto.TicketSearchItemDTO;
-import com.danzzan.ticketing.domain.admin.ticket.dto.TicketSearchResponseDTO;
+import com.danzzan.ticketing.global.exception.AdminAuthenticationException;
+import com.danzzan.ticketing.global.exception.AdminForbiddenException;
+import com.danzzan.ticketing.domain.ticket.dto.IssueTicketResponseDTO;
+import com.danzzan.ticketing.domain.ticket.dto.TicketSearchItemDTO;
+import com.danzzan.ticketing.domain.ticket.dto.TicketSearchResponseDTO;
 import com.danzzan.ticketing.domain.ticket.exception.TicketAlreadyIssuedException;
 import com.danzzan.ticketing.domain.ticket.exception.TicketEventMismatchException;
 import com.danzzan.ticketing.domain.ticket.exception.TicketNotFoundException;

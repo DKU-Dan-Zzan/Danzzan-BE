@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.time.LocalDateTime;
+import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
@@ -34,8 +36,23 @@ public class HomeService {
                 .map(notice -> new EmergencyNoticeDto(
                     notice.getId(),
                     notice.getContent(),
-                    notice.getCreatedAt()
+                    formatTime(notice.getCreatedAt())
                 ))
                 .orElse(null);
+    }
+
+    private String formatTime(LocalDateTime time) {
+        Duration duration = Duration.between(time, LocalDateTime.now());
+
+        long minutes = duration.toMinutes();
+
+        if (minutes < 1) return "방금 전";
+        if (minutes < 60) return minutes + "분 전";
+
+        long hours = duration.toHours();
+        if (hours < 24) return hours + "시간 전";
+
+        long days = duration.toDays();
+        return days + "일 전";
     }
 }

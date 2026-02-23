@@ -1,6 +1,7 @@
 package com.danzzan.festival.domain.home.controller;
 
 import com.danzzan.festival.domain.home.model.dto.HomeImageDto;
+import com.danzzan.festival.domain.home.model.dto.EmergencyNoticeDto;
 import com.danzzan.festival.domain.home.service.HomeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -16,5 +17,10 @@ public class HomeController {
     @GetMapping("/images")
     public List<HomeImageDto> getHomeImages() {
         return homeService.getHomeImages();
+    }
+
+    @GetMapping("/emergencyNotice")
+    public EmergencyNoticeDto getLatestEmergencyNotice() {
+        return homeService.getLatestEmergencyNotice();
     }
 }

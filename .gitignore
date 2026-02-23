@@ -39,3 +39,13 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Database ###
+*.db
+*.sql
+*.sqlite
+*.sqlite3
+*.dump
+*.backup
+*.bak
+*.log

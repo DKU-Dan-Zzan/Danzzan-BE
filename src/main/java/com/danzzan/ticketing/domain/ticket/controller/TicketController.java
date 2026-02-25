@@ -22,11 +22,19 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Set;
+
 @RestController
 @RequestMapping("/tickets")
 @RequiredArgsConstructor
 @Tag(name = "사용자 티켓팅", description = "공연 티켓 예매 및 조회 API")
 public class TicketController {
+
+    private static final Set<TicketRequestStatus> CLAIM_TERMINAL_STATUSES = Set.of(
+            TicketRequestStatus.SUCCESS,
+            TicketRequestStatus.SOLD_OUT,
+            TicketRequestStatus.ALREADY
+    );
 
     private final TicketService ticketService;
     private final AdmissionService admissionService;
@@ -58,7 +66,7 @@ public class TicketController {
     }
 
     @PostMapping("/request")
-    @Operation(summary = "티켓 요청(계약)", description = "선착순 티켓 요청 계약 엔드포인트. 실제 로직은 추후 구현")
+    @Operation(summary = "티켓 요청(v1)", description = "Admission 통과 시 Claim을 수행해 SUCCESS/SOLD_OUT/ALREADY를 반환합니다.")
     public ResponseEntity<TicketRequestResponseDTO> requestTicket(
             @Valid @RequestBody TicketRequestRequestDTO request
     ) {
@@ -71,6 +79,10 @@ public class TicketController {
         }
 
         ClaimResult claimResult = claimService.claim(request.getEventId(), request.getUserId());
+        if (!CLAIM_TERMINAL_STATUSES.contains(claimResult.status())) {
+            throw new IllegalStateException("claim status must be one of SUCCESS, SOLD_OUT, ALREADY");
+        }
+
         return ResponseEntity.ok(TicketRequestResponseDTO.builder()
                 .status(claimResult.status())
                 .remaining(claimResult.remaining())

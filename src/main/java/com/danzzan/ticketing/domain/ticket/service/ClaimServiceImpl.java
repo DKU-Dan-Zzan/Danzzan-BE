@@ -4,7 +4,9 @@ import com.danzzan.ticketing.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.ticketing.domain.ticket.service.model.ClaimResult;
 import com.danzzan.ticketing.domain.ticket.service.support.ClaimLuaProtocol;
+import com.danzzan.ticketing.domain.ticket.service.support.ClaimOutcomeMetrics;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -13,12 +15,14 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ClaimServiceImpl implements ClaimService {
 
     private final StringRedisTemplate stringRedisTemplate;
     @Qualifier("claimV2Script")
     private final RedisScript<List> claimV2Script;
+    private final ClaimOutcomeMetrics claimOutcomeMetrics;
 
     @Override
     public ClaimResult claim(String eventId, String userId) {
@@ -37,10 +41,10 @@ public class ClaimServiceImpl implements ClaimService {
                 ClaimLuaProtocol.CODE_SOLD_OUT_ARG,
                 ClaimLuaProtocol.CODE_SUCCESS_ARG
         );
-        return mapLuaResult(rawResult);
+        return mapLuaResult(eventId, userId, rawResult);
     }
 
-    private ClaimResult mapLuaResult(List<?> rawResult) {
+    private ClaimResult mapLuaResult(String eventId, String userId, List<?> rawResult) {
         if (rawResult == null || rawResult.size() < ClaimLuaProtocol.RESULT_SIZE) {
             throw new IllegalStateException("claim lua result must contain [code, remaining]");
         }
@@ -53,18 +57,31 @@ public class ClaimServiceImpl implements ClaimService {
             if (remaining == null) {
                 throw new IllegalStateException("claim lua success code requires remaining value");
             }
-            return ClaimResult.success(remaining);
+            return recordOutcome(eventId, userId, ClaimResult.success(remaining));
         }
 
         if (status == TicketRequestStatus.SOLD_OUT) {
-            return ClaimResult.soldOut();
+            return recordOutcome(eventId, userId, ClaimResult.soldOut());
         }
 
         if (status == TicketRequestStatus.ALREADY) {
-            return ClaimResult.already();
+            return recordOutcome(eventId, userId, ClaimResult.already());
         }
 
         throw new IllegalStateException("unexpected claim lua status: " + status);
+    }
+
+    private ClaimResult recordOutcome(String eventId, String userId, ClaimResult result) {
+        long count = claimOutcomeMetrics.increment(result.status());
+        log.info(
+                "claim_v2 outcome eventId={} userId={} status={} remaining={} total={}",
+                eventId,
+                userId,
+                result.status(),
+                result.remaining(),
+                count
+        );
+        return result;
     }
 
     private Long asNullableLong(Object value, String fieldName) {

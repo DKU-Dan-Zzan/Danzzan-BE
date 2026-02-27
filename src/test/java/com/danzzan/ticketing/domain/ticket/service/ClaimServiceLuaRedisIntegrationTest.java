@@ -3,6 +3,7 @@ package com.danzzan.ticketing.domain.ticket.service;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.ticketing.domain.ticket.service.model.ClaimResult;
+import com.danzzan.ticketing.domain.ticket.service.support.ClaimOutcomeMetrics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,7 @@ class ClaimServiceLuaRedisIntegrationTest {
         script.setLocation(new ClassPathResource("redis/claim_v2.lua"));
         script.setResultType(List.class);
 
-        claimService = new ClaimServiceImpl(redisTemplate, script);
+        claimService = new ClaimServiceImpl(redisTemplate, script, new ClaimOutcomeMetrics());
     }
 
     @AfterEach

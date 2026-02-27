@@ -4,6 +4,7 @@ import com.danzzan.ticketing.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.ticketing.domain.ticket.service.model.ClaimResult;
 import com.danzzan.ticketing.domain.ticket.service.support.ClaimLuaProtocol;
+import com.danzzan.ticketing.domain.ticket.service.support.ClaimOutcomeMetrics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,6 +33,9 @@ class ClaimServiceImplTest {
     @Mock
     private RedisScript<List> claimV2Script;
 
+    @Mock
+    private ClaimOutcomeMetrics claimOutcomeMetrics;
+
     @InjectMocks
     private ClaimServiceImpl claimService;
 
@@ -46,6 +50,7 @@ class ClaimServiceImplTest {
 
         assertThat(result.status()).isEqualTo(TicketRequestStatus.ALREADY);
         assertThat(result.remaining()).isNull();
+        verify(claimOutcomeMetrics).increment(TicketRequestStatus.ALREADY);
     }
 
     @Test
@@ -59,6 +64,7 @@ class ClaimServiceImplTest {
 
         assertThat(result.status()).isEqualTo(TicketRequestStatus.SOLD_OUT);
         assertThat(result.remaining()).isNull();
+        verify(claimOutcomeMetrics).increment(TicketRequestStatus.SOLD_OUT);
     }
 
     @Test
@@ -75,6 +81,7 @@ class ClaimServiceImplTest {
 
         assertThat(result.status()).isEqualTo(TicketRequestStatus.SUCCESS);
         assertThat(result.remaining()).isEqualTo(42L);
+        verify(claimOutcomeMetrics).increment(TicketRequestStatus.SUCCESS);
         verify(stringRedisTemplate).execute(
                 eq(claimV2Script),
                 eq(List.of(userKey, stockKey, statusKey)),

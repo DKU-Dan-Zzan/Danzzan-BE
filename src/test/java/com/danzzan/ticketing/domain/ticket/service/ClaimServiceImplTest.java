@@ -3,6 +3,7 @@ package com.danzzan.ticketing.domain.ticket.service;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.ticketing.domain.ticket.service.model.ClaimResult;
+import com.danzzan.ticketing.domain.ticket.service.support.ClaimLuaProtocol;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,10 +26,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ClaimServiceImplTest {
 
-    private static final long LUA_CODE_ALREADY = 1L;
-    private static final long LUA_CODE_SOLD_OUT = 2L;
-    private static final long LUA_CODE_SUCCESS = 3L;
-
     @Mock
     private StringRedisTemplate stringRedisTemplate;
 
@@ -43,7 +40,7 @@ class ClaimServiceImplTest {
         String eventId = "festival-day1";
         String userId = "32221902";
 
-        mockLuaResult(List.of(LUA_CODE_ALREADY, -1L));
+        mockLuaResult(List.of(ClaimLuaProtocol.CODE_ALREADY, -1L));
 
         ClaimResult result = claimService.claim(eventId, userId);
 
@@ -56,7 +53,7 @@ class ClaimServiceImplTest {
         String eventId = "festival-day1";
         String userId = "32221902";
 
-        mockLuaResult(List.of(LUA_CODE_SOLD_OUT, -1L));
+        mockLuaResult(List.of(ClaimLuaProtocol.CODE_SOLD_OUT, -1L));
 
         ClaimResult result = claimService.claim(eventId, userId);
 
@@ -72,7 +69,7 @@ class ClaimServiceImplTest {
         String statusKey = TicketRedisKeys.statusKey(eventId, userId);
         String stockKey = TicketRedisKeys.stockKey(eventId);
 
-        mockLuaResult(List.of(LUA_CODE_SUCCESS, 42L));
+        mockLuaResult(List.of(ClaimLuaProtocol.CODE_SUCCESS, 42L));
 
         ClaimResult result = claimService.claim(eventId, userId);
 
@@ -84,10 +81,10 @@ class ClaimServiceImplTest {
                 eq(TicketRequestStatus.ALREADY.name()),
                 eq(TicketRequestStatus.SOLD_OUT.name()),
                 eq(TicketRequestStatus.SUCCESS.name()),
-                eq("1"),
-                eq(String.valueOf(LUA_CODE_ALREADY)),
-                eq(String.valueOf(LUA_CODE_SOLD_OUT)),
-                eq(String.valueOf(LUA_CODE_SUCCESS))
+                eq(ClaimLuaProtocol.USER_CLAIMED_VALUE),
+                eq(ClaimLuaProtocol.CODE_ALREADY_ARG),
+                eq(ClaimLuaProtocol.CODE_SOLD_OUT_ARG),
+                eq(ClaimLuaProtocol.CODE_SUCCESS_ARG)
         );
     }
 
@@ -111,7 +108,7 @@ class ClaimServiceImplTest {
 
     @Test
     void throwsWhenLuaSuccessHasNoRemaining() {
-        mockLuaResult(Arrays.asList(LUA_CODE_SUCCESS, null));
+        mockLuaResult(Arrays.asList(ClaimLuaProtocol.CODE_SUCCESS, null));
 
         assertThatThrownBy(() -> claimService.claim("festival-day1", "32221902"))
                 .isInstanceOf(IllegalStateException.class)

@@ -3,6 +3,7 @@ package com.danzzan.ticketing.domain.ticket.service;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.ticketing.domain.ticket.service.model.ClaimResult;
+import com.danzzan.ticketing.domain.ticket.service.support.ClaimLuaProtocol;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,14 +15,6 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ClaimServiceImpl implements ClaimService {
-
-    private static final String USER_CLAIMED_VALUE = "1";
-    private static final int LUA_RESULT_SIZE = 2;
-    private static final int LUA_CODE_INDEX = 0;
-    private static final int LUA_REMAINING_INDEX = 1;
-    private static final long LUA_CODE_ALREADY = 1L;
-    private static final long LUA_CODE_SOLD_OUT = 2L;
-    private static final long LUA_CODE_SUCCESS = 3L;
 
     private final StringRedisTemplate stringRedisTemplate;
     @Qualifier("claimV2Script")
@@ -39,38 +32,39 @@ public class ClaimServiceImpl implements ClaimService {
                 TicketRequestStatus.ALREADY.name(),
                 TicketRequestStatus.SOLD_OUT.name(),
                 TicketRequestStatus.SUCCESS.name(),
-                USER_CLAIMED_VALUE,
-                String.valueOf(LUA_CODE_ALREADY),
-                String.valueOf(LUA_CODE_SOLD_OUT),
-                String.valueOf(LUA_CODE_SUCCESS)
+                ClaimLuaProtocol.USER_CLAIMED_VALUE,
+                ClaimLuaProtocol.CODE_ALREADY_ARG,
+                ClaimLuaProtocol.CODE_SOLD_OUT_ARG,
+                ClaimLuaProtocol.CODE_SUCCESS_ARG
         );
         return mapLuaResult(rawResult);
     }
 
     private ClaimResult mapLuaResult(List<?> rawResult) {
-        if (rawResult == null || rawResult.size() < LUA_RESULT_SIZE) {
+        if (rawResult == null || rawResult.size() < ClaimLuaProtocol.RESULT_SIZE) {
             throw new IllegalStateException("claim lua result must contain [code, remaining]");
         }
 
-        long code = asLong(rawResult.get(LUA_CODE_INDEX), "code");
-        Long remaining = asNullableLong(rawResult.get(LUA_REMAINING_INDEX), "remaining");
+        long code = asLong(rawResult.get(ClaimLuaProtocol.CODE_INDEX), "code");
+        Long remaining = asNullableLong(rawResult.get(ClaimLuaProtocol.REMAINING_INDEX), "remaining");
+        TicketRequestStatus status = ClaimLuaProtocol.resolveStatus(code);
 
-        if (code == LUA_CODE_SUCCESS) {
+        if (status == TicketRequestStatus.SUCCESS) {
             if (remaining == null) {
                 throw new IllegalStateException("claim lua success code requires remaining value");
             }
             return ClaimResult.success(remaining);
         }
 
-        if (code == LUA_CODE_SOLD_OUT) {
+        if (status == TicketRequestStatus.SOLD_OUT) {
             return ClaimResult.soldOut();
         }
 
-        if (code == LUA_CODE_ALREADY) {
+        if (status == TicketRequestStatus.ALREADY) {
             return ClaimResult.already();
         }
 
-        throw new IllegalStateException("unexpected claim lua code: " + code);
+        throw new IllegalStateException("unexpected claim lua status: " + status);
     }
 
     private Long asNullableLong(Object value, String fieldName) {

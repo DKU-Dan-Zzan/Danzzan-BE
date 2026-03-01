@@ -61,6 +61,9 @@ public class SecurityConfig {
                                 "/booths/**",
                                 "/lost-items/**"
                         ).permitAll()
+                        
+                        // 에러 응답
+                        .requestMatchers("/error").permitAll()
 
                         // 그 외는 인증 필요
                         .anyRequest().authenticated()

@@ -6,7 +6,7 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public class TimetablePerformanceDto {
-    private Integer performaceId;
+    private Integer performanceId;
     private String startTime;
     private String endTime;
     private String stage;

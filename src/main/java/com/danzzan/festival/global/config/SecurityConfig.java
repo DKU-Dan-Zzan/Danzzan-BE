@@ -43,9 +43,26 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // CORS preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // 인증 관련
                         .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+
+                        // Swagger
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
+
+                        // 로그인 없이 접근 가능한 조회 API (GET만 허용)
+                        .requestMatchers(HttpMethod.GET,
+                                "/home/**",
+                                "/notices/**",
+                                "/timetable/**",
+                                "/map/**",
+                                "/booths/**",
+                                "/lost-items/**"
+                        ).permitAll()
+
+                        // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);

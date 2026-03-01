@@ -13,6 +13,6 @@ public class TimetablePerformanceDto {
 
     private Integer artistId;
     private String artistName;
-    private String artistImage;
+    private String artistImageUrl;
     private String artistDescription;
 }

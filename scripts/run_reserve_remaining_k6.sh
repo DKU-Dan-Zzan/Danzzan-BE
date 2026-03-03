@@ -16,7 +16,7 @@ POLL_INTERVAL_SEC="${POLL_INTERVAL_SEC:-0.45}"
 EXPECTED_TOTAL_REQUESTS="${EXPECTED_TOTAL_REQUESTS:-171250}"
 REMAINING_PATH="${REMAINING_PATH:-/tickets/events}"
 RESERVE_PATH="${RESERVE_PATH:-}"
-OUTPUT_DIR="${OUTPUT_DIR:-reports/loadtest/raw}"
+OUTPUT_DIR="${OUTPUT_DIR:-reports/loadtest/raw/k6/reserve-remaining}"
 DRY_RUN=false
 
 usage() {
@@ -38,7 +38,7 @@ Options:
   --expected-total-requests N   expected total requests (default: 171250)
   --remaining-path PATH         remaining polling path (default: /tickets/events)
   --reserve-path PATH           reserve request path (default: /tickets/{eventId}/reserve)
-  --output-dir DIR              summary output directory (default: reports/loadtest/raw)
+  --output-dir DIR              summary output directory (default: reports/loadtest/raw/k6/reserve-remaining)
   --dry-run                     print execution plan only
   -h, --help                    show help
 

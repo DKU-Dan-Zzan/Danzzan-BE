@@ -1,5 +1,7 @@
 # Reserve + Remaining 대규모 부하테스트 (k6)
 
+공통 산출물 디렉토리 규칙은 `docs/loadtest-artifacts-layout.md`를 따른다.
+
 ## 1) 목표 시나리오
 - 가상 유저: `2000`
 - 각 유저: 로그인 토큰 보유 후 `POST /tickets/{eventId}/reserve` 1회 시도 + `GET /tickets/events` 폴링 반복
@@ -55,7 +57,7 @@ scripts/run_reserve_remaining_k6.sh \
 ```
 
 ## 4) 산출물
-기본 경로: `reports/loadtest/raw/`
+기본 경로: `reports/loadtest/raw/k6/reserve-remaining/`
 
 실행 시 아래 파일이 생성됩니다.
 - `reserve-remaining-k6-<timestamp>.log`

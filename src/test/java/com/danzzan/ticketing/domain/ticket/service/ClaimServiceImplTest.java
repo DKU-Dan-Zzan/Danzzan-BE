@@ -3,17 +3,24 @@ package com.danzzan.ticketing.domain.ticket.service;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.ticketing.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.ticketing.domain.ticket.service.model.ClaimResult;
-import org.junit.jupiter.api.BeforeEach;
+import com.danzzan.ticketing.domain.ticket.service.support.ClaimLuaProtocol;
+import com.danzzan.ticketing.domain.ticket.service.support.ClaimOutcomeMetrics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
+
+import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.never;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,72 +28,120 @@ import static org.mockito.Mockito.when;
 class ClaimServiceImplTest {
 
     @Mock
-    private StringRedisTemplate redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     @Mock
-    private ValueOperations<String, String> valueOperations;
+    private RedisScript<List> claimV2Script;
+
+    @Mock
+    private ClaimOutcomeMetrics claimOutcomeMetrics;
 
     @InjectMocks
     private ClaimServiceImpl claimService;
 
-    @BeforeEach
-    void setUp() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-    }
-
     @Test
-    void returnsAlreadyWhenUserKeyAlreadyExists() {
+    void mapsAlreadyFromLuaResult() {
         String eventId = "festival-day1";
         String userId = "32221902";
-        String userKey = TicketRedisKeys.userKey(eventId, userId);
-        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
-        String stockKey = TicketRedisKeys.stockKey(eventId);
 
-        when(valueOperations.setIfAbsent(userKey, "1")).thenReturn(false);
+        mockLuaResult(List.of(ClaimLuaProtocol.CODE_ALREADY, -1L));
 
         ClaimResult result = claimService.claim(eventId, userId);
 
         assertThat(result.status()).isEqualTo(TicketRequestStatus.ALREADY);
         assertThat(result.remaining()).isNull();
-        verify(valueOperations, never()).decrement(stockKey);
-        verify(valueOperations).set(statusKey, TicketRequestStatus.ALREADY.name());
+        verify(claimOutcomeMetrics).increment(TicketRequestStatus.ALREADY);
     }
 
     @Test
-    void returnsSoldOutWhenDecrementResultIsNegative() {
+    void mapsSoldOutFromLuaResultAndKeepsRemainingNull() {
         String eventId = "festival-day1";
         String userId = "32221902";
-        String userKey = TicketRedisKeys.userKey(eventId, userId);
-        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
-        String stockKey = TicketRedisKeys.stockKey(eventId);
 
-        when(valueOperations.setIfAbsent(userKey, "1")).thenReturn(true);
-        when(valueOperations.decrement(stockKey)).thenReturn(-1L);
+        mockLuaResult(List.of(ClaimLuaProtocol.CODE_SOLD_OUT, -1L));
 
         ClaimResult result = claimService.claim(eventId, userId);
 
         assertThat(result.status()).isEqualTo(TicketRequestStatus.SOLD_OUT);
         assertThat(result.remaining()).isNull();
-        verify(valueOperations).increment(stockKey);
-        verify(redisTemplate).delete(userKey);
-        verify(valueOperations).set(statusKey, TicketRequestStatus.SOLD_OUT.name());
+        verify(claimOutcomeMetrics).increment(TicketRequestStatus.SOLD_OUT);
     }
 
     @Test
-    void returnsSuccessWithRemainingWhenClaimSucceeds() {
+    void mapsSuccessFromLuaResultAndUsesRemaining() {
         String eventId = "festival-day1";
         String userId = "32221902";
         String userKey = TicketRedisKeys.userKey(eventId, userId);
         String statusKey = TicketRedisKeys.statusKey(eventId, userId);
         String stockKey = TicketRedisKeys.stockKey(eventId);
 
-        when(valueOperations.setIfAbsent(userKey, "1")).thenReturn(true);
-        when(valueOperations.decrement(stockKey)).thenReturn(42L);
+        mockLuaResult(List.of(ClaimLuaProtocol.CODE_SUCCESS, 42L));
 
         ClaimResult result = claimService.claim(eventId, userId);
 
         assertThat(result.status()).isEqualTo(TicketRequestStatus.SUCCESS);
         assertThat(result.remaining()).isEqualTo(42L);
-        verify(valueOperations).set(statusKey, TicketRequestStatus.SUCCESS.name());
+        verify(claimOutcomeMetrics).increment(TicketRequestStatus.SUCCESS);
+        verify(stringRedisTemplate).execute(
+                eq(claimV2Script),
+                eq(List.of(userKey, stockKey, statusKey)),
+                eq(TicketRequestStatus.ALREADY.name()),
+                eq(TicketRequestStatus.SOLD_OUT.name()),
+                eq(TicketRequestStatus.SUCCESS.name()),
+                eq(ClaimLuaProtocol.USER_CLAIMED_VALUE),
+                eq(ClaimLuaProtocol.CODE_ALREADY_ARG),
+                eq(ClaimLuaProtocol.CODE_SOLD_OUT_ARG),
+                eq(ClaimLuaProtocol.CODE_SUCCESS_ARG)
+        );
+    }
+
+    @Test
+    void throwsWhenLuaResultIsNull() {
+        mockLuaResult(null);
+
+        assertThatThrownBy(() -> claimService.claim("festival-day1", "32221902"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("[code, remaining]");
+    }
+
+    @Test
+    void throwsWhenLuaResultContainsUnknownCode() {
+        mockLuaResult(List.of(999L, 10L));
+
+        assertThatThrownBy(() -> claimService.claim("festival-day1", "32221902"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("unexpected claim lua code");
+    }
+
+    @Test
+    void throwsWhenLuaSuccessHasNoRemaining() {
+        mockLuaResult(Arrays.asList(ClaimLuaProtocol.CODE_SUCCESS, null));
+
+        assertThatThrownBy(() -> claimService.claim("festival-day1", "32221902"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("requires remaining");
+    }
+
+    @Test
+    void throwsWhenLuaCodeIsNotNumberLike() {
+        mockLuaResult(List.of("unknown", 1L));
+
+        assertThatThrownBy(() -> claimService.claim("festival-day1", "32221902"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("parseable as long");
+    }
+
+    private void mockLuaResult(List<?> luaResult) {
+        when(stringRedisTemplate.execute(
+                eq(claimV2Script),
+                anyList(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        )).thenReturn(luaResult);
     }
 }

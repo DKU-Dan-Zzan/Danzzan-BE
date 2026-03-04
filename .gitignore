@@ -7,6 +7,8 @@ build/
 
 ### application.uyml ### 
 application.yml
+src/main/resources/application-local-compose.yml
+src/main/resources/application-local-serverdb.yml
 *.pem
 
 ### STS ###

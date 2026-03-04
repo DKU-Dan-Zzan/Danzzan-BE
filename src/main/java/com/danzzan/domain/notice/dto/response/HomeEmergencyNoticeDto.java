@@ -1,11 +1,11 @@
-package com.danzzan.domain.home.model.dto;
+package com.danzzan.domain.notice.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public class EmergencyNoticeDto {
+public class HomeEmergencyNoticeDto {
     private Integer id;
     private String content;
     private String createdAt;

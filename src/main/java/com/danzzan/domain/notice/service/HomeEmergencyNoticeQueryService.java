@@ -15,7 +15,7 @@ public class HomeEmergencyNoticeQueryService {
     private final EmergencyNoticeRepository emergencyNoticeRepository;
 
     @Transactional(readOnly = true)
-    public HomeEmergencyNoticeDto getLatestEmergencyNotice() {
+    public HomeEmergencyNoticeDto getActiveEmergencyNotice() {
         return emergencyNoticeRepository.findFirstByOrderByIdAsc()
                 .filter(notice -> Boolean.TRUE.equals(notice.getIsActive()))
                 .filter(notice -> notice.getMessage() != null && !notice.getMessage().isBlank())

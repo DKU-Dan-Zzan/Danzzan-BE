@@ -15,7 +15,7 @@ public class HomeEmergencyNoticeController {
     private final HomeEmergencyNoticeQueryService homeEmergencyNoticeQueryService;
 
     @GetMapping("/emergencyNotice")
-    public HomeEmergencyNoticeDto getLatestEmergencyNotice() {
-        return homeEmergencyNoticeQueryService.getLatestEmergencyNotice();
+    public HomeEmergencyNoticeDto getActiveEmergencyNotice() {
+        return homeEmergencyNoticeQueryService.getActiveEmergencyNotice();
     }
 }

@@ -8,7 +8,5 @@ import lombok.Getter;
 public class HomeEmergencyNoticeDto {
     private Integer id;
     private String content;
-    private String createdAt;
     private String updatedAt;
-    private Boolean isActive;
 }

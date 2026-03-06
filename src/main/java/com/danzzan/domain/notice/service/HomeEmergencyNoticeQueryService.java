@@ -22,9 +22,7 @@ public class HomeEmergencyNoticeQueryService {
                 .map(notice -> new HomeEmergencyNoticeDto(
                         notice.getId() == null ? null : notice.getId().intValue(),
                         notice.getMessage(),
-                        formatTime(notice.getCreatedAt()),
-                        formatTime(notice.getUpdatedAt()),
-                        notice.getIsActive()
+                        formatTime(notice.getUpdatedAt())
                 ))
                 .orElse(null);
     }

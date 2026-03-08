@@ -72,8 +72,10 @@ public class PasswordResetService {
         passwordResetRedisRepository.setResendCooldown(studentId, properties.getResendCooldownSec());
 
         if (userOptional.isPresent()) {
-            String recipientEmail = resolveRecipientEmail(studentId, dto.getEmail());
-            sendMailSafely(recipientEmail, code, requestId);
+            String recipientEmail = resolveRecipientEmail(studentId, dto.getEmail(), requestId);
+            if (recipientEmail != null) {
+                sendMailSafely(recipientEmail, code, requestId);
+            }
         }
 
         log.info("password_reset request created requestId={} userExists={} ipHash={}",
@@ -169,20 +171,20 @@ public class PasswordResetService {
         }
     }
 
-    private String resolveRecipientEmail(String studentId, String email) {
+    private String resolveRecipientEmail(String studentId, String email, String requestId) {
         String expectedEmail = studentId + DEFAULT_SCHOOL_EMAIL_DOMAIN;
         if (!StringUtils.hasText(email)) {
             return expectedEmail;
         }
 
         String normalized = email.trim().toLowerCase(Locale.ROOT);
-        if (!expectedEmail.equalsIgnoreCase(normalized)) {
-            throw new PasswordResetException(
-                    PasswordResetErrorType.USER_NOT_FOUND,
-                    "입력한 이메일이 학번 기반 계정과 일치하지 않습니다."
-            );
+        if (expectedEmail.equalsIgnoreCase(normalized)) {
+            return normalized;
         }
-        return normalized;
+
+        // 요청 응답은 동일하게 유지하고 메일만 발송하지 않는다.
+        log.info("password_reset request email mismatch requestId={}", requestId);
+        return null;
     }
 
     private void sendMailSafely(String recipientEmail, String code, String requestId) {

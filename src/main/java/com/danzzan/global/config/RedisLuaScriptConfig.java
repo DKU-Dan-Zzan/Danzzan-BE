@@ -26,4 +26,12 @@ public class RedisLuaScriptConfig {
         script.setResultType(List.class);
         return script;
     }
+
+    @Bean("acquireSlotScript")
+    public RedisScript<Long> acquireSlotScript() {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/acquire_slot.lua"));
+        script.setResultType(Long.class);
+        return script;
+    }
 }

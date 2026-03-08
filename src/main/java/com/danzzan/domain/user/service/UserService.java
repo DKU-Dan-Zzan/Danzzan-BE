@@ -38,8 +38,8 @@ public class UserService {
 
         // JWT 토큰 발급
         String accessToken = jwtTokenProvider.createAccessToken(
-                user.getId(), user.getStudentId(), user.getRole().name());
-        String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
+                user.getId(), user.getStudentId(), user.getRole().name(), user.getTokenVersion());
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getTokenVersion());
 
         String roleStr = user.getRole().name().replace("ROLE_", "").toLowerCase();
         ResponseLoginDto.UserInfo userInfo = new ResponseLoginDto.UserInfo(
@@ -70,10 +70,15 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
 
+        int refreshTokenVersion = jwtTokenProvider.getTokenVersion(refreshToken);
+        if (refreshTokenVersion != user.getTokenVersion()) {
+            throw new IllegalArgumentException("만료된 세션입니다. 다시 로그인해주세요.");
+        }
+
         // 새 토큰 발급
         String newAccessToken = jwtTokenProvider.createAccessToken(
-                user.getId(), user.getStudentId(), user.getRole().name());
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getId());
+                user.getId(), user.getStudentId(), user.getRole().name(), user.getTokenVersion());
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getTokenVersion());
 
         return new ResponseRefreshTokenDto(newAccessToken, newRefreshToken);
     }

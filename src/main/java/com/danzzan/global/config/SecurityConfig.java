@@ -48,7 +48,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/user/login", "/user/reissue", "/user/dku/**", "/user/{signup-token}")
+                        .requestMatchers(
+                                "/user/login",
+                                "/user/reissue",
+                                "/user/dku/**",
+                                "/user/{signup-token}",
+                                "/user/password/reset/**"
+                        )
                         .permitAll()
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()

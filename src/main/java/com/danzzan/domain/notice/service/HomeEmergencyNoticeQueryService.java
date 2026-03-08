@@ -3,7 +3,6 @@ package com.danzzan.domain.notice.service;
 import com.danzzan.domain.notice.dto.response.HomeEmergencyNoticeDto;
 import com.danzzan.domain.notice.repository.EmergencyNoticeRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,21 +15,24 @@ public class HomeEmergencyNoticeQueryService {
     private final EmergencyNoticeRepository emergencyNoticeRepository;
 
     @Transactional(readOnly = true)
-    public HomeEmergencyNoticeDto getLatestEmergencyNotice() {
-        return emergencyNoticeRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
-                .stream()
-                .findFirst()
+    public HomeEmergencyNoticeDto getActiveEmergencyNotice() {
+        return emergencyNoticeRepository.findFirstByOrderByIdAsc()
+                .filter(notice -> Boolean.TRUE.equals(notice.getIsActive()))
+                .filter(notice -> notice.getMessage() != null && !notice.getMessage().isBlank())
                 .map(notice -> new HomeEmergencyNoticeDto(
-                    notice.getId() == null ? null : notice.getId().intValue(),
-                    notice.getMessage(),
-                    formatTime(notice.getCreatedAt())
+                        notice.getId() == null ? null : notice.getId().intValue(),
+                        notice.getMessage(),
+                        formatTime(notice.getUpdatedAt())
                 ))
                 .orElse(null);
     }
 
     private String formatTime(LocalDateTime time) {
-        Duration duration = Duration.between(time, LocalDateTime.now());
+        if (time == null) {
+            return null;
+        }
 
+        Duration duration = Duration.between(time, LocalDateTime.now());
         long minutes = duration.toMinutes();
 
         if (minutes < 1) return "방금 전";

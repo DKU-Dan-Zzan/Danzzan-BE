@@ -52,3 +52,6 @@ out/
 *.backup
 *.bak
 *.log
+
+# Prevent accidental commit of local test overrides
+src/test/resources/application.yml

@@ -1,5 +1,7 @@
 package com.danzzan.global.jwt;
 
+import com.danzzan.domain.user.model.entity.User;
+import com.danzzan.domain.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +23,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -33,6 +36,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Long userId = jwtTokenProvider.getUserId(token);
             String role = jwtTokenProvider.getRole(token);
             if (role == null || role.isBlank()) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            int tokenVersion = jwtTokenProvider.getTokenVersion(token);
+            User user = userRepository.findById(userId).orElse(null);
+            if (user == null || user.getTokenVersion() != tokenVersion) {
                 filterChain.doFilter(request, response);
                 return;
             }

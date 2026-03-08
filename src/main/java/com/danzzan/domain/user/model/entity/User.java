@@ -37,6 +37,9 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column(name = "token_version", nullable = false, columnDefinition = "int default 0")
+    private int tokenVersion;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -50,6 +53,7 @@ public class User {
         this.major = major;
         this.academicStatus = academicStatus;
         this.role = role != null ? role : UserRole.ROLE_USER;
+        this.tokenVersion = 0;
         this.createdAt = LocalDateTime.now();
     }
 
@@ -59,5 +63,9 @@ public class User {
 
     public void changeRole(UserRole role) {
         this.role = role;
+    }
+
+    public void bumpTokenVersion() {
+        this.tokenVersion += 1;
     }
 }

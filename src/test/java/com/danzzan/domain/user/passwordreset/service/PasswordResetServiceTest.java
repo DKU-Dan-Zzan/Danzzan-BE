@@ -124,6 +124,23 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    void requestResetWithMismatchedEmailReturnsSameResponseWithoutSendingMail() {
+        RequestPasswordResetRequestDto dto = new RequestPasswordResetRequestDto("32100000", "attacker@example.com");
+        User user = sampleUser();
+
+        when(passwordResetRedisRepository.incrementRequestRate(eq("32100000"), anyString(), eq(600L))).thenReturn(1L);
+        when(passwordResetRedisRepository.getResendCooldownSec("32100000")).thenReturn(-2L);
+        when(userRepository.findByStudentId("32100000")).thenReturn(Optional.of(user));
+
+        ResponsePasswordResetRequestDto response = passwordResetService.requestReset(dto, "127.0.0.1");
+
+        assertThat(response.getRequestId()).isNotBlank();
+        assertThat(response.getExpiresInSec()).isEqualTo(300L);
+        verify(passwordResetMailService, never())
+                .sendVerificationCode(anyString(), anyString(), anyLong(), anyString());
+    }
+
+    @Test
     void verifyCodeMismatch() {
         String requestId = "f91dc016-36a3-44e6-8a23-6bbd0aa17b14";
         PasswordResetRequestState state = new PasswordResetRequestState(

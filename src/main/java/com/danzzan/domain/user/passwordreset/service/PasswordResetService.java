@@ -55,6 +55,10 @@ public class PasswordResetService {
         enforceResendCooldown(studentId);
 
         Optional<User> userOptional = userRepository.findByStudentId(studentId);
+        if (userOptional.isEmpty()) {
+            throw new PasswordResetException(PasswordResetErrorType.USER_NOT_FOUND);
+        }
+
         String requestId = UUID.randomUUID().toString();
         String code = generateVerificationCode();
 
@@ -66,16 +70,14 @@ public class PasswordResetService {
                 false,
                 null,
                 false,
-                userOptional.isPresent()
+                true
         );
         passwordResetRedisRepository.saveRequest(state, properties.getCodeTtlSec());
         passwordResetRedisRepository.setResendCooldown(studentId, properties.getResendCooldownSec());
 
-        if (userOptional.isPresent()) {
-            String recipientEmail = resolveRecipientEmail(studentId, dto.getEmail(), requestId);
-            if (recipientEmail != null) {
-                sendMailSafely(recipientEmail, code, requestId);
-            }
+        String recipientEmail = resolveRecipientEmail(studentId, dto.getEmail(), requestId);
+        if (recipientEmail != null) {
+            sendMailSafely(recipientEmail, code, requestId);
         }
 
         log.info("password_reset request created requestId={} userExists={} ipHash={}",

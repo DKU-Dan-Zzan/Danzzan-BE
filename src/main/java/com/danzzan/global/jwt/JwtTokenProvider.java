@@ -31,7 +31,7 @@ public class JwtTokenProvider {
 
     // Access Token 생성
     // userId, studentId, role을 클레임에 포함
-    public String createAccessToken(Long userId, String studentId, String role) {
+    public String createAccessToken(Long userId, String studentId, String role, int tokenVersion) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + accessTokenExpiration);
 
@@ -39,6 +39,7 @@ public class JwtTokenProvider {
                 .setSubject(String.valueOf(userId))
                 .claim("studentId", studentId)
                 .claim("role", role)
+                .claim("tokenVersion", tokenVersion)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(key)
@@ -47,12 +48,13 @@ public class JwtTokenProvider {
 
     // Refresh Token 생성
     // userId만 포함 (최소한의 정보)
-    public String createRefreshToken(Long userId) {
+    public String createRefreshToken(Long userId, int tokenVersion) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + refreshTokenExpiration);
 
         return Jwts.builder()
                 .setSubject(String.valueOf(userId))
+                .claim("tokenVersion", tokenVersion)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(key)
@@ -72,6 +74,11 @@ public class JwtTokenProvider {
     // 토큰에서 studentId 추출
     public String getStudentId(String token) {
         return getClaims(token).get("studentId", String.class);
+    }
+
+    public int getTokenVersion(String token) {
+        Integer tokenVersion = getClaims(token).get("tokenVersion", Integer.class);
+        return tokenVersion == null ? 0 : tokenVersion;
     }
 
     // 토큰 유효성 검증

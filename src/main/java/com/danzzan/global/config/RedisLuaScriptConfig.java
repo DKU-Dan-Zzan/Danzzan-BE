@@ -18,4 +18,12 @@ public class RedisLuaScriptConfig {
         script.setResultType(List.class);
         return script;
     }
+
+    @Bean("passwordResetConsumeScript")
+    public RedisScript<List> passwordResetConsumeScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/password_reset_consume.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
 }

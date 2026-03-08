@@ -5,6 +5,9 @@ import com.danzzan.domain.timetable.model.dto.TimetablePerformanceDto;
 import com.danzzan.domain.timetable.model.dto.TimetableResponseDto;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
 
+import com.danzzan.domain.timetable.model.dto.ContentImageDto;
+import com.danzzan.domain.timetable.repository.ContentImageRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TimetableService {
     private final PerformanceRepository performanceRepository;
+    private final ContentImageRepository contentImageRepository;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
@@ -36,5 +40,17 @@ public class TimetableService {
             .toList();
 
         return new TimetableResponseDto(date, performanceDtos);
+    }
+
+    public List<ContentImageDto> getContentImages() {
+        return contentImageRepository.findAllByOrderByDisplayOrderAsc()
+                .stream()
+                .map(image -> new ContentImageDto(
+                    image.getId(),
+                    image.getName(),
+                    image.getPreviewImageUrl(),
+                    image.getDetailImageUrl()
+                ))
+                .toList();
     }
 }

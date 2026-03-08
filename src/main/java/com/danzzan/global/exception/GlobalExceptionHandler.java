@@ -11,6 +11,7 @@ import com.danzzan.domain.ticket.exception.TicketNotIssuedException;
 import com.danzzan.domain.user.exception.AlreadyStudentIdException;
 import com.danzzan.domain.user.exception.UserNotFoundException;
 import com.danzzan.domain.user.exception.WrongPasswordException;
+import com.danzzan.domain.user.passwordreset.exception.PasswordResetException;
 import com.danzzan.global.exception.AdminAuthenticationException;
 import com.danzzan.global.exception.AdminForbiddenException;
 import com.danzzan.global.model.ApiError;
@@ -111,6 +112,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleWrongPassword(WrongPasswordException e) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(PasswordResetException.class)
+    public ResponseEntity<Map<String, String>> handlePasswordResetException(PasswordResetException e) {
+        return ResponseEntity.status(e.getErrorType().getStatus())
+                .body(Map.of(
+                        "error", e.getMessage(),
+                        "errorCode", e.getErrorType().getErrorCode()
+                ));
     }
 
     @ExceptionHandler(TicketNotFoundException.class)

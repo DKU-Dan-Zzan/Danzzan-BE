@@ -63,7 +63,7 @@ class TicketControllerTest {
     }
 
     @Test
-    void enterQueue_WAITING_queuePosition_null_when_not_in_queue() throws Exception {
+    void enterQueue_WAITING_omits_queuePosition_when_not_in_queue() throws Exception {
         // 대기열 Sorted Set에 유저가 없는 경우 (ZRANK가 null 반환)
         when(admissionService.admit(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.WAITING);
         when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(null);

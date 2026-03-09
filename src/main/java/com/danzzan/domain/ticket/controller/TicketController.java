@@ -120,9 +120,12 @@ public class TicketController {
     private TicketRequestResponseDTO enterQueueAndClaim(String eventId, String userId) {
         TicketRequestStatus admissionStatus = admissionService.admit(eventId, userId);
         if (admissionStatus != TicketRequestStatus.ADMITTED) {
+            Long queuePosition = admissionStatus == TicketRequestStatus.WAITING
+                    ? ticketStatusService.getQueuePosition(eventId, userId)
+                    : null;
             return TicketRequestResponseDTO.builder()
                     .status(admissionStatus)
-                    .remaining(null)
+                    .queuePosition(queuePosition)
                     .build();
         }
 
@@ -139,8 +142,12 @@ public class TicketController {
 
     private TicketStatusResponseDTO ticketStatus(String eventId, String userId) {
         TicketRequestStatus status = ticketStatusService.getStatus(eventId, userId);
+        Long queuePosition = status == TicketRequestStatus.WAITING
+                ? ticketStatusService.getQueuePosition(eventId, userId)
+                : null;
         return TicketStatusResponseDTO.builder()
                 .status(status)
+                .queuePosition(queuePosition)
                 .build();
     }
 

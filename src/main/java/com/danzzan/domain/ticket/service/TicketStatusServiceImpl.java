@@ -27,4 +27,14 @@ public class TicketStatusServiceImpl implements TicketStatusService {
             return TicketRequestStatus.NONE;
         }
     }
+
+    @Override
+    public Long getQueuePosition(String eventId, String userId) {
+        String queueKey = TicketRedisKeys.queueKey(eventId);
+        Long rank = redisTemplate.opsForZSet().rank(queueKey, userId);
+        if (rank == null) {
+            return null;
+        }
+        return rank + 1; // Redis ZRANK는 0-indexed → 1-indexed로 변환
+    }
 }

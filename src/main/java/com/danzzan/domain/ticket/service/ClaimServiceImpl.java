@@ -13,6 +13,7 @@ import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Arrays;
 
 @Service
 @Slf4j
@@ -103,5 +104,20 @@ public class ClaimServiceImpl implements ClaimService {
             }
         }
         throw new IllegalStateException(fieldName + " must be number-like");
+    }
+
+    @Override
+    public void rollback(String eventId, String userId) {
+        String userKey = TicketRedisKeys.userKey(eventId, userId);
+        String stockKey = TicketRedisKeys.stockKey(eventId);
+        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+        try {
+            stringRedisTemplate.opsForValue().increment(stockKey);
+            stringRedisTemplate.delete(Arrays.asList(userKey, statusKey));
+            log.warn("claim rollback 성공 eventId={} userId={}", eventId, userId);
+        } catch (Exception e) {
+            log.error("claim rollback 실패 eventId={} userId={} - Redis-DB 불일치 발생, 수동 확인 필요",
+                    eventId, userId, e);
+        }
     }
 }

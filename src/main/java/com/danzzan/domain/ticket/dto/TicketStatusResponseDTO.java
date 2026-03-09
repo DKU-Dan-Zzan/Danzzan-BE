@@ -16,4 +16,7 @@ public class TicketStatusResponseDTO {
 
     @Schema(description = "현재 상태", example = "WAITING")
     private TicketRequestStatus status;
+
+    @Schema(description = "대기열 순번(대기 중일 때만, 1-indexed)", example = "142", nullable = true)
+    private Long queuePosition;
 }

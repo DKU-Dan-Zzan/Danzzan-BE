@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,7 +71,7 @@ class TicketControllerTest {
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("WAITING"))
-                .andExpect(jsonPath("$.queuePosition").isEmpty());
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
     }
 
     @Test
@@ -80,7 +81,7 @@ class TicketControllerTest {
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ALREADY"))
-                .andExpect(jsonPath("$.queuePosition").isEmpty());
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
 
         verify(ticketStatusService, never()).getQueuePosition(any(), any());
     }
@@ -94,7 +95,7 @@ class TicketControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.remaining").value(42))
-                .andExpect(jsonPath("$.queuePosition").isEmpty());
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
     }
 
     @Test
@@ -105,7 +106,32 @@ class TicketControllerTest {
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SOLD_OUT"))
-                .andExpect(jsonPath("$.remaining").isEmpty())
-                .andExpect(jsonPath("$.queuePosition").isEmpty());
+                .andExpect(jsonPath("$.remaining").doesNotExist())
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
+    }
+
+    // ── /queue/status 엔드포인트 테스트 ──────────────────────────────────────
+
+    @Test
+    void getQueueStatus_WAITING_returns_queuePosition() throws Exception {
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.WAITING);
+        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(3L);
+
+        mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("WAITING"))
+                .andExpect(jsonPath("$.queuePosition").value(3));
+    }
+
+    @Test
+    void getQueueStatus_ALREADY_does_not_include_queuePosition() throws Exception {
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.ALREADY);
+
+        mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ALREADY"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
+
+        verify(ticketStatusService, never()).getQueuePosition(any(), any());
     }
 }

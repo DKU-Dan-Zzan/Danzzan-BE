@@ -1,6 +1,7 @@
 package com.danzzan.domain.ticket.dto;
 
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,6 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "티켓 상태 조회 응답")
 public class TicketStatusResponseDTO {
 

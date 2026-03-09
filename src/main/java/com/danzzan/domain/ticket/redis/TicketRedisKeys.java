@@ -28,6 +28,14 @@ public final class TicketRedisKeys {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":gate";
     }
 
+    public static String gateUserKey(String eventId, String userId) {
+        return PREFIX + ":" + keyPart(eventId, "eventId") + ":gate:" + keyPart(userId, "userId");
+    }
+
+    public static String activeKey(String eventId) {
+        return PREFIX + ":" + keyPart(eventId, "eventId") + ":active";
+    }
+
     private static String keyPart(String raw, String fieldName) {
         if (raw == null || raw.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");

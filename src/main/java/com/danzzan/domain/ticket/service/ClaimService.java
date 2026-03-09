@@ -5,4 +5,6 @@ import com.danzzan.domain.ticket.service.model.ClaimResult;
 public interface ClaimService {
 
     ClaimResult claim(String eventId, String userId);
+
+    void rollback(String eventId, String userId);
 }

@@ -8,13 +8,16 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "pub")
 public class Pub {
     @Id
-    @GeneratedValue(strategy = GeneratedType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

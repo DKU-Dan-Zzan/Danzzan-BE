@@ -14,7 +14,7 @@ import org.hibernate.annotations.CreationTimestamp;
 @Table(name = "pub_image")
 public class PubImage {
     @Id
-    @GeneratedValue(strategy = GeneratedType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

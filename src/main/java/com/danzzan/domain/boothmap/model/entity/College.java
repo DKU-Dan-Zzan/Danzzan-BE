@@ -14,7 +14,7 @@ import org.hibernate.annotations.CreationTimestamp;
 @Table(name = "college")
 public class College {
     @Id
-    @GeneratedValue(strategy = GeneratedType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "name", nullable = false)

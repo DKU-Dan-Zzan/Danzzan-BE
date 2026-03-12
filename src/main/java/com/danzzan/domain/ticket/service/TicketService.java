@@ -98,6 +98,39 @@ public class TicketService {
         return new ResponseReserveTicketDto(order, ticketDto);
     }
 
+    /**
+     * Redis Lua claim 성공 후 DB에 티켓을 저장하고 응답을 생성합니다.
+     * remaining = Lua DECR 후 남은 재고 → order = totalCapacity - remaining
+     */
+    @Transactional
+    public ResponseReserveTicketDto persistAndBuildResponse(Long userId, Long eventId, long remaining) {
+        if (ticketRepository.existsByUserIdAndEventId(userId, eventId)) {
+            throw new AlreadyReservedException("이미 예매 처리가 완료되었습니다. 내 티켓에서 확인해주세요.");
+        }
+
+        FestivalEvent event = eventRepository.findById(eventId)
+                .orElseThrow(EventNotFoundException::new);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+
+        int order = (int) (event.getTotalCapacity() - remaining);
+
+        UserTicket ticket = UserTicket.builder()
+                .user(user)
+                .event(event)
+                .ticketingOrder(order)
+                .build();
+
+        try {
+            ticketRepository.save(ticket);
+        } catch (DataIntegrityViolationException e) {
+            throw new AlreadyReservedException("이미 예매 처리가 완료되었습니다. 내 티켓에서 확인해주세요.");
+        }
+
+        return new ResponseReserveTicketDto(order, toMyTicketDto(ticket, event));
+    }
+
     // 내 티켓 목록 조회 (로그인 필요)
     public ResponseMyTicketListDto getMyTickets(Long userId) {
         List<UserTicket> tickets = ticketRepository.findAllByUserIdOrderByTicketingAtDesc(userId);

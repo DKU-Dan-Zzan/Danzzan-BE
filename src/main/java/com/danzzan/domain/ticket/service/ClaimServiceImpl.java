@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -69,6 +70,21 @@ public class ClaimServiceImpl implements ClaimService {
         }
 
         throw new IllegalStateException("unexpected claim lua status: " + status);
+    }
+
+    @Override
+    public void rollback(String eventId, String userId) {
+        try {
+            String stockKey = TicketRedisKeys.stockKey(eventId);
+            String userKey = TicketRedisKeys.userKey(eventId, userId);
+            String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+
+            stringRedisTemplate.opsForValue().increment(stockKey);
+            stringRedisTemplate.delete(Arrays.asList(userKey, statusKey));
+            log.info("claim_rollback eventId={} userId={}", eventId, userId);
+        } catch (Exception e) {
+            log.error("claim_rollback 실패 eventId={} userId={}", eventId, userId, e);
+        }
     }
 
     private ClaimResult recordOutcome(String eventId, String userId, ClaimResult result) {

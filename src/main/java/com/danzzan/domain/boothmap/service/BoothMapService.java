@@ -16,6 +16,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class BoothMapService {
     private final CollegeRepository collegeRepository;
     private final BoothRepository boothRepository;

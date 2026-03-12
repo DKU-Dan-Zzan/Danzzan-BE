@@ -5,4 +5,6 @@ import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 public interface TicketStatusService {
 
     TicketRequestStatus getStatus(String eventId, String userId);
+
+    Long getQueuePosition(String eventId, String userId);
 }

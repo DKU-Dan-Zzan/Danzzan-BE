@@ -18,4 +18,6 @@ public interface FestivalEventRepository extends JpaRepository<FestivalEvent, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from FestivalEvent e where e.id = :eventId")
     Optional<FestivalEvent> findByIdForUpdate(@Param("eventId") Long eventId);
+
+    List<FestivalEvent> findByTicketingStatus(TicketingStatus ticketingStatus);
 }

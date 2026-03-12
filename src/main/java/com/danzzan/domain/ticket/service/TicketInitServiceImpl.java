@@ -28,6 +28,9 @@ public class TicketInitServiceImpl implements TicketInitService {
 
         unlinkByPattern(eventPrefix + ":user:*");
         unlinkByPattern(eventPrefix + ":status:*");
+        unlinkByPattern(eventPrefix + ":gate:*");
+        redisTemplate.delete(TicketRedisKeys.queueKey(eventId));
+        redisTemplate.delete(TicketRedisKeys.activeKey(eventId));
         redisTemplate.opsForValue().set(stockKey, String.valueOf(stock));
 
         return AdminTicketInitResponseDTO.builder()

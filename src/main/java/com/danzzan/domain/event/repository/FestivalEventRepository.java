@@ -13,6 +13,8 @@ import java.util.Optional;
 
 public interface FestivalEventRepository extends JpaRepository<FestivalEvent, Long> {
 
+    List<FestivalEvent> findAllByTicketingStatus(TicketingStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from FestivalEvent e where e.id = :eventId")
     Optional<FestivalEvent> findByIdForUpdate(@Param("eventId") Long eventId);

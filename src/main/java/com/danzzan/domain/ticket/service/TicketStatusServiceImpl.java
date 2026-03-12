@@ -12,39 +12,45 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class TicketStatusServiceImpl implements TicketStatusService {
 
-    private static final Set<TicketRequestStatus> TERMINAL_STATUSES =
-            Set.of(TicketRequestStatus.SUCCESS, TicketRequestStatus.SOLD_OUT, TicketRequestStatus.ALREADY);
+    private static final Set<TicketRequestStatus> TERMINAL_STATUSES = Set.of(
+            TicketRequestStatus.SUCCESS,
+            TicketRequestStatus.SOLD_OUT,
+            TicketRequestStatus.ALREADY
+    );
 
     private final StringRedisTemplate redisTemplate;
     private final QueueService queueService;
 
     @Override
     public TicketRequestStatus getStatus(String eventId, String userId) {
-        // 1. Lua가 기록한 최종 상태 확인 (SUCCESS / SOLD_OUT / ALREADY)
-        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
-        String statusValue = redisTemplate.opsForValue().get(statusKey);
+        // 1. 터미널 상태 확인 (Lua Script가 저장한 최종 결과)
+        String statusValue = redisTemplate.opsForValue().get(TicketRedisKeys.statusKey(eventId, userId));
         if (statusValue != null && !statusValue.isBlank()) {
             try {
-                TicketRequestStatus s = TicketRequestStatus.valueOf(statusValue);
-                if (TERMINAL_STATUSES.contains(s)) {
-                    return s;
+                TicketRequestStatus status = TicketRequestStatus.valueOf(statusValue);
+                if (TERMINAL_STATUSES.contains(status)) {
+                    return status;
                 }
             } catch (IllegalArgumentException ignored) {
+                return TicketRequestStatus.NONE;
             }
         }
 
-        // 2. 스케줄러가 발급한 gate 키 확인 → ADMITTED
-        String gateUserKey = TicketRedisKeys.gateUserKey(eventId, userId);
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(gateUserKey))) {
+        // 2. gate 키 확인 → 스케줄러가 입장 허가한 상태
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(TicketRedisKeys.gateUserKey(eventId, userId)))) {
             return TicketRequestStatus.ADMITTED;
         }
 
-        // 3. 대기열 존재 여부 → WAITING
-        Long position = queueService.getQueuePosition(eventId, userId);
-        if (position != null) {
+        // 3. 대기열 순번 확인 → 대기 중
+        if (queueService.getQueuePosition(eventId, userId) != null) {
             return TicketRequestStatus.WAITING;
         }
 
         return TicketRequestStatus.NONE;
+    }
+
+    @Override
+    public Long getQueuePosition(String eventId, String userId) {
+        return queueService.getQueuePosition(eventId, userId);
     }
 }

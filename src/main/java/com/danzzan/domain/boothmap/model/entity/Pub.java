@@ -39,7 +39,7 @@ public class Pub {
     @Column(name = "instagram")
     private String instagram;
 
-    @OneToMany(mappedBy = "pub", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "pub", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<PubImage> images = new ArrayList<>();
 
     @CreationTimestamp

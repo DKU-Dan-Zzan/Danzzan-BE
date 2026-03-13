@@ -22,7 +22,7 @@ public class PubService {
     private final PubImageRepository pubImageRepository;
 
     public List<PubSummaryResponse> getPubs() {
-        List<Pub> pubs = pubRepository.findAllWithCollege();
+        List<Pub> pubs = pubRepository.findAllWithCollegeAndMainImage();
 
         return pubs.stream()
             .map(pub -> {

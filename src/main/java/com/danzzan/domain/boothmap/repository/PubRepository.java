@@ -20,4 +20,13 @@ public interface PubRepository extends JpaRepository<Pub, Long> {
     WHERE p.id = :pubId
     """)
     Optional<Pub> findByIdWithCollege(Long pubId);
+
+    @Query("""
+    SELECT p
+    FROM Pub p
+    JOIN FETCH p.college
+    LEFT JOIN FETCH p.images img
+    WHERE img.isMain = true OR img IS NULL
+    """)
+    List<Pub> findAllWithCollegeAndMainImage();
 }

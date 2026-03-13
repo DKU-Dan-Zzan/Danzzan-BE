@@ -161,8 +161,8 @@ class TicketControllerTest {
 
         // gate 없으면 claim도 호출하지 않음
         verify(claimService, never()).claim(any(), any());
-        // gate 없어도 releaseSlot은 finally에서 호출됨
-        verify(slotService).releaseSlot(eq("10"), eq("1"));
+        // gate를 획득하지 못한 요청은 reserve 본 처리에 들어가지 않으므로 슬롯 반환도 호출하지 않는다.
+        verify(slotService, never()).releaseSlot(any(), any());
     }
 
     @Test

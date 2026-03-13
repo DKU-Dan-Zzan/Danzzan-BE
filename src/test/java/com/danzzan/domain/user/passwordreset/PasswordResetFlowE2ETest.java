@@ -69,7 +69,8 @@ class PasswordResetFlowE2ETest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "requestId", "request-123",
                                 "verificationToken", "verified-token",
-                                "newPassword", "NewPass!2026"
+                                "newPassword", "NewPass!2026",
+                                "confirmPassword", "NewPass!2026"
                         ))))
                 .andExpect(status().isOk());
 

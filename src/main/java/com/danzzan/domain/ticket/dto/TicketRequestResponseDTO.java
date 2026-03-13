@@ -1,6 +1,7 @@
 package com.danzzan.domain.ticket.dto;
 
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,6 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "티켓 요청(선착순) 응답")
 public class TicketRequestResponseDTO {
 
@@ -20,6 +22,6 @@ public class TicketRequestResponseDTO {
     @Schema(description = "남은 재고(선택)", example = "42", nullable = true)
     private Long remaining;
 
-    @Schema(description = "대기열 순번(대기 중일 때만, 1-indexed)", example = "142", nullable = true)
+    @Schema(description = "대기열 순번(대기 중일 때만, 1-indexed) — WAITING 외 상태에서는 필드 자체가 응답에서 생략됨", example = "142")
     private Long queuePosition;
 }

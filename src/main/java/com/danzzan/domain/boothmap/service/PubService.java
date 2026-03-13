@@ -1,6 +1,7 @@
 package com.danzzan.domain.boothmap.service;
 
 import com.danzzan.domain.boothmap.model.dto.PubSummaryResponse;
+import com.danzzan.domain.boothmap.model.dto.PubDetailResponse;
 import com.danzzan.domain.boothmap.model.entity.Pub;
 import com.danzzan.domain.boothmap.model.entity.College;
 import com.danzzan.domain.boothmap.model.entity.PubImage;
@@ -21,7 +22,7 @@ public class PubService {
     private final PubImageRepository pubImageRepository;
 
     public List<PubSummaryResponse> getPubs() {
-        List<Pub> pubs = pubRepository.findAll();
+        List<Pub> pubs = pubRepository.findAllWithCollege();
 
         return pubs.stream()
             .map(pub -> {
@@ -37,5 +38,27 @@ public class PubService {
                 );
             })
             .toList();
+    }
+
+    public PubDetailResponse getPubDetail(Long pubId) {
+
+        Pub pub = pubRepository.findByIdWithCollege(pubId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 주점을 찾을 수 없습니다. id=" + pubId));
+
+        List<String> imageUrls = pubImageRepository.findByPubId(pubId)
+                .stream()
+                .map(image -> image.getImageUrl())
+                .toList();
+
+        return new PubDetailResponse(
+                pub.getId(),
+                pub.getName(),
+                pub.getIntro(),
+                pub.getDescription(),
+                pub.getDepartment(),
+                pub.getCollege().getName(),
+                pub.getInstagram(),
+                imageUrls
+        );
     }
 }

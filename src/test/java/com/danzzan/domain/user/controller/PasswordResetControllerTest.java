@@ -19,6 +19,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -79,10 +81,47 @@ class PasswordResetControllerTest {
                                 java.util.Map.of(
                                         "requestId", "request-123",
                                         "verificationToken", "verification-token",
-                                        "newPassword", "NewPass!2026"
+                                        "newPassword", "NewPass!2026",
+                                        "confirmPassword", "NewPass!2026"
                                 )
                         )))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void resetPasswordConfirmMismatchReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/user/password/reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                java.util.Map.of(
+                                        "requestId", "request-123",
+                                        "verificationToken", "verification-token",
+                                        "newPassword", "NewPass!2026",
+                                        "confirmPassword", "Different!2026"
+                                )
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("비밀번호 확인이 일치하지 않습니다."));
+
+        verify(passwordResetService, never()).resetPassword(any());
+    }
+
+    @Test
+    void resetPasswordPasswordPolicyViolationReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/user/password/reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                java.util.Map.of(
+                                        "requestId", "request-123",
+                                        "verificationToken", "verification-token",
+                                        "newPassword", "password1",
+                                        "confirmPassword", "password1"
+                                )
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("비밀번호는 8자 이상이며 특수문자를 1자 이상 포함해야 합니다."));
+
+        verify(passwordResetService, never()).resetPassword(any());
     }
 
     @Test

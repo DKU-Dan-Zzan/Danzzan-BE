@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -48,6 +49,13 @@ public class UserController {
         String accessToken = extractAccessToken(request);
         ResponseRefreshTokenDto response = userService.refreshToken(accessToken, dto.getRefreshToken());
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자 정보를 조회합니다.")
+    public ResponseEntity<ResponseLoginDto.UserInfo> getMyInfo(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ResponseEntity.ok(userService.getMyInfo(userId));
     }
 
     private String extractAccessToken(HttpServletRequest request) {

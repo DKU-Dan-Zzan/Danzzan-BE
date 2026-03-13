@@ -33,6 +33,9 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
 
+    @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
+    private String allowedOriginPatterns;
+
     private final JwtProvider jwtProvider;
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
 
@@ -59,6 +62,8 @@ public class SecurityConfig {
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET,
+                                "/",
+                                "/health",
                                 "/home/**",
                                 "/notices/**",
                                 "/timetable/**",
@@ -80,18 +85,19 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        List<String> parsedAllowedOrigins = parseCsv(allowedOrigins);
+        List<String> parsedAllowedOriginPatterns = parseCsv(allowedOriginPatterns);
+
         CorsConfiguration festivalCors = new CorsConfiguration();
-        festivalCors.setAllowedOrigins(
-                Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList());
+        festivalCors.setAllowedOrigins(parsedAllowedOrigins);
+        festivalCors.setAllowedOriginPatterns(parsedAllowedOriginPatterns);
         festivalCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         festivalCors.setAllowedHeaders(List.of("*"));
         festivalCors.setAllowCredentials(true);
 
         CorsConfiguration ticketingCors = new CorsConfiguration();
-        ticketingCors.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*"
-        ));
+        ticketingCors.setAllowedOrigins(parsedAllowedOrigins);
+        ticketingCors.setAllowedOriginPatterns(parsedAllowedOriginPatterns);
         ticketingCors.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         ticketingCors.setAllowedHeaders(List.of("*"));
         ticketingCors.setAllowCredentials(true);
@@ -103,6 +109,13 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/api/admin/ticket/**", ticketingCors);
         source.registerCorsConfiguration("/**", festivalCors);
         return source;
+    }
+
+    private List<String> parseCsv(String value) {
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     @Bean

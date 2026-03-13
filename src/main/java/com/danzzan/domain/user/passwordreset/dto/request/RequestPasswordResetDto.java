@@ -1,6 +1,7 @@
 package com.danzzan.domain.user.passwordreset.dto.request;
 
 import com.danzzan.domain.user.validation.PasswordPolicy;
+import com.danzzan.domain.user.validation.ValidPasswordConfirmation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
+@ValidPasswordConfirmation(passwordField = "newPassword", confirmPasswordField = "confirmPassword")
 @Schema(description = "비밀번호 재설정 최종 요청")
 public class RequestPasswordResetDto {
 
@@ -24,4 +26,8 @@ public class RequestPasswordResetDto {
     @Pattern(regexp = PasswordPolicy.REGEX, message = PasswordPolicy.MESSAGE)
     @Schema(description = "새 비밀번호", example = "NewPass!2026")
     private final String newPassword;
+
+    @NotBlank(message = "비밀번호 확인은 필수입니다.")
+    @Schema(description = "비밀번호 확인", example = "NewPass!2026")
+    private final String confirmPassword;
 }

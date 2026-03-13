@@ -51,7 +51,7 @@ class TicketAdmissionSchedulerTest {
         doReturn(zOps).when(redis).opsForZSet();
         doReturn(vOps).when(redis).opsForValue();
 
-        sut = new TicketAdmissionScheduler(redis, eventRepo, slotService);
+        sut = new TicketAdmissionScheduler(redis, slotService, eventRepo);
         ReflectionTestUtils.setField(sut, "maxConcurrentSlots", 100);
         ReflectionTestUtils.setField(sut, "gateTtlSeconds", 300L);
     }
@@ -84,7 +84,7 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("여유 슬롯 2개일 때 popMin(2) 호출 후 gate 키 발급")
     void processQueue_admitsUpToFreeSlots() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN))
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(openEvent(1L)));
         when(slotService.activeSlotCount(EVENT_ID)).thenReturn(98L); // freeSlots=2
         when(vOps.get(STOCK_KEY)).thenReturn("50");
@@ -92,7 +92,7 @@ class TicketAdmissionSchedulerTest {
                 .thenReturn(Set.of(tuple("userA"), tuple("userB")));
         when(slotService.acquireSlot(eq(EVENT_ID), anyString())).thenReturn(true);
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         verify(zOps).popMin(QUEUE_KEY, 2L);
         verify(vOps, times(2)).set(anyString(), eq("1"), any());
@@ -101,11 +101,11 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("슬롯이 꽉 찼을 때(freeSlots=0) popMin 호출 안 함")
     void processQueue_skipsWhenNoFreeSlots() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN))
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(openEvent(1L)));
         when(slotService.activeSlotCount(EVENT_ID)).thenReturn(100L);
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         verify(zOps, never()).popMin(any(), anyLong());
     }
@@ -113,12 +113,12 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("stock=0이면 popMin 호출 안 함")
     void processQueue_skipsWhenStockEmpty() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN))
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(openEvent(1L)));
         when(slotService.activeSlotCount(EVENT_ID)).thenReturn(0L);
         when(vOps.get(STOCK_KEY)).thenReturn("0");
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         verify(zOps, never()).popMin(any(), anyLong());
     }
@@ -126,14 +126,14 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("acquireSlot 실패한 userId는 재입대(addIfAbsent)")
     void processQueue_requeueOnAcquireFailure() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN))
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(openEvent(1L)));
         when(slotService.activeSlotCount(EVENT_ID)).thenReturn(99L);
         when(vOps.get(STOCK_KEY)).thenReturn("10");
         when(zOps.popMin(QUEUE_KEY, 1L)).thenReturn(Set.of(tuple("userX")));
         when(slotService.acquireSlot(EVENT_ID, "userX")).thenReturn(false);
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         verify(vOps, never()).set(anyString(), eq("1"), any());
         verify(zOps).addIfAbsent(eq(QUEUE_KEY), eq("userX"), anyDouble());
@@ -142,13 +142,13 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("toAdmit = min(freeSlots=100, stock=5, CEILING=100) = 5")
     void processQueue_toAdmitIsMinOfThree() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN))
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(openEvent(1L)));
         when(slotService.activeSlotCount(EVENT_ID)).thenReturn(0L);
         when(vOps.get(STOCK_KEY)).thenReturn("5");
         when(zOps.popMin(eq(QUEUE_KEY), anyLong())).thenReturn(Set.of());
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         verify(zOps).popMin(QUEUE_KEY, 5L);
     }
@@ -156,9 +156,9 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("OPEN 이벤트 없으면 Redis 호출 없음")
     void processQueue_noOpenEvents_doesNothing() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN)).thenReturn(List.of());
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN)).thenReturn(List.of());
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         verify(redis, never()).opsForZSet();
         verify(redis, never()).opsForValue();
@@ -168,12 +168,12 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("stock null이면 0으로 파싱 → popMin 안 함")
     void processQueue_nullStockSkips() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN))
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(openEvent(1L)));
         when(slotService.activeSlotCount(EVENT_ID)).thenReturn(0L);
         when(vOps.get(STOCK_KEY)).thenReturn(null);
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         verify(zOps, never()).popMin(any(), anyLong());
     }
@@ -185,14 +185,14 @@ class TicketAdmissionSchedulerTest {
     @Test
     @DisplayName("gate 키 TTL = 300초로 설정")
     void processQueue_gateKeySetWith300sTtl() {
-        when(eventRepo.findByTicketingStatus(TicketingStatus.OPEN))
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(openEvent(1L)));
         when(slotService.activeSlotCount(EVENT_ID)).thenReturn(99L);
         when(vOps.get(STOCK_KEY)).thenReturn("10");
         when(zOps.popMin(QUEUE_KEY, 1L)).thenReturn(Set.of(tuple("userZ")));
         when(slotService.acquireSlot(EVENT_ID, "userZ")).thenReturn(true);
 
-        sut.processQueue();
+        sut.admitFromQueue();
 
         ArgumentCaptor<Duration> ttlCaptor = ArgumentCaptor.forClass(Duration.class);
         verify(vOps).set(anyString(), eq("1"), ttlCaptor.capture());

@@ -10,12 +10,15 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AdmissionServiceImpl implements AdmissionService {
 
-    private final StringRedisTemplate stringRedisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
+    /**
+     * 스케줄러가 발급한 gate 키가 있으면 ADMITTED, 없으면 WAITING 반환.
+     */
     @Override
     public TicketRequestStatus admit(String eventId, String userId) {
-        String gateUserKey = TicketRedisKeys.gateUserKey(eventId, userId);
-        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(gateUserKey))) {
+        String gateKey = TicketRedisKeys.gateUserKey(eventId, userId);
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(gateKey))) {
             return TicketRequestStatus.ADMITTED;
         }
         return TicketRequestStatus.WAITING;

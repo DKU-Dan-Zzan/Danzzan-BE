@@ -227,7 +227,12 @@ class PasswordResetServiceTest {
         when(userRepository.findByStudentId("32100000")).thenReturn(Optional.of(user));
         when(passwordEncoder.encode("NewPass!2026")).thenReturn("encoded-password");
 
-        passwordResetService.resetPassword(new RequestPasswordResetDto(requestId, verificationToken, "NewPass!2026"));
+        passwordResetService.resetPassword(new RequestPasswordResetDto(
+                requestId,
+                verificationToken,
+                "NewPass!2026",
+                "NewPass!2026"
+        ));
 
         assertThat(user.getPassword()).isEqualTo("encoded-password");
         assertThat(user.getTokenVersion()).isEqualTo(1);
@@ -243,7 +248,12 @@ class PasswordResetServiceTest {
                 .thenReturn(PasswordResetConsumeResult.fail(PasswordResetConsumeResult.ConsumeStatus.TOKEN_ALREADY_CONSUMED));
 
         assertThatThrownBy(() -> passwordResetService.resetPassword(
-                new RequestPasswordResetDto(requestId, verificationToken, "NewPass!2026")))
+                new RequestPasswordResetDto(
+                        requestId,
+                        verificationToken,
+                        "NewPass!2026",
+                        "NewPass!2026"
+                )))
                 .isInstanceOf(PasswordResetException.class)
                 .extracting("errorType")
                 .isEqualTo(PasswordResetErrorType.TOKEN_ALREADY_CONSUMED);

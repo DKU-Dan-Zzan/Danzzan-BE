@@ -129,7 +129,7 @@ public class MapController {
                                                 "pubId": 1,
                                                 "name": "소프트웨어학과 주점",
                                                 "intro": "오늘만 사는 주점",
-                                                "collegeId": 2,
+                                                "department": "소프트웨어학과",
                                                 "collegeName": "SW융합대학",
                                                 "mainImageUrl": "https://image.url/main.png"
                                               },
@@ -137,7 +137,7 @@ public class MapController {
                                                 "pubId": 2,
                                                 "name": "전자공학과 주점",
                                                 "intro": "신나는 주점",
-                                                "collegeId": 3,
+                                                "department": "전자공학과",
                                                 "collegeName": "공과대학",
                                                 "mainImageUrl": "https://image.url/main2.png"
                                               }

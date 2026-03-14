@@ -58,4 +58,20 @@ public class RedisLuaScriptConfig {
         script.setResultType(String.class);
         return script;
     }
+
+    @Bean("expireReadyUsersScript")
+    public RedisScript<List> expireReadyUsersScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/expire_ready_users.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
+
+    @Bean("expireActiveUsersScript")
+    public RedisScript<List> expireActiveUsersScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/expire_active_users.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
 }

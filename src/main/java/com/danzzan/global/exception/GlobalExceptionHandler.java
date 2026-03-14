@@ -165,21 +165,21 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(EventNotOpenException.class)
-    public ResponseEntity<Map<String, String>> handleEventNotOpen(EventNotOpenException e) {
+    public ResponseEntity<ApiResponse<Void>> handleEventNotOpen(EventNotOpenException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", e.getMessage()));
+                .body(ApiResponse.error("RESERVE_NOT_OPEN", e.getMessage()));
     }
 
     @ExceptionHandler(EventSoldOutException.class)
-    public ResponseEntity<Map<String, String>> handleEventSoldOut(EventSoldOutException e) {
+    public ResponseEntity<ApiResponse<Void>> handleEventSoldOut(EventSoldOutException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", e.getMessage()));
+                .body(ApiResponse.error("RESERVE_SOLD_OUT", e.getMessage()));
     }
 
     @ExceptionHandler(AlreadyReservedException.class)
-    public ResponseEntity<Map<String, String>> handleAlreadyReserved(AlreadyReservedException e) {
+    public ResponseEntity<ApiResponse<Void>> handleAlreadyReserved(AlreadyReservedException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", e.getMessage()));
+                .body(ApiResponse.error("RESERVE_ALREADY_RESERVED", e.getMessage()));
     }
 
     @ExceptionHandler(AdminAuthenticationException.class)

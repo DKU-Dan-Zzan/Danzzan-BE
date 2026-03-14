@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
@@ -39,6 +38,12 @@ public class QueueStateServiceImpl implements QueueStateService {
 
     @Qualifier("admitOneWaitingUserScript")
     private final RedisScript<String> admitOneWaitingUserScript;
+
+    @Qualifier("expireReadyUsersScript")
+    private final RedisScript<List> expireReadyUsersScript;
+
+    @Qualifier("expireActiveUsersScript")
+    private final RedisScript<List> expireActiveUsersScript;
 
     @Value("${app.ticketing.active-ttl-seconds:600}")
     private long activeTtlSeconds;
@@ -118,52 +123,46 @@ public class QueueStateServiceImpl implements QueueStateService {
 
     @Override
     public int expireActiveUsers(String eventId) {
-        double nowMs = System.currentTimeMillis();
-        Set<TypedTuple<String>> expired = redisTemplate.opsForZSet()
-                .rangeByScoreWithScores(TicketRedisKeys.activeKey(eventId), 0, nowMs);
-        if (expired == null || expired.isEmpty()) {
+        String nowMs = String.valueOf(System.currentTimeMillis());
+        List<Object> expiredIds = redisTemplate.execute(
+                expireActiveUsersScript,
+                List.of(TicketRedisKeys.activeKey(eventId)),
+                TicketRedisKeys.queueUserPrefix(eventId),
+                TicketRedisKeys.dedupKeyPrefix(eventId),
+                nowMs
+        );
+        if (expiredIds == null || expiredIds.isEmpty()) {
             return 0;
         }
-        int count = 0;
-        for (TypedTuple<String> entry : expired) {
-            String userId = entry.getValue();
-            if (userId == null) continue;
-            String hashKey = TicketRedisKeys.queueUserHashKey(eventId, userId);
-            redisTemplate.opsForHash().put(hashKey, FIELD_STATE, QueueUserState.EXPIRED.name());
-            redisTemplate.opsForHash().put(hashKey, FIELD_EXPIRED_AT, String.valueOf((long) nowMs));
-            redisTemplate.opsForZSet().remove(TicketRedisKeys.activeKey(eventId), userId);
-            redisTemplate.delete(TicketRedisKeys.dedupKey(eventId, userId));
+        for (Object raw : expiredIds) {
+            String userId = raw.toString();
             ticketQueueEntrySyncService.markExpired(eventId, userId);
-            count++;
             log.debug("ACTIVE 만료 eventId={} userId={}", eventId, userId);
         }
-        backfillFreedSlotsIfOpen(eventId, count);
-        return count;
+        backfillFreedSlotsIfOpen(eventId, expiredIds.size());
+        return expiredIds.size();
     }
 
     @Override
     public int expireReadyUsers(String eventId) {
-        double nowMs = System.currentTimeMillis();
-        Set<TypedTuple<String>> expired = redisTemplate.opsForZSet()
-                .rangeByScoreWithScores(TicketRedisKeys.readyKey(eventId), 0, nowMs);
-        if (expired == null || expired.isEmpty()) {
+        String nowMs = String.valueOf(System.currentTimeMillis());
+        List<Object> expiredIds = redisTemplate.execute(
+                expireReadyUsersScript,
+                List.of(TicketRedisKeys.readyKey(eventId)),
+                TicketRedisKeys.queueUserPrefix(eventId),
+                TicketRedisKeys.dedupKeyPrefix(eventId),
+                nowMs
+        );
+        if (expiredIds == null || expiredIds.isEmpty()) {
             return 0;
         }
-        int count = 0;
-        for (TypedTuple<String> entry : expired) {
-            String userId = entry.getValue();
-            if (userId == null) continue;
-            String hashKey = TicketRedisKeys.queueUserHashKey(eventId, userId);
-            redisTemplate.opsForHash().put(hashKey, FIELD_STATE, QueueUserState.EXPIRED.name());
-            redisTemplate.opsForHash().put(hashKey, FIELD_EXPIRED_AT, String.valueOf((long) nowMs));
-            redisTemplate.opsForZSet().remove(TicketRedisKeys.readyKey(eventId), userId);
-            redisTemplate.delete(TicketRedisKeys.dedupKey(eventId, userId));
+        for (Object raw : expiredIds) {
+            String userId = raw.toString();
             ticketQueueEntrySyncService.markExpired(eventId, userId);
-            count++;
             log.debug("READY 만료 eventId={} userId={}", eventId, userId);
         }
-        backfillFreedSlotsIfOpen(eventId, count);
-        return count;
+        backfillFreedSlotsIfOpen(eventId, expiredIds.size());
+        return expiredIds.size();
     }
 
     @Override

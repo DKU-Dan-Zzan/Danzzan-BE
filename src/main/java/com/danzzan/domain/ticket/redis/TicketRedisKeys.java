@@ -58,6 +58,11 @@ public final class TicketRedisKeys {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":dedup:" + keyPart(userId, "userId");
     }
 
+    /** 중복 진입 방지 키 prefix (Lua 내부 동적 조합용) */
+    public static String dedupKeyPrefix(String eventId) {
+        return PREFIX + ":" + keyPart(eventId, "eventId") + ":dedup:";
+    }
+
     /** CLOSED 이벤트 대기열 정리 완료 마커 */
     public static String closedCleanupKey(String eventId) {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":closed-cleanup";

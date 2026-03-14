@@ -10,12 +10,14 @@ import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.model.entity.TicketStatus;
 import com.danzzan.domain.ticket.model.entity.UserTicket;
+import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.domain.user.exception.UserNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,7 @@ public class TicketService {
     private final FestivalEventRepository eventRepository;
     private final UserTicketRepository ticketRepository;
     private final UserRepository userRepository;
+    private final StringRedisTemplate redisTemplate;
 
     // 이벤트 목록 조회 (로그인 불필요)
     public ResponseTicketEventListDto getTicketingEvents() {
@@ -67,7 +70,9 @@ public class TicketService {
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
 
-        int order = (int) (event.getTotalCapacity() - remaining);
+        // Redis stock(remaining)과 totalCapacity가 다를 수 있으므로
+        // DB 발급 수 기준으로 순번 계산 (unique 제약으로 동일 유저 중복 불가)
+        int order = (int) ticketRepository.countByEventId(eventId) + 1;
 
         UserTicket ticket = UserTicket.builder()
                 .user(user)
@@ -108,8 +113,20 @@ public class TicketService {
     // ===== 변환 메서드 =====
 
     private ResponseTicketEventDto toTicketEventDto(FestivalEvent event) {
-        long ticketCount = ticketRepository.countByEventId(event.getId());
-        int remaining = Math.max(0, event.getTotalCapacity() - (int) ticketCount);
+        // Redis stock을 진실원천으로 사용 — DB 발급 수와 totalCapacity 기반 계산은 초기화 값과 어긋남
+        String stockStr = redisTemplate.opsForValue().get(
+                TicketRedisKeys.stockKey(String.valueOf(event.getId())));
+        int remaining;
+        if (stockStr != null) {
+            try {
+                remaining = Math.max(0, Integer.parseInt(stockStr));
+            } catch (NumberFormatException e) {
+                remaining = 0;
+            }
+        } else {
+            // 이벤트 오픈 전(READY)이거나 초기화 전: totalCapacity로 표시
+            remaining = event.getTotalCapacity();
+        }
 
         // BE status → FE status 변환
         String feStatus;

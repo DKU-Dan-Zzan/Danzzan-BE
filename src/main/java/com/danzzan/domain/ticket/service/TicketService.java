@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -45,59 +44,6 @@ public class TicketService {
         return new ResponseTicketEventListDto(items);
     }
 
-    // 티켓 예매 (로그인 필요)
-    @Transactional
-    public ResponseReserveTicketDto reserveTicket(Long userId, Long eventId) {
-        // 1. 이벤트 행 잠금 조회
-        // 동일 eventId 예매 경쟁을 직렬화해 count-check/insert 레이스를 방지한다.
-        FestivalEvent event = eventRepository.findByIdForUpdate(eventId)
-                .orElseThrow(EventNotFoundException::new);
-
-        // 2. 오픈 전 체크 (FE에서도 막지만 BE 방어)
-        if (event.getTicketingStatus() == TicketingStatus.READY) {
-            throw new EventNotOpenException();
-        }
-
-        // 3. 마감 체크 (FE에서도 막지만 BE 방어)
-        if (event.getTicketingStatus() == TicketingStatus.CLOSED) {
-            throw new EventSoldOutException();
-        }
-
-        // 4. 중복 예매 체크
-        if (ticketRepository.existsByUserIdAndEventId(userId, eventId)) {
-            throw new AlreadyReservedException();
-        }
-
-        // 5. 잔여석 체크
-        long currentCount = ticketRepository.countByEventId(eventId);
-        if (currentCount >= event.getTotalCapacity()) {
-            throw new EventSoldOutException();
-        }
-
-        // 6. 유저 조회
-        User user = userRepository.findById(userId)
-                .orElseThrow(UserNotFoundException::new);
-
-        // 7. 순번 계산 + 티켓 생성
-        int order = (int) currentCount + 1;
-        UserTicket ticket = UserTicket.builder()
-                .user(user)
-                .event(event)
-                .ticketingOrder(order)
-                .build();
-
-        // 8. DB 저장 (동시 요청 시 unique 제약 위반 가능)
-        try {
-            ticketRepository.save(ticket);
-        } catch (DataIntegrityViolationException e) {
-            throw new AlreadyReservedException("이미 예매 처리가 완료되었습니다. 내 티켓에서 확인해주세요.");
-        }
-
-        // 9. 응답 생성
-        ResponseMyTicketDto ticketDto = toMyTicketDto(ticket, event);
-        return new ResponseReserveTicketDto(order, ticketDto);
-    }
-
     /**
      * Redis Lua claim 성공 후 DB에 티켓을 저장하고 응답을 생성합니다.
      * remaining = Lua DECR 후 남은 재고 → order = totalCapacity - remaining
@@ -110,6 +56,13 @@ public class TicketService {
 
         FestivalEvent event = eventRepository.findById(eventId)
                 .orElseThrow(EventNotFoundException::new);
+
+        if (event.getTicketingStatus() == TicketingStatus.READY) {
+            throw new EventNotOpenException("아직 예매가 시작되지 않았습니다.");
+        }
+        if (event.getTicketingStatus() == TicketingStatus.CLOSED) {
+            throw new EventSoldOutException();
+        }
 
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
@@ -129,6 +82,16 @@ public class TicketService {
         }
 
         return new ResponseReserveTicketDto(order, toMyTicketDto(ticket, event));
+    }
+
+    public boolean hasTicket(Long userId, Long eventId) {
+        return ticketRepository.existsByUserIdAndEventId(userId, eventId);
+    }
+
+    public boolean isClosedEvent(Long eventId) {
+        FestivalEvent event = eventRepository.findById(eventId)
+                .orElseThrow(EventNotFoundException::new);
+        return event.getTicketingStatus() == TicketingStatus.CLOSED;
     }
 
     // 내 티켓 목록 조회 (로그인 필요)

@@ -16,12 +16,14 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -92,6 +94,29 @@ class PasswordResetFlowE2ETest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andExpect(jsonPath("$.user.studentId").value("32100000"));
+                .andExpect(jsonPath("$.user.studentId").value("32100000"))
+                .andExpect(jsonPath("$.user.name").value("테스터"))
+                .andExpect(jsonPath("$.user.college").value("공과대학"))
+                .andExpect(jsonPath("$.user.department").value("컴퓨터공학과"));
+
+        MvcResult loginResult = mockMvc.perform(post("/user/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "studentId", "32100000",
+                                "password", "NewPass!2026"
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn();
+        String accessToken = objectMapper.readTree(loginResult.getResponse().getContentAsString())
+                .path("accessToken")
+                .asText();
+
+        mockMvc.perform(get("/user/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.studentId").value("32100000"))
+                .andExpect(jsonPath("$.name").value("테스터"))
+                .andExpect(jsonPath("$.college").value("공과대학"))
+                .andExpect(jsonPath("$.department").value("컴퓨터공학과"));
     }
 }

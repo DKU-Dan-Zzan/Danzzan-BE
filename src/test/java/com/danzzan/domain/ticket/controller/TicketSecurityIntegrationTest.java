@@ -59,7 +59,7 @@ class TicketSecurityIntegrationTest {
                 .andExpect(status().isForbidden())
                 .andReturn();
 
-        assertThat(result.getResponse().getContentAsString()).isBlank();
+        assertThat(result.getResponse().getContentAsString()).isEmpty();
     }
 
     @ParameterizedTest

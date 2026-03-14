@@ -41,16 +41,14 @@ public class UserService {
                 user.getId(), user.getStudentId(), user.getRole().name(), user.getTokenVersion());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getTokenVersion());
 
-        String roleStr = user.getRole().name().replace("ROLE_", "").toLowerCase();
-        ResponseLoginDto.UserInfo userInfo = new ResponseLoginDto.UserInfo(
-                String.valueOf(user.getId()),
-                user.getStudentId(),
-                user.getName(),
-                roleStr,
-                user.getMajor(),
-                user.getCollege()
-        );
+        ResponseLoginDto.UserInfo userInfo = toUserInfo(user);
         return new ResponseLoginDto(accessToken, refreshToken, userInfo);
+    }
+
+    public ResponseLoginDto.UserInfo getMyInfo(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+        return toUserInfo(user);
     }
 
     // 토큰 재발급
@@ -81,5 +79,17 @@ public class UserService {
         String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getTokenVersion());
 
         return new ResponseRefreshTokenDto(newAccessToken, newRefreshToken);
+    }
+
+    private ResponseLoginDto.UserInfo toUserInfo(User user) {
+        String roleStr = user.getRole().name().replace("ROLE_", "").toLowerCase();
+        return new ResponseLoginDto.UserInfo(
+                String.valueOf(user.getId()),
+                user.getStudentId(),
+                user.getName(),
+                roleStr,
+                user.getMajor(),
+                user.getCollege()
+        );
     }
 }

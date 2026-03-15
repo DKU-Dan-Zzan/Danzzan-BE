@@ -10,6 +10,7 @@ public class PubSummaryResponse {
     private String name;
     private String intro;
     private String department;
+    private Long collegeId;
     private String collegeName;
     private String mainImageUrl;
 }

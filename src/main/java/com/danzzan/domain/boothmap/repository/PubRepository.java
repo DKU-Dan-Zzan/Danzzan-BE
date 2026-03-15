@@ -22,11 +22,11 @@ public interface PubRepository extends JpaRepository<Pub, Long> {
     Optional<Pub> findByIdWithCollege(Long pubId);
 
     @Query("""
-    SELECT p
+    SELECT DISTINCT p
     FROM Pub p
     JOIN FETCH p.college
     LEFT JOIN FETCH p.images img
-    WHERE img.isMain = true OR img IS NULL
+        WITH img.isMain = true
     """)
     List<Pub> findAllWithCollegeAndMainImage();
 }

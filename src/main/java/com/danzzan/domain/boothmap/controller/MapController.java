@@ -185,7 +185,19 @@ public class MapController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "404",
-                    description = "해당 주점(pubId)이 존재하지 않음"
+                    description = "해당 주점(pubId)이 존재하지 않음",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(
+                                    description = "에러 응답",
+                                    example = """
+                                            {
+                                              "message": "해당 주점이 존재하지 않습니다.",
+                                              "status": 404
+                                            }
+                                            """
+                            )
+                    )
             )
     })
     public PubDetailResponse getPubDetail(@NotNull @PathVariable Long pubId) {

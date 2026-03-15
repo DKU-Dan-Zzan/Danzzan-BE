@@ -134,7 +134,8 @@ public class TicketController {
                 throw new EventSoldOutException();
             }
             if (claimResult.status() == TicketRequestStatus.ALREADY) {
-                ticketQueueEntrySyncService.markFailed(eventIdStr, userIdStr);
+                // userKey 존재 = Redis claim 이미 완료 → DONE으로 동기화 (markFailed 아님)
+                ticketQueueEntrySyncService.markDone(eventIdStr, userIdStr);
                 throw new AlreadyReservedException();
             }
 

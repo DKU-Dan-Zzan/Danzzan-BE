@@ -47,7 +47,9 @@ public class TicketStatusServiceImpl implements TicketStatusService {
             return TicketRequestStatus.NONE;
         }
         return switch (state) {
-            case WAITING -> TicketRequestStatus.WAITING;
+            case WAITING -> isStockExhausted(eventId)
+                    ? TicketRequestStatus.SOLD_OUT
+                    : TicketRequestStatus.WAITING;
             case READY, ACTIVE -> TicketRequestStatus.ADMITTED;
             case DONE -> TicketRequestStatus.SUCCESS;
             case EXPIRED -> TicketRequestStatus.NONE;
@@ -112,6 +114,18 @@ public class TicketStatusServiceImpl implements TicketStatusService {
             return state;
         }
         return null;
+    }
+
+    private boolean isStockExhausted(String eventId) {
+        String stock = redisTemplate.opsForValue().get(TicketRedisKeys.stockKey(eventId));
+        if (stock == null) {
+            return false; // 키 없음 = READY 상태(미초기화), 아직 오픈 전
+        }
+        try {
+            return Long.parseLong(stock) <= 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private Long getHashLong(String eventId, String userId, String field) {

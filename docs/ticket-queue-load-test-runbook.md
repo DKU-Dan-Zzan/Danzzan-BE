@@ -2,6 +2,10 @@
 
 이 문서는 팀원이 같은 저장소를 `pull` 한 뒤, 로컬에서 같은 조건으로 대기열 부하 테스트를 재현할 수 있도록 정리한 실행 문서다.
 
+> **모든 명령어는 `Danzzan-BE/` 레포 루트에서 실행한다.**
+> `k6-test/`, `docs/`, `src/` 는 모두 이 루트 기준 상대경로다.
+> `git clone` 후 `cd Danzzan-BE` 한 위치가 기준이다.
+
 대상 구조:
 - `POST /tickets/{eventId}/queue/enter`
 - `GET /tickets/{eventId}/queue/status`
@@ -10,7 +14,7 @@
 
 테스트 도구:
 - `k6`
-- 부하 테스트 스크립트: [`k6-test/ticket-queue-flow.js`](../k6-test/ticket-queue-flow.js)
+- 부하 테스트 스크립트: `k6-test/ticket-queue-flow.js` (레포 루트 기준, 이 레포에 포함되어 있음)
 
 ## 1. 전제 조건
 
@@ -21,7 +25,7 @@
 - 백엔드: `localhost:8080`
 
 현재 백엔드 기준 설정:
-- [`application.yml`](../src/main/resources/application.yml)
+- `src/main/resources/application.yml`
 - DB: `festival_test`
 - Redis: `localhost:6379`
 - `app.ticketing.max-concurrent-slots=100`
@@ -53,12 +57,11 @@
 
 ## 3. 사용한 스크립트
 
-부하 테스트 관련 파일:
-- [`k6-test/ticket-queue-flow.js`](../k6-test/ticket-queue-flow.js)
-- [`k6-test/seed_test_users.py`](../k6-test/seed_test_users.py)
-- [`k6-test/reset_event_queue.py`](../k6-test/reset_event_queue.py)
+부하 테스트 관련 파일 (모두 레포 루트 `k6-test/` 아래):
+- `k6-test/ticket-queue-flow.js`
+- `k6-test/seed_test_users.py`
+- `k6-test/reset_event_queue.py`
 
-위 파일들은 레포 루트 기준 `k6-test/` 디렉터리에 있다.
 `k6-test/tokens*.json` 은 테스트 산출물이므로 `.gitignore`로 제외되어 있다.
 
 각 역할:
@@ -130,7 +133,7 @@ seeded_or_updated=8000
 ### 6-2. 우리가 사용한 방식
 
 MySQL에서 테스트 유저 `id`, `student_id`, `role`, `token_version` 을 읽고,
-[`JwtTokenProvider.java`](../src/main/java/com/danzzan/global/jwt/JwtTokenProvider.java) 와 같은 클레임 구조로 HS256 JWT를 만들어 `tokens_load_8000.json` 을 생성했다.
+`src/main/java/com/danzzan/global/jwt/JwtTokenProvider.java` 와 같은 클레임 구조로 HS256 JWT를 만들어 `tokens_load_8000.json` 을 생성했다.
 
 현재 토큰 payload 기준:
 - `sub`
@@ -141,7 +144,7 @@ MySQL에서 테스트 유저 `id`, `student_id`, `role`, `token_version` 을 읽
 - `exp`
 
 서명 secret:
-- [`application.yml`](../src/main/resources/application.yml) 의 `jwt.secret`
+- `src/main/resources/application.yml` 의 `jwt.secret`
 
 생성 파일:
 - `k6-test/tokens_load_8000.json`
@@ -343,9 +346,11 @@ k6 run \
 
 ## 15. 관련 파일
 
-- [`application.yml`](../src/main/resources/application.yml)
-- [`k6-test/ticket-queue-flow.js`](../k6-test/ticket-queue-flow.js)
-- [`k6-test/seed_test_users.py`](../k6-test/seed_test_users.py)
-- [`k6-test/reset_event_queue.py`](../k6-test/reset_event_queue.py)
-- [`TicketAdmissionScheduler.java`](../src/main/java/com/danzzan/domain/ticket/scheduler/TicketAdmissionScheduler.java)
-- [`QueueStateServiceImpl.java`](../src/main/java/com/danzzan/domain/ticket/service/QueueStateServiceImpl.java)
+모두 레포 루트(`Danzzan-BE/`) 기준 상대경로:
+
+- `src/main/resources/application.yml`
+- `k6-test/ticket-queue-flow.js`
+- `k6-test/seed_test_users.py`
+- `k6-test/reset_event_queue.py`
+- `src/main/java/com/danzzan/domain/ticket/scheduler/TicketAdmissionScheduler.java`
+- `src/main/java/com/danzzan/domain/ticket/service/QueueStateServiceImpl.java`

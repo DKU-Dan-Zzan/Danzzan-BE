@@ -19,5 +19,12 @@ public class CreateNoticeRequest {
     @NotBlank(message = "작성자를 입력해 주세요.")
     private String author;
 
-    private Boolean isEmergency = false;
+    /** 카테고리 (미입력 시 GENERAL) */
+    private String category;
+
+    /** 상단 고정 여부 (기본 false) */
+    private Boolean isPinned = false;
+
+    /** 대표 이미지 URL (선택) */
+    private String thumbnailImageUrl;
 }

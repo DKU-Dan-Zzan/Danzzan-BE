@@ -26,7 +26,11 @@ public class PubService {
 
         return pubs.stream()
             .map(pub -> {
-                PubImage mainImage = pubImageRepository.findByPubIdAndIsMainTrue(pub.getId()).orElse(null);
+                PubImage mainImage = pub.getImages()
+                    .stream()
+                    .filter(PubImage::isMain)
+                    .findFirst()
+                    .orElse(null);
 
                 return new PubSummaryResponse(
                     pub.getId(),

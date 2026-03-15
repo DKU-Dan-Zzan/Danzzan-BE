@@ -18,11 +18,26 @@ public class NoticeService {
     private final NoticeRepository noticeRepository;
 
     @Transactional(readOnly = true)
+    public Page<NoticeResponse> getActiveNotices(String keyword, String category, Pageable pageable) {
+        String normalizedKeyword = normalizeOptional(keyword);
+        String normalizedCategory = normalizeOptional(category);
+        Page<Notice> page = noticeRepository.searchActive(normalizedKeyword, normalizedCategory, pageable);
+        return page.map(NoticeResponse::from);
+    }
+
+    @Transactional(readOnly = true)
     public Page<NoticeResponse> getNotices(String keyword, Pageable pageable) {
         Page<Notice> page = StringUtils.hasText(keyword)
                 ? noticeRepository.findByTitleContainingAndIsActiveTrue(keyword.trim(), pageable)
                 : noticeRepository.findByIsActiveTrue(pageable);
         return page.map(NoticeResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public NoticeResponse getNotice(Long id) {
+        Notice notice = noticeRepository.findActiveById(id)
+                .orElseThrow(() -> new IllegalArgumentException("공지를 찾을 수 없습니다. id=" + id));
+        return NoticeResponse.from(notice);
     }
 
     @Transactional
@@ -66,6 +81,14 @@ public class NoticeService {
             n.setIsEmergency(false);
             noticeRepository.save(n);
         }
+    }
+
+    private String normalizeOptional(String s) {
+        if (s == null) {
+            return null;
+        }
+        String trimmed = s.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static final class StringUtils {

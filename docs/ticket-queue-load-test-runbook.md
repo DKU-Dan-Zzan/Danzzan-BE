@@ -10,7 +10,7 @@
 
 테스트 도구:
 - `k6`
-- 부하 테스트 스크립트: [`k6-test/ticket-queue-flow.js`](/Users/ziuuu/Documents/capstone_23/k6-test/ticket-queue-flow.js)
+- 부하 테스트 스크립트: [`k6-test/ticket-queue-flow.js`](../k6-test/ticket-queue-flow.js)
 
 ## 1. 전제 조건
 
@@ -21,18 +21,18 @@
 - 백엔드: `localhost:8080`
 
 현재 백엔드 기준 설정:
-- [`application.yml`](/Users/ziuuu/Documents/capstone_23/Danzzan-BE/src/main/resources/application.yml)
+- [`application.yml`](../src/main/resources/application.yml)
 - DB: `festival_test`
 - Redis: `localhost:6379`
 - `app.ticketing.max-concurrent-slots=100`
-- `app.ticketing.gate-ttl-seconds=300`
+- `app.ticketing.gate-ttl-seconds=180`
 - `app.ticketing.active-ttl-seconds=600`
 
 테스트 당시 사용한 도구:
 - Java 17
 - Gradle Wrapper
 - `k6` 1.6.1
-  - 경로 예시: `/opt/homebrew/Cellar/k6/1.6.1/bin/k6`
+  - 설치: `brew install k6`
 
 ## 2. 테스트에 사용한 이벤트 조건
 
@@ -54,9 +54,12 @@
 ## 3. 사용한 스크립트
 
 부하 테스트 관련 파일:
-- [`k6-test/ticket-queue-flow.js`](/Users/ziuuu/Documents/capstone_23/k6-test/ticket-queue-flow.js)
-- [`k6-test/seed_test_users.py`](/Users/ziuuu/Documents/capstone_23/k6-test/seed_test_users.py)
-- [`k6-test/reset_event_queue.py`](/Users/ziuuu/Documents/capstone_23/k6-test/reset_event_queue.py)
+- [`k6-test/ticket-queue-flow.js`](../k6-test/ticket-queue-flow.js)
+- [`k6-test/seed_test_users.py`](../k6-test/seed_test_users.py)
+- [`k6-test/reset_event_queue.py`](../k6-test/reset_event_queue.py)
+
+위 파일들은 레포 루트 기준 `k6-test/` 디렉터리에 있다.
+`k6-test/tokens*.json` 은 테스트 산출물이므로 `.gitignore`로 제외되어 있다.
 
 각 역할:
 - `seed_test_users.py`
@@ -89,9 +92,9 @@
 
 ### 5-1. 8000명 테스트 유저 생성
 
-```bash
-cd /Users/ziuuu/Documents/capstone_23
+레포 루트에서 실행:
 
+```bash
 COUNT=8000 \
 PASSWORD=test1234 \
 STUDENT_ID_PREFIX=TEST \
@@ -127,7 +130,7 @@ seeded_or_updated=8000
 ### 6-2. 우리가 사용한 방식
 
 MySQL에서 테스트 유저 `id`, `student_id`, `role`, `token_version` 을 읽고,
-현재 [`JwtTokenProvider.java`](/Users/ziuuu/Documents/capstone_23/Danzzan-BE/src/main/java/com/danzzan/global/jwt/JwtTokenProvider.java) 와 같은 클레임 구조로 HS256 JWT를 만들어 `tokens_load_8000.json` 을 생성했다.
+[`JwtTokenProvider.java`](../src/main/java/com/danzzan/global/jwt/JwtTokenProvider.java) 와 같은 클레임 구조로 HS256 JWT를 만들어 `tokens_load_8000.json` 을 생성했다.
 
 현재 토큰 payload 기준:
 - `sub`
@@ -138,7 +141,7 @@ MySQL에서 테스트 유저 `id`, `student_id`, `role`, `token_version` 을 읽
 - `exp`
 
 서명 secret:
-- [`application.yml`](/Users/ziuuu/Documents/capstone_23/Danzzan-BE/src/main/resources/application.yml) 의 `jwt.secret`
+- [`application.yml`](../src/main/resources/application.yml) 의 `jwt.secret`
 
 생성 파일:
 - `k6-test/tokens_load_8000.json`
@@ -149,8 +152,9 @@ MySQL에서 테스트 유저 `id`, `student_id`, `role`, `token_version` 을 읽
 
 ## 7. 백엔드 실행
 
+레포 루트에서 실행:
+
 ```bash
-cd /Users/ziuuu/Documents/capstone_23/Danzzan-BE
 ./gradlew bootRun
 ```
 
@@ -172,8 +176,6 @@ curl -i -X POST http://localhost:8080/tickets/1/queue/enter \
 매번 부하 테스트 전에 반드시 실행:
 
 ```bash
-cd /Users/ziuuu/Documents/capstone_23
-
 EVENT_ID=1 \
 STOCK=3000 \
 LIMIT=8000 \
@@ -203,47 +205,45 @@ event=1 cleared_keys=32005 stock=3000 users=8000
 ### 9-1. 1000명 enter-only
 
 ```bash
-/opt/homebrew/Cellar/k6/1.6.1/bin/k6 run \
+k6 run \
   -e BASE_URL=http://localhost:8080 \
   -e EVENT_ID=1 \
   -e FLOW_MODE=enter-only \
   -e TARGET_VUS=1000 \
   -e ITERATIONS_PER_VU=1 \
   -e MAX_DURATION=10m \
-  -e TOKENS_FILE=/Users/ziuuu/Documents/capstone_23/k6-test/tokens_load_8000.json \
-  /Users/ziuuu/Documents/capstone_23/k6-test/ticket-queue-flow.js
+  -e TOKENS_FILE=./k6-test/tokens_load_8000.json \
+  ./k6-test/ticket-queue-flow.js
 ```
 
 ### 9-2. 3000명 enter-only
 
 ```bash
-/opt/homebrew/Cellar/k6/1.6.1/bin/k6 run \
+k6 run \
   -e BASE_URL=http://localhost:8080 \
   -e EVENT_ID=1 \
   -e FLOW_MODE=enter-only \
   -e TARGET_VUS=3000 \
   -e ITERATIONS_PER_VU=1 \
   -e MAX_DURATION=15m \
-  -e TOKENS_FILE=/Users/ziuuu/Documents/capstone_23/k6-test/tokens_load_8000.json \
-  /Users/ziuuu/Documents/capstone_23/k6-test/ticket-queue-flow.js
+  -e TOKENS_FILE=./k6-test/tokens_load_8000.json \
+  ./k6-test/ticket-queue-flow.js
 ```
 
 ### 9-3. 8000명 enter-only
 
 지금 구조에서는 `3000명`에서도 이미 timeout 이 크게 나므로, `8000명`은 튜닝 후 재시도 대상이다.
 
-그래도 동일 명령 형식은 아래다.
-
 ```bash
-/opt/homebrew/Cellar/k6/1.6.1/bin/k6 run \
+k6 run \
   -e BASE_URL=http://localhost:8080 \
   -e EVENT_ID=1 \
   -e FLOW_MODE=enter-only \
   -e TARGET_VUS=8000 \
   -e ITERATIONS_PER_VU=1 \
   -e MAX_DURATION=20m \
-  -e TOKENS_FILE=/Users/ziuuu/Documents/capstone_23/k6-test/tokens_load_8000.json \
-  /Users/ziuuu/Documents/capstone_23/k6-test/ticket-queue-flow.js
+  -e TOKENS_FILE=./k6-test/tokens_load_8000.json \
+  ./k6-test/ticket-queue-flow.js
 ```
 
 ### 9-4. full-flow
@@ -251,7 +251,7 @@ event=1 cleared_keys=32005 stock=3000 users=8000
 `full-flow`는 `enter -> poll -> activate -> reserve` 전체를 본다.
 
 ```bash
-/opt/homebrew/Cellar/k6/1.6.1/bin/k6 run \
+k6 run \
   -e BASE_URL=http://localhost:8080 \
   -e EVENT_ID=1 \
   -e FLOW_MODE=full-flow \
@@ -260,8 +260,8 @@ event=1 cleared_keys=32005 stock=3000 users=8000
   -e POLL_INTERVAL_MS=1000 \
   -e POLL_TIMEOUT_MS=240000 \
   -e MAX_DURATION=15m \
-  -e TOKENS_FILE=/Users/ziuuu/Documents/capstone_23/k6-test/tokens_load_8000.json \
-  /Users/ziuuu/Documents/capstone_23/k6-test/ticket-queue-flow.js
+  -e TOKENS_FILE=./k6-test/tokens_load_8000.json \
+  ./k6-test/ticket-queue-flow.js
 ```
 
 ## 10. 실제로 우리가 진행한 순서
@@ -343,9 +343,9 @@ event=1 cleared_keys=32005 stock=3000 users=8000
 
 ## 15. 관련 파일
 
-- [`application.yml`](/Users/ziuuu/Documents/capstone_23/Danzzan-BE/src/main/resources/application.yml)
-- [`k6-test/ticket-queue-flow.js`](/Users/ziuuu/Documents/capstone_23/k6-test/ticket-queue-flow.js)
-- [`k6-test/seed_test_users.py`](/Users/ziuuu/Documents/capstone_23/k6-test/seed_test_users.py)
-- [`k6-test/reset_event_queue.py`](/Users/ziuuu/Documents/capstone_23/k6-test/reset_event_queue.py)
-- [`TicketAdmissionScheduler.java`](/Users/ziuuu/Documents/capstone_23/Danzzan-BE/src/main/java/com/danzzan/domain/ticket/scheduler/TicketAdmissionScheduler.java)
-- [`QueueStateServiceImpl.java`](/Users/ziuuu/Documents/capstone_23/Danzzan-BE/src/main/java/com/danzzan/domain/ticket/service/QueueStateServiceImpl.java)
+- [`application.yml`](../src/main/resources/application.yml)
+- [`k6-test/ticket-queue-flow.js`](../k6-test/ticket-queue-flow.js)
+- [`k6-test/seed_test_users.py`](../k6-test/seed_test_users.py)
+- [`k6-test/reset_event_queue.py`](../k6-test/reset_event_queue.py)
+- [`TicketAdmissionScheduler.java`](../src/main/java/com/danzzan/domain/ticket/scheduler/TicketAdmissionScheduler.java)
+- [`QueueStateServiceImpl.java`](../src/main/java/com/danzzan/domain/ticket/service/QueueStateServiceImpl.java)

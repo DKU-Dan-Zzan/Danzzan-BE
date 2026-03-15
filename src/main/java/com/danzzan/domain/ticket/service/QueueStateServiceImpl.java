@@ -8,10 +8,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -195,9 +200,9 @@ public class QueueStateServiceImpl implements QueueStateService {
     public int cancelWaitingQueue(String eventId) {
         long now = System.currentTimeMillis();
         int cancelled = 0;
-        cancelled += cancelUsers(eventId, redisTemplate.opsForZSet().range(TicketRedisKeys.queueKey(eventId), 0, -1), now);
-        cancelled += cancelUsers(eventId, redisTemplate.opsForZSet().range(TicketRedisKeys.readyKey(eventId), 0, -1), now);
-        cancelled += cancelUsers(eventId, redisTemplate.opsForZSet().range(TicketRedisKeys.activeKey(eventId), 0, -1), now);
+        cancelled += cancelUsersFromZSet(eventId, TicketRedisKeys.queueKey(eventId), now);
+        cancelled += cancelUsersFromZSet(eventId, TicketRedisKeys.readyKey(eventId), now);
+        cancelled += cancelUsersFromZSet(eventId, TicketRedisKeys.activeKey(eventId), now);
 
         redisTemplate.delete(TicketRedisKeys.queueKey(eventId));
         redisTemplate.delete(TicketRedisKeys.readyKey(eventId));
@@ -209,7 +214,32 @@ public class QueueStateServiceImpl implements QueueStateService {
         return cancelled;
     }
 
-    private int cancelUsers(String eventId, Set<String> users, long now) {
+    private int cancelUsersFromZSet(String eventId, String zsetKey, long now) {
+        int cancelled = 0;
+        List<String> batch = new ArrayList<>();
+        try (Cursor<ZSetOperations.TypedTuple<String>> cursor =
+                     redisTemplate.opsForZSet().scan(zsetKey, ScanOptions.scanOptions().count(500).build())) {
+            while (cursor.hasNext()) {
+                ZSetOperations.TypedTuple<String> tuple = cursor.next();
+                if (tuple == null || tuple.getValue() == null) {
+                    continue;
+                }
+                batch.add(tuple.getValue());
+                if (batch.size() >= EVENT_TRIGGER_BATCH_LIMIT) {
+                    cancelled += cancelUsers(eventId, batch, now);
+                    batch.clear();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("대기열 일괄 취소 scan 실패 eventId={} key={}", eventId, zsetKey, e);
+        }
+        if (!batch.isEmpty()) {
+            cancelled += cancelUsers(eventId, batch, now);
+        }
+        return cancelled;
+    }
+
+    private int cancelUsers(String eventId, Collection<String> users, long now) {
         if (users == null || users.isEmpty()) {
             return 0;
         }

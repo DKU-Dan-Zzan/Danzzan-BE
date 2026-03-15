@@ -1,6 +1,7 @@
 package com.danzzan.domain.notice.service;
 
 import com.danzzan.domain.notice.dto.request.CreateNoticeRequest;
+import com.danzzan.domain.notice.dto.request.UpdateNoticeDisplayOrderRequest;
 import com.danzzan.domain.notice.dto.request.UpdateNoticeRequest;
 import com.danzzan.domain.notice.dto.response.NoticeResponse;
 import com.danzzan.domain.notice.entity.Notice;
@@ -34,6 +35,15 @@ public class NoticeService {
     }
 
     @Transactional(readOnly = true)
+    public Page<NoticeResponse> getAdminNotices(String keyword, String category, String status, Pageable pageable) {
+        String normalizedKeyword = normalizeOptional(keyword);
+        String normalizedCategory = normalizeOptional(category);
+        Boolean isActiveFilter = mapStatusToIsActive(status);
+        Page<Notice> page = noticeRepository.searchByStatus(normalizedKeyword, normalizedCategory, isActiveFilter, pageable);
+        return page.map(NoticeResponse::from);
+    }
+
+    @Transactional(readOnly = true)
     public NoticeResponse getNotice(Long id) {
         Notice notice = noticeRepository.findActiveById(id)
                 .orElseThrow(() -> new IllegalArgumentException("공지를 찾을 수 없습니다. id=" + id));
@@ -42,14 +52,14 @@ public class NoticeService {
 
     @Transactional
     public NoticeResponse create(CreateNoticeRequest request) {
-        if (Boolean.TRUE.equals(request.getIsEmergency())) {
-            clearOtherEmergencyFlags();
-        }
         Notice notice = Notice.create(
                 request.getTitle(),
                 request.getContent(),
                 request.getAuthor(),
-                request.getIsEmergency()
+                request.getCategory(),
+                request.getIsPinned(),
+                request.getThumbnailImageUrl(),
+                false
         );
         return NoticeResponse.from(noticeRepository.save(notice));
     }
@@ -58,13 +68,14 @@ public class NoticeService {
     public NoticeResponse update(Long id, UpdateNoticeRequest request) {
         Notice notice = noticeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("공지를 찾을 수 없습니다. id=" + id));
-        if (Boolean.TRUE.equals(request.getIsEmergency())) {
-            clearOtherEmergencyFlags();
-        }
         notice.setTitle(request.getTitle());
         notice.setContent(request.getContent());
         notice.setAuthor(request.getAuthor());
-        notice.setIsEmergency(Boolean.TRUE.equals(request.getIsEmergency()));
+        notice.setCategory((request.getCategory() == null || request.getCategory().isBlank())
+                ? "GENERAL"
+                : request.getCategory().trim());
+        notice.setIsPinned(Boolean.TRUE.equals(request.getIsPinned()));
+        notice.setThumbnailImageUrl(request.getThumbnailImageUrl());
         return NoticeResponse.from(noticeRepository.save(notice));
     }
 
@@ -83,6 +94,23 @@ public class NoticeService {
         }
     }
 
+    @Transactional
+    public NoticeResponse restore(Long id) {
+        Notice notice = noticeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("공지를 찾을 수 없습니다. id=" + id));
+        notice.setIsActive(true);
+        return NoticeResponse.from(noticeRepository.save(notice));
+    }
+
+    @Transactional
+    public void updateDisplayOrders(UpdateNoticeDisplayOrderRequest request) {
+        for (UpdateNoticeDisplayOrderRequest.Item item : request.getOrders()) {
+            Notice notice = noticeRepository.findById(item.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("공지를 찾을 수 없습니다. id=" + item.getId()));
+            notice.setDisplayOrder(item.getDisplayOrder());
+        }
+    }
+
     private String normalizeOptional(String s) {
         if (s == null) {
             return null;
@@ -95,5 +123,18 @@ public class NoticeService {
         static boolean hasText(String s) {
             return s != null && !s.isBlank();
         }
+    }
+
+    private Boolean mapStatusToIsActive(String status) {
+        if (status == null || status.isBlank()) {
+            return Boolean.TRUE;
+        }
+        String upper = status.trim().toUpperCase();
+        return switch (upper) {
+            case "ACTIVE" -> Boolean.TRUE;
+            case "DELETED" -> Boolean.FALSE;
+            case "ALL" -> null;
+            default -> Boolean.TRUE;
+        };
     }
 }

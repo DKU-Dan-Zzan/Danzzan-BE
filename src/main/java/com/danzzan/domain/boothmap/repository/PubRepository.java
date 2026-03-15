@@ -25,8 +25,7 @@ public interface PubRepository extends JpaRepository<Pub, Long> {
     SELECT DISTINCT p
     FROM Pub p
     JOIN FETCH p.college
-    LEFT JOIN FETCH p.images img
-        WITH img.isMain = true
+    LEFT JOIN FETCH p.images
     """)
-    List<Pub> findAllWithCollegeAndMainImage();
+    List<Pub> findAllWithCollegeAndImages();
 }

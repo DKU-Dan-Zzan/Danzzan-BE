@@ -3,7 +3,6 @@ package com.danzzan.domain.boothmap.service;
 import com.danzzan.domain.boothmap.model.dto.PubSummaryResponse;
 import com.danzzan.domain.boothmap.model.dto.PubDetailResponse;
 import com.danzzan.domain.boothmap.model.entity.Pub;
-import com.danzzan.domain.boothmap.model.entity.College;
 import com.danzzan.domain.boothmap.model.entity.PubImage;
 import com.danzzan.domain.boothmap.repository.PubRepository;
 import com.danzzan.domain.boothmap.repository.PubImageRepository;
@@ -22,13 +21,13 @@ public class PubService {
     private final PubImageRepository pubImageRepository;
 
     public List<PubSummaryResponse> getPubs() {
-        List<Pub> pubs = pubRepository.findAllWithCollegeAndMainImage();
+        List<Pub> pubs = pubRepository.findAllWithCollegeAndImages();
 
         return pubs.stream()
             .map(pub -> {
-                PubImage mainImage = pub.getImages()
-                    .stream()
+                String mainImageUrl = pub.getImages().stream()
                     .filter(PubImage::isMain)
+                    .map(PubImage::getImageUrl)
                     .findFirst()
                     .orElse(null);
 
@@ -37,21 +36,21 @@ public class PubService {
                     pub.getName(),
                     pub.getIntro(),
                     pub.getDepartment(),
+                    pub.getCollege().getId(),
                     pub.getCollege().getName(),
-                    mainImage != null ? mainImage.getImageUrl() : null
+                    mainImageUrl
                 );
             })
             .toList();
     }
 
     public PubDetailResponse getPubDetail(Long pubId) {
-
         Pub pub = pubRepository.findByIdWithCollege(pubId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 주점을 찾을 수 없습니다. id=" + pubId));
 
         List<String> imageUrls = pubImageRepository.findByPubId(pubId)
                 .stream()
-                .map(image -> image.getImageUrl())
+                .map(PubImage::getImageUrl)
                 .toList();
 
         return new PubDetailResponse(

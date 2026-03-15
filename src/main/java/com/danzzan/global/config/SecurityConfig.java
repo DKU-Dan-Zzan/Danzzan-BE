@@ -64,9 +64,10 @@ public class SecurityConfig {
                                 "/timetable/**",
                                 "/map/**",
                                 "/booths/**",
-                                "/lost-items/**",
-                                "/tickets/events"
+                                "/tickets/events",
+                                "/api/ads"
                         ).permitAll()
+                        .requestMatchers("/api/admin/ads", "/api/admin/ads/**").hasRole("ADMIN")
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
                         .requestMatchers("/api/admin/events/**", "/api/admin/ticket/**").hasRole("ADMIN")
                         .requestMatchers("/error").permitAll()

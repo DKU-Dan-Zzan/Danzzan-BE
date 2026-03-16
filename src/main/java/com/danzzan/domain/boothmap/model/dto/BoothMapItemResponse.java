@@ -13,4 +13,6 @@ public class BoothMapItemResponse {
     private BoothType type;
     private Double locationX;
     private Double locationY;
+    private String startTime;
+    private String endTime;
 }

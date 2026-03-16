@@ -13,10 +13,14 @@ public final class ClaimLuaProtocol {
     public static final long CODE_ALREADY = 1L;
     public static final long CODE_SOLD_OUT = 2L;
     public static final long CODE_SUCCESS = 3L;
+    public static final long CODE_NOT_ACTIVE = 4L;
+    public static final long CODE_EXPIRED_ACTIVE = 5L;
 
     public static final String CODE_ALREADY_ARG = String.valueOf(CODE_ALREADY);
     public static final String CODE_SOLD_OUT_ARG = String.valueOf(CODE_SOLD_OUT);
     public static final String CODE_SUCCESS_ARG = String.valueOf(CODE_SUCCESS);
+    public static final String CODE_NOT_ACTIVE_ARG = String.valueOf(CODE_NOT_ACTIVE);
+    public static final String CODE_EXPIRED_ACTIVE_ARG = String.valueOf(CODE_EXPIRED_ACTIVE);
 
     private ClaimLuaProtocol() {
     }
@@ -30,6 +34,12 @@ public final class ClaimLuaProtocol {
         }
         if (code == CODE_SUCCESS) {
             return TicketRequestStatus.SUCCESS;
+        }
+        if (code == CODE_NOT_ACTIVE) {
+            return TicketRequestStatus.NONE;
+        }
+        if (code == CODE_EXPIRED_ACTIVE) {
+            return TicketRequestStatus.NONE;
         }
         throw new IllegalStateException("unexpected claim lua code: " + code);
     }

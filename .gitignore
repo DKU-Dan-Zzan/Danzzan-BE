@@ -55,3 +55,6 @@ out/
 
 # Prevent accidental commit of local test overrides
 src/test/resources/application.yml
+
+### k6 load test ###
+k6-test/tokens*.json

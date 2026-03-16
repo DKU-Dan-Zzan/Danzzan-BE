@@ -12,6 +12,11 @@ src/main/resources/application-local.yml
 src/main/resources/application-prod.yml
 *.pem
 
+### Docker / env ###
+.env
+.env.*
+!.env.example
+
 ### STS ###
 .apt_generated
 .classpath

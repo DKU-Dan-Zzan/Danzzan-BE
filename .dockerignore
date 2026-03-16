@@ -1,0 +1,15 @@
+.git
+.gitignore
+.gradle
+.idea
+build
+out
+docs
+k6-test
+scripts
+src/test
+*.iml
+*.log
+.env
+.env.*
+!.env.example

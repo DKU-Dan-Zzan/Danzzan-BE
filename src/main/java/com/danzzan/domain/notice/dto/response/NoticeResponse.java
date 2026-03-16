@@ -16,6 +16,9 @@ public class NoticeResponse {
     private String author;
     private Boolean isEmergency;
     private Boolean isActive;
+    private String category;
+    private Boolean isPinned;
+    private String thumbnailImageUrl;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -27,6 +30,11 @@ public class NoticeResponse {
         res.author = notice.getAuthor();
         res.isEmergency = notice.getIsEmergency();
         res.isActive = notice.getIsActive();
+        res.category = (notice.getCategory() == null || notice.getCategory().isBlank())
+                ? "GENERAL"
+                : notice.getCategory();
+        res.isPinned = Boolean.TRUE.equals(notice.getIsPinned());
+        res.thumbnailImageUrl = notice.getThumbnailImageUrl();
         res.createdAt = notice.getCreatedAt();
         res.updatedAt = notice.getUpdatedAt();
         return res;

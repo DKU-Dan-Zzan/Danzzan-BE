@@ -10,19 +10,20 @@ import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.model.entity.TicketStatus;
 import com.danzzan.domain.ticket.model.entity.UserTicket;
+import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.domain.user.exception.UserNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,6 +34,7 @@ public class TicketService {
     private final FestivalEventRepository eventRepository;
     private final UserTicketRepository ticketRepository;
     private final UserRepository userRepository;
+    private final StringRedisTemplate redisTemplate;
 
     // 이벤트 목록 조회 (로그인 불필요)
     public ResponseTicketEventListDto getTicketingEvents() {
@@ -43,59 +45,6 @@ public class TicketService {
                 .collect(Collectors.toList());
 
         return new ResponseTicketEventListDto(items);
-    }
-
-    // 티켓 예매 (로그인 필요)
-    @Transactional
-    public ResponseReserveTicketDto reserveTicket(Long userId, Long eventId) {
-        // 1. 이벤트 행 잠금 조회
-        // 동일 eventId 예매 경쟁을 직렬화해 count-check/insert 레이스를 방지한다.
-        FestivalEvent event = eventRepository.findByIdForUpdate(eventId)
-                .orElseThrow(EventNotFoundException::new);
-
-        // 2. 오픈 전 체크 (FE에서도 막지만 BE 방어)
-        if (event.getTicketingStatus() == TicketingStatus.READY) {
-            throw new EventNotOpenException();
-        }
-
-        // 3. 마감 체크 (FE에서도 막지만 BE 방어)
-        if (event.getTicketingStatus() == TicketingStatus.CLOSED) {
-            throw new EventSoldOutException();
-        }
-
-        // 4. 중복 예매 체크
-        if (ticketRepository.existsByUserIdAndEventId(userId, eventId)) {
-            throw new AlreadyReservedException();
-        }
-
-        // 5. 잔여석 체크
-        long currentCount = ticketRepository.countByEventId(eventId);
-        if (currentCount >= event.getTotalCapacity()) {
-            throw new EventSoldOutException();
-        }
-
-        // 6. 유저 조회
-        User user = userRepository.findById(userId)
-                .orElseThrow(UserNotFoundException::new);
-
-        // 7. 순번 계산 + 티켓 생성
-        int order = (int) currentCount + 1;
-        UserTicket ticket = UserTicket.builder()
-                .user(user)
-                .event(event)
-                .ticketingOrder(order)
-                .build();
-
-        // 8. DB 저장 (동시 요청 시 unique 제약 위반 가능)
-        try {
-            ticketRepository.save(ticket);
-        } catch (DataIntegrityViolationException e) {
-            throw new AlreadyReservedException("이미 예매 처리가 완료되었습니다. 내 티켓에서 확인해주세요.");
-        }
-
-        // 9. 응답 생성
-        ResponseMyTicketDto ticketDto = toMyTicketDto(ticket, event);
-        return new ResponseReserveTicketDto(order, ticketDto);
     }
 
     /**
@@ -111,10 +60,19 @@ public class TicketService {
         FestivalEvent event = eventRepository.findById(eventId)
                 .orElseThrow(EventNotFoundException::new);
 
+        if (event.getTicketingStatus() == TicketingStatus.READY) {
+            throw new EventNotOpenException("아직 예매가 시작되지 않았습니다.");
+        }
+        if (event.getTicketingStatus() == TicketingStatus.CLOSED) {
+            throw new EventSoldOutException();
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
 
-        int order = (int) (event.getTotalCapacity() - remaining);
+        // Redis stock(remaining)과 totalCapacity가 다를 수 있으므로
+        // DB 발급 수 기준으로 순번 계산 (unique 제약으로 동일 유저 중복 불가)
+        int order = (int) ticketRepository.countByEventId(eventId) + 1;
 
         UserTicket ticket = UserTicket.builder()
                 .user(user)
@@ -131,6 +89,16 @@ public class TicketService {
         return new ResponseReserveTicketDto(order, toMyTicketDto(ticket, event));
     }
 
+    public boolean hasTicket(Long userId, Long eventId) {
+        return ticketRepository.existsByUserIdAndEventId(userId, eventId);
+    }
+
+    public boolean isClosedEvent(Long eventId) {
+        FestivalEvent event = eventRepository.findById(eventId)
+                .orElseThrow(EventNotFoundException::new);
+        return event.getTicketingStatus() == TicketingStatus.CLOSED;
+    }
+
     // 내 티켓 목록 조회 (로그인 필요)
     public ResponseMyTicketListDto getMyTickets(Long userId) {
         List<UserTicket> tickets = ticketRepository.findAllByUserIdOrderByTicketingAtDesc(userId);
@@ -145,8 +113,20 @@ public class TicketService {
     // ===== 변환 메서드 =====
 
     private ResponseTicketEventDto toTicketEventDto(FestivalEvent event) {
-        long ticketCount = ticketRepository.countByEventId(event.getId());
-        int remaining = Math.max(0, event.getTotalCapacity() - (int) ticketCount);
+        // Redis stock을 진실원천으로 사용 — DB 발급 수와 totalCapacity 기반 계산은 초기화 값과 어긋남
+        String stockStr = redisTemplate.opsForValue().get(
+                TicketRedisKeys.stockKey(String.valueOf(event.getId())));
+        int remaining;
+        if (stockStr != null) {
+            try {
+                remaining = Math.max(0, Integer.parseInt(stockStr));
+            } catch (NumberFormatException e) {
+                remaining = 0;
+            }
+        } else {
+            // 이벤트 오픈 전(READY)이거나 초기화 전: totalCapacity로 표시
+            remaining = event.getTotalCapacity();
+        }
 
         // BE status → FE status 변환
         String feStatus;

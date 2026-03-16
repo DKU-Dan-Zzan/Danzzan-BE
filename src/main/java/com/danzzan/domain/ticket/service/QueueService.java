@@ -3,11 +3,11 @@ package com.danzzan.domain.ticket.service;
 public interface QueueService {
 
     /**
-     * 대기열에 진입합니다 (중복 진입 무시).
+     * 대기열에 진입합니다 (INCR sequence score, dedup 보장).
      *
-     * @return 새로 진입했으면 true, 이미 있으면 false
+     * @return 발급된 순번(1 이상), 0이면 이미 진입된 상태
      */
-    boolean enterQueue(String eventId, String userId);
+    long enterQueue(String eventId, String userId);
 
     /**
      * 대기열 순번을 반환합니다 (1-indexed).

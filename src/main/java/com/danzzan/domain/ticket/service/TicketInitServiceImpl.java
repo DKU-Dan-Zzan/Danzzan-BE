@@ -7,12 +7,14 @@ import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class TicketInitServiceImpl implements TicketInitService {
 
     private static final String STOCK_SUFFIX = ":stock";
@@ -20,17 +22,31 @@ public class TicketInitServiceImpl implements TicketInitService {
     private static final int UNLINK_BATCH_SIZE = 500;
 
     private final StringRedisTemplate redisTemplate;
+    private final com.danzzan.domain.ticket.repository.TicketQueueEntryRepository ticketQueueEntryRepository;
 
     @Override
     public AdminTicketInitResponseDTO initStock(String eventId, Long stock) {
         String stockKey = TicketRedisKeys.stockKey(eventId);
         String eventPrefix = eventPrefixFromStockKey(stockKey);
 
+        // Lua claim 관련 키
         unlinkByPattern(eventPrefix + ":user:*");
         unlinkByPattern(eventPrefix + ":status:*");
-        unlinkByPattern(eventPrefix + ":gate:*");
+
+        // 대기열 상태 Hash 키
+        unlinkByPattern(eventPrefix + ":quser:*");
+
+        // 중복 방지 키
+        unlinkByPattern(eventPrefix + ":dedup:*");
+
+        // 대기열/READY/ACTIVE 키
         redisTemplate.delete(TicketRedisKeys.queueKey(eventId));
+        redisTemplate.delete(TicketRedisKeys.seqKey(eventId));
+        redisTemplate.delete(TicketRedisKeys.readyKey(eventId));
         redisTemplate.delete(TicketRedisKeys.activeKey(eventId));
+        redisTemplate.delete(TicketRedisKeys.closedCleanupKey(eventId));
+        ticketQueueEntryRepository.deleteAllByEventId(Long.valueOf(eventId));
+
         redisTemplate.opsForValue().set(stockKey, String.valueOf(stock));
 
         return AdminTicketInitResponseDTO.builder()
@@ -65,9 +81,7 @@ public class TicketInitServiceImpl implements TicketInitService {
     }
 
     private void unlinkBatch(List<String> batch) {
-        if (batch.isEmpty()) {
-            return;
-        }
+        if (batch.isEmpty()) return;
         redisTemplate.unlink(batch);
         batch.clear();
     }

@@ -25,7 +25,10 @@ public class BoothMapService {
 
     public BoothMapResponse getBoothMap(LocalDate operationDate) {
         List<College> colleges = collegeRepository.findAll();
-        List<BoothOperation> boothOperations = boothOperationRepository.findAllWithBoothByOperationDate(operationDate);
+
+        List<BoothOperation> boothOperations = (operationDate == null)
+                ? boothOperationRepository.findAllWithBooth()
+                : boothOperationRepository.findAllWithBoothByOperationDate(operationDate);
 
         List<CollegeMapItemResponse> collegeDtos = colleges.stream()
                 .map(college -> new CollegeMapItemResponse(

@@ -8,4 +8,5 @@ import java.util.Optional;
 
 public interface PubOperationRepository extends JpaRepository<PubOperation, Long> {
     Optional<PubOperation> findByOperationDate(LocalDate operationDate);
+    Optional<PubOperation> findFirstByOrderByOperationDateAsc();
 }

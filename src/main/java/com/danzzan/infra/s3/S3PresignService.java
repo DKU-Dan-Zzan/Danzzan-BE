@@ -18,13 +18,17 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class S3PresignService {
 
     private static final long MAX_IMAGE_SIZE_BYTES = 5L * 1024 * 1024; // 5MB
     private static final Set<String> ALLOWED_IMAGE_CONTENT_TYPES = Set.of(
             "image/jpeg",
+            "image/jpg",
             "image/png",
             "image/webp"
     );
@@ -47,13 +51,26 @@ public class S3PresignService {
     private long putExpirationSec;
 
     /**
-     * 공지 대표 이미지 Presigned PUT URL 발급.
-     * (파일 크기는 클라이언트에서만 체크한다고 가정, 타입만 검증)
+     * 공지 이미지 Presigned PUT URL 발급.
+     * - contentType이 있으면 이미지 타입 검증 (image/jpeg, image/jpg, image/png, image/webp)
+     * - fileSize가 있으면 5MB 제한 검증
      */
-    public S3PresignedPutResult presignPutNoticeImage(String fileName, String contentType) {
-        validateImageContentType(contentType);
+    public S3PresignedPutResult presignPutNoticeImage(String fileName, String contentType, Long fileSize) {
+        if (contentType != null && !contentType.isBlank()) {
+            validateImageContentType(contentType.trim());
+        }
+        validateMaxSize(fileSize);
+        ensureBucketConfigured();
         String key = s3PathGenerator.generateNoticeImageKey(fileName);
-        return presignPutObject(key, contentType);
+        try {
+            return presignPutObject(key, contentType);
+        } catch (Exception e) {
+            log.warn("공지 이미지 presign 실패 fileName={} contentType={}", fileName, contentType, e);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+            );
+        }
     }
 
     /**
@@ -100,7 +117,11 @@ public class S3PresignService {
     }
 
     private void validateImageContentType(String contentType) {
-        if (contentType == null || !ALLOWED_IMAGE_CONTENT_TYPES.contains(contentType)) {
+        if (contentType == null || contentType.isBlank()) {
+            return;
+        }
+        String trimmed = contentType.trim();
+        if (!ALLOWED_IMAGE_CONTENT_TYPES.contains(trimmed)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "허용되지 않은 파일 타입입니다. (image/jpeg, image/png, image/webp만 허용)"
@@ -116,6 +137,16 @@ public class S3PresignService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "파일 크기가 5MB를 초과했습니다."
+            );
+        }
+    }
+
+    private void ensureBucketConfigured() {
+        if (bucket == null || bucket.isBlank()) {
+            log.error("aws.s3.bucket이 설정되지 않았습니다.");
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "S3 bucket이 설정되지 않았습니다. application 설정에 aws.s3.bucket을 추가해 주세요."
             );
         }
     }

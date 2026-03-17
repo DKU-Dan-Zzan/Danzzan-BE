@@ -10,4 +10,6 @@ public class BoothSummaryResponse {
     private String name;
     private String description;
     private String imageUrl;
+    private String startTime;
+    private String endTime;
 }

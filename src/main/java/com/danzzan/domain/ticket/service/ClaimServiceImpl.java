@@ -1,5 +1,6 @@
 package com.danzzan.domain.ticket.service;
 
+import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
@@ -12,7 +13,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
 import java.util.List;
 
 @Service
@@ -23,24 +23,34 @@ public class ClaimServiceImpl implements ClaimService {
     private final StringRedisTemplate stringRedisTemplate;
     @Qualifier("claimV2Script")
     private final RedisScript<List> claimV2Script;
+    @Qualifier("claimRollbackScript")
+    private final RedisScript<Long> claimRollbackScript;
     private final ClaimOutcomeMetrics claimOutcomeMetrics;
+    private final TicketQueueEntrySyncService ticketQueueEntrySyncService;
 
     @Override
     public ClaimResult claim(String eventId, String userId) {
         String userKey = TicketRedisKeys.userKey(eventId, userId);
         String stockKey = TicketRedisKeys.stockKey(eventId);
         String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+        String queueUserHashKey = TicketRedisKeys.queueUserHashKey(eventId, userId);
+        String activeKey = TicketRedisKeys.activeKey(eventId);
+        String dedupKey = TicketRedisKeys.dedupKey(eventId, userId);
 
         List<?> rawResult = stringRedisTemplate.execute(
                 claimV2Script,
-                List.of(userKey, stockKey, statusKey),
+                List.of(userKey, stockKey, statusKey, queueUserHashKey, activeKey, dedupKey),
                 TicketRequestStatus.ALREADY.name(),
                 TicketRequestStatus.SOLD_OUT.name(),
                 TicketRequestStatus.SUCCESS.name(),
                 ClaimLuaProtocol.USER_CLAIMED_VALUE,
                 ClaimLuaProtocol.CODE_ALREADY_ARG,
                 ClaimLuaProtocol.CODE_SOLD_OUT_ARG,
-                ClaimLuaProtocol.CODE_SUCCESS_ARG
+                ClaimLuaProtocol.CODE_SUCCESS_ARG,
+                String.valueOf(System.currentTimeMillis()),
+                ClaimLuaProtocol.CODE_NOT_ACTIVE_ARG,
+                ClaimLuaProtocol.CODE_EXPIRED_ACTIVE_ARG,
+                userId
         );
         return mapLuaResult(eventId, userId, rawResult);
     }
@@ -51,6 +61,14 @@ public class ClaimServiceImpl implements ClaimService {
         }
 
         long code = asLong(rawResult.get(ClaimLuaProtocol.CODE_INDEX), "code");
+        if (code == ClaimLuaProtocol.CODE_EXPIRED_ACTIVE) {
+            ticketQueueEntrySyncService.markExpired(eventId, userId);
+            throw new EventNotOpenException("입장 가능 시간이 만료되었습니다. 다시 대기열에 참여해주세요.");
+        }
+        if (code == ClaimLuaProtocol.CODE_NOT_ACTIVE) {
+            throw new EventNotOpenException("유의사항 화면 진입 후 예매 가능합니다.");
+        }
+
         Long remaining = asNullableLong(rawResult.get(ClaimLuaProtocol.REMAINING_INDEX), "remaining");
         TicketRequestStatus status = ClaimLuaProtocol.resolveStatus(code);
 
@@ -79,8 +97,10 @@ public class ClaimServiceImpl implements ClaimService {
             String userKey = TicketRedisKeys.userKey(eventId, userId);
             String statusKey = TicketRedisKeys.statusKey(eventId, userId);
 
-            stringRedisTemplate.opsForValue().increment(stockKey);
-            stringRedisTemplate.delete(Arrays.asList(userKey, statusKey));
+            stringRedisTemplate.execute(
+                    claimRollbackScript,
+                    List.of(stockKey, userKey, statusKey)
+            );
             log.info("claim_rollback eventId={} userId={}", eventId, userId);
         } catch (Exception e) {
             log.error("claim_rollback 실패 eventId={} userId={}", eventId, userId, e);

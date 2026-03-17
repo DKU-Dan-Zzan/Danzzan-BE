@@ -15,12 +15,15 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 
 @Validated
 @RestController
@@ -71,8 +74,15 @@ public class MapController {
                     )
             )
     })
-    public BoothMapResponse getBoothMap() {
-        return boothMapService.getBoothMap();
+    public BoothMapResponse getBoothMap(
+        @Parameter(
+                description = "조회할 축제 날짜",
+                example = "2026-05-20"
+        )
+        @RequestParam
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return boothMapService.getBoothMap(date);
     }
 
     @GetMapping("/booths/{boothId}")
@@ -94,7 +104,9 @@ public class MapController {
                                               "boothId": 3,
                                               "name": "심폐소생술 체험",
                                               "description": "응급상황 대처 체험 부스",
-                                              "imageUrl": "https://cdn.example.com/booth3.jpg"
+                                              "imageUrl": "https://cdn.example.com/booth3.jpg",
+                                              "startTime": "18:00",
+                                              "endTime": "21:00"
                                             }
                                             """
                             )
@@ -105,8 +117,16 @@ public class MapController {
                     description = "해당 부스(boothId)가 존재하지 않음"
             )
     })
-    public BoothSummaryResponse getBoothSummary(@NotNull @PathVariable Long boothId) {
-        return boothService.getBoothSummary(boothId);
+    public BoothSummaryResponse getBoothSummary(
+        @NotNull @PathVariable Long boothId,
+        @Parameter(
+                description = "조회할 축제 날짜",
+                example = "2026-05-20"
+        )
+        @RequestParam 
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return boothService.getBoothSummary(boothId, date);
     }
 
     @GetMapping("/pubs")
@@ -132,7 +152,9 @@ public class MapController {
                                                 "department": "소프트웨어학과",
                                                 "collegeId": 1,
                                                 "collegeName": "SW융합대학",
-                                                "mainImageUrl": "https://image.url/main.png"
+                                                "mainImageUrl": "https://image.url/main.png",
+                                                "startTime": "18:00",
+                                                "endTime": "23:00"
                                               },
                                               {
                                                 "pubId": 2,
@@ -141,7 +163,9 @@ public class MapController {
                                                 "department": "전자공학과",
                                                 "collegeId": 2,
                                                 "collegeName": "공과대학",
-                                                "mainImageUrl": "https://image.url/main2.png"
+                                                "mainImageUrl": "https://image.url/main2.png",
+                                                "startTime": "18:00",
+                                                "endTime": "23:00"
                                               }
                                             ]
                                             """
@@ -149,8 +173,15 @@ public class MapController {
                     )
             )
     })
-    public List<PubSummaryResponse> getPubs() {
-        return pubService.getPubs();
+    public List<PubSummaryResponse> getPubs(
+        @Parameter(
+                description = "조회할 축제 날짜",
+                example = "2026-05-20"
+        )
+        @RequestParam
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return pubService.getPubs(date);
     }
 
     @GetMapping("/pubs/{pubId}")
@@ -179,7 +210,9 @@ public class MapController {
                                               "imageUrls": [
                                                 "https://cdn.xxx/pub1_main.jpg",
                                                 "https://cdn.xxx/pub1_2.jpg"
-                                              ]
+                                              ],
+                                              "startTime": "18:00",
+                                              "endTime": "23:00"
                                             }
                                             """
                             )
@@ -202,7 +235,15 @@ public class MapController {
                     )
             )
     })
-    public PubDetailResponse getPubDetail(@NotNull @PathVariable Long pubId) {
-        return pubService.getPubDetail(pubId);
+    public PubDetailResponse getPubDetail(
+        @NotNull @PathVariable Long pubId,
+        @Parameter(
+                description = "조회할 축제 날짜",
+                example = "2026-05-20"
+        )
+        @RequestParam 
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return pubService.getPubDetail(pubId, date);
     }
 }

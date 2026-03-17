@@ -121,7 +121,8 @@ public class AdminNoticeController {
     public ResponseEntity<NoticeImagePresignResponse> presignNoticeImage(@Valid @RequestBody PresignNoticeImageRequest request) {
         S3PresignedPutResult result = s3PresignService.presignPutNoticeImage(
                 request.getFileName(),
-                request.getContentType()
+                request.getContentType(),
+                request.getFileSize()
         );
         return ResponseEntity.ok(NoticeImagePresignResponse.from(result));
     }

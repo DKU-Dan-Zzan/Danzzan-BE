@@ -18,5 +18,11 @@ public class PresignNoticeImageRequest {
      * (선택) 미입력 시 content-type 없이 presign 발급됩니다.
      */
     private String contentType;
+
+    /**
+     * 파일 크기 (byte 단위).
+     * 5MB 초과 시 서버에서 1차로 막기 위해 사용합니다.
+     */
+    private Long fileSize;
 }
 

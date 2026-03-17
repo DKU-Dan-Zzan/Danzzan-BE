@@ -59,6 +59,7 @@ public class NoticeService {
                 request.getCategory(),
                 request.getIsPinned(),
                 request.getThumbnailImageUrl(),
+                request.getImages(),
                 false
         );
         return NoticeResponse.from(noticeRepository.save(notice));
@@ -75,7 +76,19 @@ public class NoticeService {
                 ? "GENERAL"
                 : request.getCategory().trim());
         notice.setIsPinned(Boolean.TRUE.equals(request.getIsPinned()));
-        notice.setThumbnailImageUrl(request.getThumbnailImageUrl());
+        // 이미지 목록 전체 교체
+        notice.getImages().clear();
+        if (request.getImages() != null) {
+            notice.getImages().addAll(request.getImages());
+        }
+        // 썸네일 정책: 명시된 썸네일이 없고 이미지가 있으면 첫 번째 이미지를 썸네일로 사용
+        String thumbnail = request.getThumbnailImageUrl();
+        if ((thumbnail == null || thumbnail.isBlank())
+                && !notice.getImages().isEmpty()) {
+            notice.setThumbnailImageUrl(notice.getImages().get(0));
+        } else {
+            notice.setThumbnailImageUrl(thumbnail);
+        }
         return NoticeResponse.from(noticeRepository.save(notice));
     }
 

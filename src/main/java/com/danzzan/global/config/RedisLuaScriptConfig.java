@@ -19,6 +19,14 @@ public class RedisLuaScriptConfig {
         return script;
     }
 
+    @Bean("claimRollbackScript")
+    public RedisScript<Long> claimRollbackScript() {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/claim_rollback.lua"));
+        script.setResultType(Long.class);
+        return script;
+    }
+
     @Bean("passwordResetConsumeScript")
     public RedisScript<List> passwordResetConsumeScript() {
         DefaultRedisScript<List> script = new DefaultRedisScript<>();
@@ -27,11 +35,43 @@ public class RedisLuaScriptConfig {
         return script;
     }
 
-    @Bean("acquireSlotScript")
-    public RedisScript<Long> acquireSlotScript() {
+    @Bean("readyToActiveScript")
+    public RedisScript<Long> readyToActiveScript() {
         DefaultRedisScript<Long> script = new DefaultRedisScript<>();
-        script.setLocation(new ClassPathResource("redis/acquire_slot.lua"));
+        script.setLocation(new ClassPathResource("redis/ready_to_active.lua"));
         script.setResultType(Long.class);
+        return script;
+    }
+
+    @Bean("enterQueueScript")
+    public RedisScript<Long> enterQueueScript() {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/enter_queue.lua"));
+        script.setResultType(Long.class);
+        return script;
+    }
+
+    @Bean("admitOneWaitingUserScript")
+    public RedisScript<String> admitOneWaitingUserScript() {
+        DefaultRedisScript<String> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/admit_one_waiting_user.lua"));
+        script.setResultType(String.class);
+        return script;
+    }
+
+    @Bean("expireReadyUsersScript")
+    public RedisScript<List> expireReadyUsersScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/expire_ready_users.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
+
+    @Bean("expireActiveUsersScript")
+    public RedisScript<List> expireActiveUsersScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/expire_active_users.lua"));
+        script.setResultType(List.class);
         return script;
     }
 }

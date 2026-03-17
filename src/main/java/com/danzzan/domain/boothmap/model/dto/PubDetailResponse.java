@@ -16,4 +16,6 @@ public class PubDetailResponse {
     private String collegeName;
     private String instagram;
     private List<String> imageUrls;
+    private String startTime;
+    private String endTime;
 }

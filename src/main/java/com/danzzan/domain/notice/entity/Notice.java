@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -26,6 +28,38 @@ public class Notice {
 
     @Column(nullable = false)
     private String author;
+
+    /**
+     * 카테고리 (예: GENERAL, EVENT 등).
+     * 카테고리 목록이 확정되지 않은 상태를 고려해 String으로 유지합니다.
+     */
+    @Column(length = 50)
+    private String category = "GENERAL";
+
+    /** 상단 고정 여부 */
+    private Boolean isPinned = false;
+
+    /** 대표 이미지 URL (선택) */
+    @Column(length = 2048)
+    private String thumbnailImageUrl;
+
+    /**
+     * 공지 본문에 첨부된 이미지 URL 목록.
+     * 최대 10개까지를 권장하며, 썸네일은 이 목록 중 하나를 사용합니다.
+     */
+    @ElementCollection
+    @CollectionTable(name = "notice_image", joinColumns = @JoinColumn(name = "notice_id"))
+    @Column(name = "image_url", length = 2048, nullable = false)
+    @OrderColumn(name = "position")
+    private List<String> images = new ArrayList<>();
+
+    /**
+     * 동일 카테고리 내에서의 표시 순서.
+     * 값이 작을수록 위에 노출되며, isPinned=true 그룹과 조합해 정렬에 사용됩니다.
+     * 기본값 0으로 두고, 필요 시 관리자 페이지에서 드래그 앤 드롭으로 재정렬합니다.
+     */
+    @Column(nullable = false)
+    private Integer displayOrder = 0;
 
     @Column(nullable = false)
     private Boolean isEmergency = false;
@@ -48,10 +82,40 @@ public class Notice {
     }
 
     public static Notice create(String title, String content, String author, Boolean isEmergency) {
+        return create(title, content, author, null, false, null, null, isEmergency);
+    }
+
+    public static Notice create(
+            String title,
+            String content,
+            String author,
+            String category,
+            Boolean isPinned,
+            String thumbnailImageUrl,
+            java.util.List<String> images,
+            Boolean isEmergency
+    ) {
         Notice notice = new Notice();
         notice.setTitle(title);
         notice.setContent(content);
         notice.setAuthor(author);
+        notice.setCategory((category == null || category.isBlank()) ? "GENERAL" : category.trim());
+        notice.setIsPinned(Boolean.TRUE.equals(isPinned));
+
+        // 썸네일 정책: 명시된 썸네일이 없고 이미지가 있으면 첫 번째 이미지를 썸네일로 사용
+        if ((thumbnailImageUrl == null || thumbnailImageUrl.isBlank())
+                && images != null
+                && !images.isEmpty()) {
+            notice.setThumbnailImageUrl(images.get(0));
+        } else {
+            notice.setThumbnailImageUrl(thumbnailImageUrl);
+        }
+
+        if (images != null) {
+            notice.getImages().clear();
+            notice.getImages().addAll(images);
+        }
+
         notice.setIsEmergency(isEmergency != null && isEmergency);
         return notice;
     }

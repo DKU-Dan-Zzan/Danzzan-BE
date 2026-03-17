@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @NoArgsConstructor
@@ -16,6 +18,10 @@ public class NoticeResponse {
     private String author;
     private Boolean isEmergency;
     private Boolean isActive;
+    private String category;
+    private Boolean isPinned;
+    private String thumbnailImageUrl;
+    private List<String> images = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -27,6 +33,11 @@ public class NoticeResponse {
         res.author = notice.getAuthor();
         res.isEmergency = notice.getIsEmergency();
         res.isActive = notice.getIsActive();
+        res.category = (notice.getCategory() == null || notice.getCategory().isBlank())
+                ? "GENERAL"
+                : notice.getCategory();
+        res.isPinned = Boolean.TRUE.equals(notice.getIsPinned());
+        res.thumbnailImageUrl = notice.getThumbnailImageUrl();
         res.createdAt = notice.getCreatedAt();
         res.updatedAt = notice.getUpdatedAt();
         return res;

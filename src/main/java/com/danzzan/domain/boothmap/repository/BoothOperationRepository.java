@@ -25,4 +25,9 @@ public interface BoothOperationRepository extends JpaRepository<BoothOperation, 
           and bo.operationDate = :operationDate
     """)
     Optional<BoothOperation> findByBoothIdAndOperationDate(Long boothId, LocalDate operationDate);
+
+    @Query("select bo from BoothOperation bo join fetch bo.booth")
+    List<BoothOperation> findAllWithBooth();
+
+    Optional<BoothOperation> findFirstByBoothIdOrderByOperationDateAsc(Long boothId);
 }

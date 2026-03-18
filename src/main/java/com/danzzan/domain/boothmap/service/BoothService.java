@@ -18,8 +18,11 @@ public class BoothService {
     private final BoothOperationRepository boothOperationRepository;
 
     public BoothSummaryResponse getBoothSummary(Long boothId, LocalDate operationDate) {
-        BoothOperation boothOperation = boothOperationRepository.findByBoothIdAndOperationDate(boothId, operationDate)
-                .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 부스를 찾을 수 없습니다. id=" + boothId));
+        BoothOperation boothOperation = (operationDate == null)
+                ? boothOperationRepository.findFirstByBoothIdOrderByOperationDateAsc(boothId)
+                    .orElseThrow(() -> new IllegalArgumentException("해당 부스를 찾을 수 없습니다. id=" + boothId))
+                : boothOperationRepository.findByBoothIdAndOperationDate(boothId, operationDate)
+                    .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 부스를 찾을 수 없습니다. id=" + boothId));
 
         Booth booth = boothOperation.getBooth();
 

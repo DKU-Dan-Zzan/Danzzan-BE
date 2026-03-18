@@ -20,8 +20,18 @@ public class NoticeResponse {
     private Boolean isActive;
     private String category;
     private Boolean isPinned;
+
+    /**
+     * 썸네일 이미지 URL (없을 수 있음).
+     */
     private String thumbnailImageUrl;
-    private List<String> images = new ArrayList<>();
+
+    /**
+     * 본문 이미지 URL 배열.
+     * 관리자/클라이언트 공지 모두 동일하게 사용합니다.
+     */
+    private List<String> imageUrls = new ArrayList<>();
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -38,6 +48,9 @@ public class NoticeResponse {
                 : notice.getCategory();
         res.isPinned = Boolean.TRUE.equals(notice.getIsPinned());
         res.thumbnailImageUrl = notice.getThumbnailImageUrl();
+        if (notice.getImages() != null) {
+            res.imageUrls = new ArrayList<>(notice.getImages());
+        }
         res.createdAt = notice.getCreatedAt();
         res.updatedAt = notice.getUpdatedAt();
         return res;

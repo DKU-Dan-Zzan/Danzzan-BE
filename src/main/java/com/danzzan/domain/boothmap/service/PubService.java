@@ -27,8 +27,11 @@ public class PubService {
     public List<PubSummaryResponse> getPubs(LocalDate operationDate) {
         List<Pub> pubs = pubRepository.findAllWithCollegeAndImages();
 
-        PubOperation pubOperation = pubOperationRepository.findByOperationDate(operationDate)
-                .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 주점 운영정보가 없습니다."));
+        PubOperation pubOperation = (operationDate == null)
+                ? pubOperationRepository.findFirstByOrderByOperationDateAsc()
+                    .orElseThrow(() -> new IllegalArgumentException("주점 운영정보가 없습니다."))
+                : pubOperationRepository.findByOperationDate(operationDate)
+                    .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 주점 운영정보가 없습니다."));
 
         String startTime = formatTime(pubOperation.getStartTime());
         String endTime = formatTime(pubOperation.getEndTime());
@@ -60,8 +63,11 @@ public class PubService {
         Pub pub = pubRepository.findByIdWithCollege(pubId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 주점을 찾을 수 없습니다. id=" + pubId));
 
-        PubOperation pubOperation = pubOperationRepository.findByOperationDate(operationDate)
-                .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 주점 운영정보가 없습니다."));
+        PubOperation pubOperation = (operationDate == null)
+                ? pubOperationRepository.findFirstByOrderByOperationDateAsc()
+                    .orElseThrow(() -> new IllegalArgumentException("주점 운영정보가 없습니다."))
+                : pubOperationRepository.findByOperationDate(operationDate)
+                    .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 주점 운영정보가 없습니다."));
 
         List<String> imageUrls = pubImageRepository.findByPubId(pubId)
                 .stream()

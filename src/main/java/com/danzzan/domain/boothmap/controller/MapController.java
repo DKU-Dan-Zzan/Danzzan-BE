@@ -79,7 +79,7 @@ public class MapController {
                 description = "조회할 축제 날짜",
                 example = "2026-05-20"
         )
-        @RequestParam
+        @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return boothMapService.getBoothMap(date);
@@ -123,7 +123,7 @@ public class MapController {
                 description = "조회할 축제 날짜",
                 example = "2026-05-20"
         )
-        @RequestParam 
+        @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return boothService.getBoothSummary(boothId, date);
@@ -178,7 +178,7 @@ public class MapController {
                 description = "조회할 축제 날짜",
                 example = "2026-05-20"
         )
-        @RequestParam
+        @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return pubService.getPubs(date);
@@ -241,7 +241,7 @@ public class MapController {
                 description = "조회할 축제 날짜",
                 example = "2026-05-20"
         )
-        @RequestParam 
+        @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
         return pubService.getPubDetail(pubId, date);

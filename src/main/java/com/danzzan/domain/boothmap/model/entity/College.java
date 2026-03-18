@@ -29,4 +29,9 @@ public class College {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
+
+    public void updateLocation(Double locationX, Double locationY) {
+        this.locationX = locationX;
+        this.locationY = locationY;
+    }
 }

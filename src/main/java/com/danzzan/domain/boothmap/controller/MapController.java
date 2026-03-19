@@ -7,6 +7,7 @@ import com.danzzan.domain.boothmap.model.dto.PubSummaryResponse;
 import com.danzzan.domain.boothmap.service.BoothMapService;
 import com.danzzan.domain.boothmap.service.BoothService;
 import com.danzzan.domain.boothmap.service.PubService;
+import com.danzzan.domain.admin.map.service.AdminMapService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -34,6 +35,7 @@ public class MapController {
     private final BoothMapService boothMapService;
     private final BoothService boothService;
     private final PubService pubService;
+    private final AdminMapService adminMapService;
 
     @GetMapping("/booth-map")
     @Operation(
@@ -82,7 +84,7 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return boothMapService.getBoothMap(date);
+        return boothMapService.getBoothMap(resolveDate(date));
     }
 
     @GetMapping("/booths/{boothId}")
@@ -126,7 +128,7 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return boothService.getBoothSummary(boothId, date);
+        return boothService.getBoothSummary(boothId, resolveDate(date));
     }
 
     @GetMapping("/pubs")
@@ -181,7 +183,7 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return pubService.getPubs(date);
+        return pubService.getPubs(resolveDate(date));
     }
 
     @GetMapping("/pubs/{pubId}")
@@ -244,6 +246,10 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return pubService.getPubDetail(pubId, date);
+        return pubService.getPubDetail(pubId, resolveDate(date));
+    }
+
+    private LocalDate resolveDate(LocalDate date) {
+        return date != null ? date : adminMapService.getActiveOperationDate();
     }
 }

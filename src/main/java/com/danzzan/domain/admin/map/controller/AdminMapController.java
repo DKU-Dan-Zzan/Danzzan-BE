@@ -1,11 +1,14 @@
 package com.danzzan.domain.admin.map.controller;
 
 import com.danzzan.domain.admin.map.dto.request.UpdateMapLocationRequest;
+import com.danzzan.domain.admin.map.dto.request.UpdateActiveOperationDateRequest;
 import com.danzzan.domain.admin.map.dto.response.AdminMapResponse;
 import com.danzzan.domain.admin.map.service.AdminMapService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 @RestController
 @RequiredArgsConstructor
@@ -15,8 +18,12 @@ public class AdminMapController {
     private final AdminMapService adminMapService;
 
     @GetMapping
-    public AdminMapResponse getAdminMap() {
-        return adminMapService.getAdminMap();
+    public AdminMapResponse getAdminMap(@RequestParam(required = false) String date) {
+        LocalDate operationDate = (date == null || date.isBlank())
+                ? adminMapService.getActiveOperationDate()
+                : LocalDate.parse(date);
+
+        return adminMapService.getAdminMap(operationDate);
     }
 
     @PatchMapping("/colleges/{collegeId}/location")
@@ -38,5 +45,10 @@ public class AdminMapController {
     @DeleteMapping("/booths/{boothId}/location")
     public void clearBoothLocation(@PathVariable Long boothId) {
         adminMapService.clearBoothLocation(boothId);
+    }
+
+    @PutMapping("/active-date")
+    public void updateActiveDate(@RequestBody UpdateActiveOperationDateRequest request) {
+        adminMapService.updateActiveDate(request);
     }
 }

@@ -115,7 +115,7 @@ public class AdminNoticeController {
 
     /**
      * 공지 대표 이미지 업로드용 Presigned URL 발급 (S3).
-     * 클라이언트가 받은 uploadUrl로 PUT 업로드 후, imageUrl을 Notice.thumbnailImageUrl 등에 저장해서 사용.
+     * 클라이언트가 받은 presignedUrl로 PUT 업로드 후, fileUrl을 Notice.thumbnailImageUrl/images 등에 저장해서 사용.
      */
     @PostMapping("/notices/images/presign")
     public ResponseEntity<NoticeImagePresignResponse> presignNoticeImage(@Valid @RequestBody PresignNoticeImageRequest request) {

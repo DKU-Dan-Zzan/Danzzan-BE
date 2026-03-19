@@ -8,7 +8,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetUrlRequest;
-import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
@@ -93,9 +92,9 @@ public class S3PresignService {
         if (contentType != null && !contentType.isBlank()) {
             putReq = putReq.contentType(contentType.trim());
         }
-        if (publicRead) {
-            putReq = putReq.acl(ObjectCannedACL.PUBLIC_READ);
-        }
+        // (중요) Presigned PUT은 서명에 포함되는 헤더/필드를 클라이언트가 정확히 동일하게 보내야 합니다.
+        // 프론트에서 x-amz-acl 헤더가 누락/변형되는 경우 SignatureDoesNotMatch(403)가 발생할 수 있어
+        // presign 경로에서는 ACL을 서명에 포함하지 않습니다. (B 정책: 객체는 private 유지)
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
                 .signatureDuration(Duration.ofSeconds(putExpirationSec))

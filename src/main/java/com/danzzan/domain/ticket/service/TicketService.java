@@ -6,7 +6,6 @@ import com.danzzan.domain.event.repository.FestivalEventRepository;
 import com.danzzan.domain.event.exception.EventNotFoundException;
 import com.danzzan.domain.ticket.dto.*;
 import com.danzzan.domain.ticket.exception.AlreadyReservedException;
-import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.model.entity.TicketStatus;
 import com.danzzan.domain.ticket.model.entity.UserTicket;
@@ -30,6 +29,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class TicketService {
+
+    private static final String[] DAY_OF_WEEK_KOR = {"", "월", "화", "수", "목", "금", "토", "일"};
 
     private final FestivalEventRepository eventRepository;
     private final UserTicketRepository ticketRepository;
@@ -60,9 +61,6 @@ public class TicketService {
         FestivalEvent event = eventRepository.findById(eventId)
                 .orElseThrow(EventNotFoundException::new);
 
-        if (event.getTicketingStatus() == TicketingStatus.READY) {
-            throw new EventNotOpenException("아직 예매가 시작되지 않았습니다.");
-        }
         if (event.getTicketingStatus() == TicketingStatus.CLOSED) {
             throw new EventSoldOutException();
         }
@@ -70,14 +68,18 @@ public class TicketService {
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
 
-        // Redis stock(remaining)과 totalCapacity가 다를 수 있으므로
-        // DB 발급 수 기준으로 순번 계산 (unique 제약으로 동일 유저 중복 불가)
-        int order = (int) ticketRepository.countByEventId(eventId) + 1;
+        // Lua DECR 후 반환된 remaining을 사용해 순번 계산 (원자적, 동시성 안전)
+        // remaining = 차감 후 남은 재고 → 순번 = totalCapacity - remaining
+        int order = (int) (event.getTotalCapacity() - remaining);
+
+        // 대기열 진입 순번(seq) — Redis hash에서 읽어 저장
+        Long seq = readSeqFromRedis(String.valueOf(eventId), String.valueOf(userId));
 
         UserTicket ticket = UserTicket.builder()
                 .user(user)
                 .event(event)
                 .ticketingOrder(order)
+                .seq(seq)
                 .build();
 
         try {
@@ -93,10 +95,10 @@ public class TicketService {
         return ticketRepository.existsByUserIdAndEventId(userId, eventId);
     }
 
-    public boolean isClosedEvent(Long eventId) {
-        FestivalEvent event = eventRepository.findById(eventId)
-                .orElseThrow(EventNotFoundException::new);
-        return event.getTicketingStatus() == TicketingStatus.CLOSED;
+    public TicketingStatus getTicketingStatus(Long eventId) {
+        return eventRepository.findById(eventId)
+                .orElseThrow(EventNotFoundException::new)
+                .getTicketingStatus();
     }
 
     // 내 티켓 목록 조회 (로그인 필요)
@@ -108,6 +110,17 @@ public class TicketService {
                 .collect(Collectors.toList());
 
         return new ResponseMyTicketListDto(items);
+    }
+
+    private Long readSeqFromRedis(String eventId, String userId) {
+        Object raw = redisTemplate.opsForHash().get(
+                TicketRedisKeys.queueUserHashKey(eventId, userId), "seq");
+        if (raw == null) return null;
+        try {
+            return Long.parseLong(raw.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     // ===== 변환 메서드 =====
@@ -124,8 +137,11 @@ public class TicketService {
                 remaining = 0;
             }
         } else {
-            // 이벤트 오픈 전(READY)이거나 초기화 전: totalCapacity로 표시
-            remaining = event.getTotalCapacity();
+            // OPEN인데 stock 키 없음 = initStock 미호출 → 실제로 예매 불가 상태
+            // admit/claim Lua 모두 stock nil이면 거부하므로 0으로 표시해 FE와 일치시킴
+            // READY이면 아직 초기화 전 정상 상태 → totalCapacity로 예고 표시
+            remaining = event.getTicketingStatus() == TicketingStatus.OPEN
+                    ? 0 : event.getTotalCapacity();
         }
 
         // BE status → FE status 변환
@@ -139,10 +155,9 @@ public class TicketService {
 
         // 날짜 포맷팅
         LocalDate date = event.getEventDate();
-        String[] dayOfWeekKor = {"", "월", "화", "수", "목", "금", "토", "일"};
         String formattedDate = String.format("%02d월 %02d일 (%s)",
                 date.getMonthValue(), date.getDayOfMonth(),
-                dayOfWeekKor[date.getDayOfWeek().getValue()]);
+                DAY_OF_WEEK_KOR[date.getDayOfWeek().getValue()]);
 
         String formattedTime = event.getTicketingStartTime()
                 .format(DateTimeFormatter.ofPattern("HH:mm")) + " 예매 오픈";
@@ -166,18 +181,14 @@ public class TicketService {
 
         // 날짜 포맷팅
         LocalDate date = event.getEventDate();
-        String[] dayOfWeekKor = {"", "월", "화", "수", "목", "금", "토", "일"};
         String formattedDate = String.format("%02d월 %02d일 (%s) 19:00",
                 date.getMonthValue(), date.getDayOfMonth(),
-                dayOfWeekKor[date.getDayOfWeek().getValue()]);
-
-        // 몇 일차 계산 (첫 이벤트 기준)
-        String eventName = event.getTitle();
+                DAY_OF_WEEK_KOR[date.getDayOfWeek().getValue()]);
 
         return ResponseMyTicketDto.builder()
                 .id(String.valueOf(ticket.getId()))
                 .status(feStatus)
-                .eventName(eventName)
+                .eventName(event.getTitle())
                 .eventDate(formattedDate)
                 .issuedAt(ticket.getTicketingAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
                 .seat("단국존 순번 #" + ticket.getTicketingOrder())

@@ -14,7 +14,6 @@ import java.util.List;
 public class QueueServiceImpl implements QueueService {
 
     private final StringRedisTemplate redisTemplate;
-    private final TicketQueueEntrySyncService ticketQueueEntrySyncService;
 
     @Qualifier("enterQueueScript")
     private final RedisScript<Long> enterQueueScript;
@@ -40,9 +39,6 @@ public class QueueServiceImpl implements QueueService {
                 String.valueOf(nowMs)
         );
         long seq = result == null ? 0L : result;
-        if (seq > 0) {
-            ticketQueueEntrySyncService.markWaiting(eventId, userId, seq, nowMs);
-        }
         return seq;
     }
 

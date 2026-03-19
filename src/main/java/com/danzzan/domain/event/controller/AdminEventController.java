@@ -1,5 +1,7 @@
 package com.danzzan.domain.event.controller;
 
+import com.danzzan.domain.event.exception.EventNotFoundException;
+import com.danzzan.domain.event.service.EventOpenService;
 import com.danzzan.global.model.ApiResponse;
 import com.danzzan.domain.event.dto.EventListResponseDTO;
 import com.danzzan.domain.event.dto.EventStatsResponseDTO;
@@ -13,12 +15,16 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @Validated
 @RestController
@@ -28,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminEventController {
 
     private final AdminEventService adminEventService;
+    private final EventOpenService eventOpenService;
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/events")
@@ -79,6 +86,22 @@ public class AdminEventController {
     })
     public ApiResponse<EventListResponseDTO> listEvents() {
         return ApiResponse.success(adminEventService.listEvents());
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping("/events/{eventId}/open")
+    @Operation(
+            summary = "이벤트 수동 OPEN 전환",
+            description = "READY 상태 이벤트를 즉시 OPEN으로 전환합니다. 자동 오픈 스케줄러와 동일한 서비스를 사용하므로 동시 호출이 들어와도 딱 한 번만 실행됩니다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ApiResponse<Void>> openEvent(@NotNull @PathVariable Long eventId) {
+        boolean opened = eventOpenService.openNow(eventId);
+        if (!opened) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "이미 OPEN 또는 CLOSED 상태입니다.");
+        }
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

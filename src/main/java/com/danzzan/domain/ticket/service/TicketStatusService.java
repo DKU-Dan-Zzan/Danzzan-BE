@@ -13,8 +13,6 @@ public interface TicketStatusService {
 
     Long getAheadCount(String eventId, String userId);
 
-    Long getEstimatedWaitSeconds(String eventId, String userId);
-
     Long getEstimatedWaitSeconds(Long aheadCount);
 
     Long getReadyUntil(String eventId, String userId);

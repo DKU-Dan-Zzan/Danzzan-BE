@@ -42,11 +42,4 @@ public class FestivalEvent {
         this.totalCapacity = totalCapacity;
     }
 
-    public void changeStatus(TicketingStatus status) {
-        this.ticketingStatus = status;
-    }
-
-    public void updateCapacity(Integer capacity) {
-        this.totalCapacity = capacity;
-    }
 }

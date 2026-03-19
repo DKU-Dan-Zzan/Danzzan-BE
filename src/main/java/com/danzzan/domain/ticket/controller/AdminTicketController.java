@@ -1,13 +1,10 @@
 package com.danzzan.domain.ticket.controller;
 
 import com.danzzan.global.model.ApiResponse;
-import com.danzzan.domain.ticket.dto.AdminTicketInitRequestDTO;
-import com.danzzan.domain.ticket.dto.AdminTicketInitResponseDTO;
 import com.danzzan.domain.ticket.dto.IssueTicketRequestDTO;
 import com.danzzan.domain.ticket.dto.IssueTicketResponseDTO;
 import com.danzzan.domain.ticket.dto.TicketSearchResponseDTO;
 import com.danzzan.domain.ticket.service.AdminTicketService;
-import com.danzzan.domain.ticket.service.TicketInitService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -19,13 +16,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -39,24 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminTicketController {
 
     private final AdminTicketService adminTicketService;
-    private final TicketInitService ticketInitService;
-
-    @PreAuthorize("hasRole('ADMIN')")
-    @PostMapping("/ticket/init")
-    @Operation(
-            summary = "티켓팅 Redis 초기화",
-            description = "eventId별 선착순 재고(stock) 키를 초기화합니다."
-    )
-    @SecurityRequirement(name = "bearerAuth")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "초기화 성공")
-    })
-    public ResponseEntity<ApiResponse<AdminTicketInitResponseDTO>> initTicketStock(
-            @Valid @RequestBody AdminTicketInitRequestDTO request
-    ) {
-        AdminTicketInitResponseDTO response = ticketInitService.initStock(request.getEventId(), request.getStock());
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/events/{eventId}/tickets/search")

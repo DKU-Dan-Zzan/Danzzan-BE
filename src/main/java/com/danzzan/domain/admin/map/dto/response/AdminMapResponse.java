@@ -8,6 +8,7 @@ import java.util.List;
 @Getter
 @AllArgsConstructor
 public class AdminMapResponse {
+    private String activeOperationDate;
     private List<AdminMapCollegeResponse> colleges;
     private List<AdminMapBoothResponse> booths;
 }

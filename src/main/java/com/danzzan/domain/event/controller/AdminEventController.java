@@ -96,12 +96,17 @@ public class AdminEventController {
     )
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<ApiResponse<Void>> openEvent(@NotNull @PathVariable Long eventId) {
-        boolean opened = eventOpenService.openNow(eventId);
-        if (!opened) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "이미 OPEN 또는 CLOSED 상태입니다.");
+        try {
+            boolean opened = eventOpenService.openNow(eventId);
+            if (!opened) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "이미 OPEN 또는 CLOSED 상태입니다.");
+            }
+            return ResponseEntity.ok(ApiResponse.success(null));
+        } catch (EventNotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "이벤트를 찾을 수 없습니다.", e);
         }
-        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @PreAuthorize("hasRole('ADMIN')")

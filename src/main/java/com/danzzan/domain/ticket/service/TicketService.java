@@ -129,19 +129,20 @@ public class TicketService {
         // Redis stock을 진실원천으로 사용 — DB 발급 수와 totalCapacity 기반 계산은 초기화 값과 어긋남
         String stockStr = redisTemplate.opsForValue().get(
                 TicketRedisKeys.stockKey(String.valueOf(event.getId())));
+        TicketingStatus status = event.getTicketingStatus();
         int remaining;
-        if (stockStr != null) {
+        if (status == TicketingStatus.CLOSED) {
+            // CLOSED는 stock 키 유무와 무관하게 항상 0
+            remaining = 0;
+        } else if (stockStr != null) {
             try {
                 remaining = Math.max(0, Integer.parseInt(stockStr));
             } catch (NumberFormatException e) {
                 remaining = 0;
             }
         } else {
-            // OPEN인데 stock 키 없음 = initStock 미호출 → 실제로 예매 불가 상태
-            // admit/claim Lua 모두 stock nil이면 거부하므로 0으로 표시해 FE와 일치시킴
-            // READY이면 아직 초기화 전 정상 상태 → totalCapacity로 예고 표시
-            remaining = event.getTicketingStatus() == TicketingStatus.OPEN
-                    ? 0 : event.getTotalCapacity();
+            // stock 키 없음: OPEN이면 예매 불가 상태(0), READY이면 아직 오픈 전(totalCapacity 예고)
+            remaining = status == TicketingStatus.OPEN ? 0 : event.getTotalCapacity();
         }
 
         // BE status → FE status 변환

@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
 public class AdminNoticeController {
 
     private final EmergencyNoticeService emergencyNoticeService;

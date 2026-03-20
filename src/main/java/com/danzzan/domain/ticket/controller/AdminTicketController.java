@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
 @Tag(name = "관리자 티켓", description = "관리자 티켓 조회/발급 API")
+@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
 public class AdminTicketController {
 
     private final AdminTicketService adminTicketService;

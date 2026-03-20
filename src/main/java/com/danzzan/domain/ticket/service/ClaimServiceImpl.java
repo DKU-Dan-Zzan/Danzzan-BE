@@ -26,7 +26,6 @@ public class ClaimServiceImpl implements ClaimService {
     @Qualifier("claimRollbackScript")
     private final RedisScript<Long> claimRollbackScript;
     private final ClaimOutcomeMetrics claimOutcomeMetrics;
-    private final TicketQueueEntrySyncService ticketQueueEntrySyncService;
 
     @Override
     public ClaimResult claim(String eventId, String userId) {
@@ -62,7 +61,6 @@ public class ClaimServiceImpl implements ClaimService {
 
         long code = asLong(rawResult.get(ClaimLuaProtocol.CODE_INDEX), "code");
         if (code == ClaimLuaProtocol.CODE_EXPIRED_ACTIVE) {
-            ticketQueueEntrySyncService.markExpired(eventId, userId);
             throw new EventNotOpenException("입장 가능 시간이 만료되었습니다. 다시 대기열에 참여해주세요.");
         }
         if (code == ClaimLuaProtocol.CODE_NOT_ACTIVE) {
@@ -92,18 +90,24 @@ public class ClaimServiceImpl implements ClaimService {
 
     @Override
     public void rollback(String eventId, String userId) {
-        try {
-            String stockKey = TicketRedisKeys.stockKey(eventId);
-            String userKey = TicketRedisKeys.userKey(eventId, userId);
-            String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+        String stockKey = TicketRedisKeys.stockKey(eventId);
+        String userKey = TicketRedisKeys.userKey(eventId, userId);
+        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+        List<String> keys = List.of(stockKey, userKey, statusKey);
 
-            stringRedisTemplate.execute(
-                    claimRollbackScript,
-                    List.of(stockKey, userKey, statusKey)
-            );
-            log.info("claim_rollback eventId={} userId={}", eventId, userId);
-        } catch (Exception e) {
-            log.error("claim_rollback 실패 eventId={} userId={}", eventId, userId, e);
+        int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                stringRedisTemplate.execute(claimRollbackScript, keys);
+                log.info("claim_rollback 성공 eventId={} userId={} attempt={}", eventId, userId, attempt);
+                return;
+            } catch (Exception e) {
+                if (attempt < maxAttempts) {
+                    log.warn("claim_rollback 재시도 {}/{} eventId={} userId={}", attempt, maxAttempts, eventId, userId, e);
+                } else {
+                    log.error("claim_rollback 최종 실패 — stock 수동 보정 필요 eventId={} userId={}", eventId, userId, e);
+                }
+            }
         }
     }
 

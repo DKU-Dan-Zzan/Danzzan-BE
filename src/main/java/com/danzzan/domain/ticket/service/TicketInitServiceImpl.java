@@ -7,14 +7,12 @@ import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class TicketInitServiceImpl implements TicketInitService {
 
     private static final String STOCK_SUFFIX = ":stock";
@@ -22,7 +20,6 @@ public class TicketInitServiceImpl implements TicketInitService {
     private static final int UNLINK_BATCH_SIZE = 500;
 
     private final StringRedisTemplate redisTemplate;
-    private final com.danzzan.domain.ticket.repository.TicketQueueEntryRepository ticketQueueEntryRepository;
 
     @Override
     public AdminTicketInitResponseDTO initStock(String eventId, Long stock) {
@@ -45,7 +42,6 @@ public class TicketInitServiceImpl implements TicketInitService {
         redisTemplate.delete(TicketRedisKeys.readyKey(eventId));
         redisTemplate.delete(TicketRedisKeys.activeKey(eventId));
         redisTemplate.delete(TicketRedisKeys.closedCleanupKey(eventId));
-        ticketQueueEntryRepository.deleteAllByEventId(Long.valueOf(eventId));
 
         redisTemplate.opsForValue().set(stockKey, String.valueOf(stock));
 
@@ -78,6 +74,13 @@ public class TicketInitServiceImpl implements TicketInitService {
             }
             unlinkBatch(batch);
         }
+    }
+
+    @Override
+    public boolean restoreStockIfMissing(String eventId, long stock) {
+        String stockKey = TicketRedisKeys.stockKey(eventId);
+        Boolean set = redisTemplate.opsForValue().setIfAbsent(stockKey, String.valueOf(stock));
+        return Boolean.TRUE.equals(set);
     }
 
     private void unlinkBatch(List<String> batch) {

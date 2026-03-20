@@ -5,12 +5,12 @@ import com.danzzan.domain.ticket.dto.ResponseReserveTicketDto;
 import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
+import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import com.danzzan.domain.ticket.service.TicketService;
-import com.danzzan.domain.ticket.service.TicketQueueEntrySyncService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
 import com.danzzan.global.exception.GlobalExceptionHandler;
@@ -46,14 +46,12 @@ class TicketControllerTest {
     @Mock private TicketStatusService ticketStatusService;
     @Mock private QueueService queueService;
     @Mock private QueueStateService queueStateService;
-    @Mock private TicketQueueEntrySyncService ticketQueueEntrySyncService;
-
     private static final Principal USER_AUTH = new TestingAuthenticationToken(1L, null);
 
     @BeforeEach
     void setUp() {
         TicketController controller = new TicketController(
-                ticketService, claimService, ticketStatusService, queueService, queueStateService, ticketQueueEntrySyncService);
+                ticketService, claimService, ticketStatusService, queueService, queueStateService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -65,6 +63,8 @@ class TicketControllerTest {
     void enterQueue_대기중이면_queuePosition을_반환한다() throws Exception {
         when(ticketStatusService.getStatus(eq("10"), eq("1")))
                 .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.WAITING);
+        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
+        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
         when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
         when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(5L);
 
@@ -79,6 +79,8 @@ class TicketControllerTest {
     void enterQueue_WAITING이고_queuePosition_없으면_필드를_생략한다() throws Exception {
         when(ticketStatusService.getStatus(eq("10"), eq("1")))
                 .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.WAITING);
+        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
+        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
         when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
         when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(null);
 
@@ -92,6 +94,8 @@ class TicketControllerTest {
     void enterQueue_READY이면_ADMITTED를_반환한다() throws Exception {
         when(ticketStatusService.getStatus(eq("10"), eq("1")))
                 .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.ADMITTED);
+        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
+        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
         when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
@@ -196,7 +200,6 @@ class TicketControllerTest {
                 .andExpect(jsonPath("$.queueNumber").value(42));
 
         verify(claimService, never()).rollback(eq("10"), eq("1"));
-        verify(ticketQueueEntrySyncService).markDone(eq("10"), eq("1"));
         verify(queueStateService).releaseActive(eq("10"), eq("1"));
     }
 
@@ -219,7 +222,6 @@ class TicketControllerTest {
         mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
                 .andExpect(status().isConflict());
 
-        verify(ticketQueueEntrySyncService).markFailed(eq("10"), eq("1"));
         verify(queueStateService).releaseActive(eq("10"), eq("1"));
     }
 

@@ -12,8 +12,8 @@ import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
+import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.ticket.service.TicketService;
-import com.danzzan.domain.ticket.service.TicketQueueEntrySyncService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,8 +36,6 @@ public class TicketController {
     private final TicketStatusService ticketStatusService;
     private final QueueService queueService;
     private final QueueStateService queueStateService;
-    private final TicketQueueEntrySyncService ticketQueueEntrySyncService;
-
     @GetMapping("/events")
     @Operation(summary = "이벤트 목록 조회", description = "티켓팅 가능한 공연 목록을 조회합니다. 로그인 불필요.")
     public ResponseEntity<ResponseTicketEventListDto> getTicketingEvents() {
@@ -68,9 +66,17 @@ public class TicketController {
                     .status(TicketRequestStatus.ALREADY)
                     .build());
         }
-        if (ticketService.isClosedEvent(eventId)) {
+        // 이벤트 상태를 한 번만 조회해서 CLOSED/READY 모두 처리 (DB 1회)
+        TicketingStatus ticketingStatus = ticketService.getTicketingStatus(eventId);
+        if (ticketingStatus == TicketingStatus.CLOSED) {
             return ResponseEntity.ok(TicketRequestResponseDTO.builder()
                     .status(TicketRequestStatus.SOLD_OUT)
+                    .build());
+        }
+        // READY(오픈 전) 이벤트: 스케줄러가 OPEN 이벤트만 승격하므로 진입 자체를 차단
+        if (ticketingStatus != TicketingStatus.OPEN) {
+            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
+                    .status(TicketRequestStatus.NONE)
                     .build());
         }
 
@@ -130,12 +136,9 @@ public class TicketController {
             ClaimResult claimResult = claimService.claim(eventIdStr, userIdStr);
 
             if (claimResult.status() == TicketRequestStatus.SOLD_OUT) {
-                ticketQueueEntrySyncService.markFailed(eventIdStr, userIdStr);
                 throw new EventSoldOutException();
             }
             if (claimResult.status() == TicketRequestStatus.ALREADY) {
-                // userKey 존재 = Redis claim 이미 완료 → DONE으로 동기화 (markFailed 아님)
-                ticketQueueEntrySyncService.markDone(eventIdStr, userIdStr);
                 throw new AlreadyReservedException();
             }
 
@@ -144,7 +147,6 @@ public class TicketController {
                 response = ticketService.persistAndBuildResponse(userId, eventId, claimResult.remaining());
             } catch (Exception e) {
                 claimService.rollback(eventIdStr, userIdStr);
-                ticketQueueEntrySyncService.markFailed(eventIdStr, userIdStr);
                 throw e;
             }
 
@@ -200,11 +202,6 @@ public class TicketController {
             queueStateService.markDone(eventId, userId);
         } catch (Exception e) {
             log.error("markDone 실패, 예매는 이미 DB에 저장됨 eventId={} userId={}", eventId, userId, e);
-            try {
-                ticketQueueEntrySyncService.markDone(eventId, userId);
-            } catch (Exception syncException) {
-                log.error("ticketQueueEntrySync markDone 추가 실패 eventId={} userId={}", eventId, userId, syncException);
-            }
         }
     }
 

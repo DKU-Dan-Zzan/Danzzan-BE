@@ -34,6 +34,9 @@ public class UserTicket {
     @Column(name = "ticketing_order", nullable = false)
     private Integer ticketingOrder;
 
+    @Column(name = "seq")
+    private Long seq;
+
     @Column(name = "ticketing_at", nullable = false)
     private LocalDateTime ticketingAt;
 
@@ -45,11 +48,12 @@ public class UserTicket {
     private User issuerAdmin;
 
     @Builder
-    public UserTicket(User user, FestivalEvent event, Integer ticketingOrder) {
+    public UserTicket(User user, FestivalEvent event, Integer ticketingOrder, Long seq) {
         this.user = user;
         this.event = event;
         this.status = TicketStatus.CONFIRMED;
         this.ticketingOrder = ticketingOrder;
+        this.seq = seq;
         this.ticketingAt = LocalDateTime.now();
     }
 

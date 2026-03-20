@@ -81,12 +81,6 @@ public class TicketStatusServiceImpl implements TicketStatusService {
     }
 
     @Override
-    public Long getEstimatedWaitSeconds(String eventId, String userId) {
-        Long aheadCount = getAheadCount(eventId, userId);
-        return getEstimatedWaitSeconds(aheadCount);
-    }
-
-    @Override
     public Long getEstimatedWaitSeconds(Long aheadCount) {
         if (aheadCount == null || maxConcurrent <= 0) {
             return null;
@@ -119,12 +113,14 @@ public class TicketStatusServiceImpl implements TicketStatusService {
     private boolean isStockExhausted(String eventId) {
         String stock = redisTemplate.opsForValue().get(TicketRedisKeys.stockKey(eventId));
         if (stock == null) {
-            return false; // 키 없음 = READY 상태(미초기화), 아직 오픈 전
+            // stock 키 없음 = 미초기화. admit_one_waiting_user.lua도 동일하게 승격 거부하므로
+            // WAITING 유저가 영원히 진행 불가 → SOLD_OUT으로 표시해 혼란 방지
+            return true;
         }
         try {
             return Long.parseLong(stock) <= 0;
         } catch (NumberFormatException e) {
-            return false;
+            return true;
         }
     }
 

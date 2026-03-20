@@ -5,7 +5,6 @@ import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import com.danzzan.domain.ticket.service.TicketService;
-import com.danzzan.domain.ticket.service.TicketQueueEntrySyncService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -49,9 +48,6 @@ class TicketSecurityIntegrationTest {
 
     @MockitoBean
     private QueueService queueService;
-
-    @MockitoBean
-    private TicketQueueEntrySyncService ticketQueueEntrySyncService;
 
     @Test
     void getMyTickets_비인증_요청은_403과_빈본문을_반환한다() throws Exception {

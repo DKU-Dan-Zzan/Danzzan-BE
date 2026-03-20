@@ -36,7 +36,6 @@ public class QueueStateServiceImpl implements QueueStateService {
 
     private final StringRedisTemplate redisTemplate;
     private final FestivalEventRepository eventRepository;
-    private final TicketQueueEntrySyncService ticketQueueEntrySyncService;
 
     @Qualifier("readyToActiveScript")
     private final RedisScript<Long> readyToActiveScript;
@@ -77,7 +76,6 @@ public class QueueStateServiceImpl implements QueueStateService {
         if (promotedUserId == null || promotedUserId.isBlank()) {
             return false;
         }
-        ticketQueueEntrySyncService.markReady(eventId, promotedUserId, readyUntilMs);
         return true;
     }
 
@@ -98,10 +96,7 @@ public class QueueStateServiceImpl implements QueueStateService {
                 String.valueOf(activeUntilMs)
         );
         long normalized = result == null ? 0L : result;
-        if (normalized > 0) {
-            ticketQueueEntrySyncService.markActive(eventId, userId, activeUntilMs);
-        } else if (normalized < 0) {
-            ticketQueueEntrySyncService.markExpired(eventId, userId);
+        if (normalized < 0) {
             backfillFreedSlotsIfOpen(eventId, 1);
         }
         return normalized;
@@ -113,7 +108,6 @@ public class QueueStateServiceImpl implements QueueStateService {
                 TicketRedisKeys.queueUserHashKey(eventId, userId),
                 FIELD_STATE, QueueUserState.DONE.name());
         redisTemplate.opsForZSet().remove(TicketRedisKeys.activeKey(eventId), userId);
-        ticketQueueEntrySyncService.markDone(eventId, userId);
     }
 
     @Override
@@ -141,7 +135,6 @@ public class QueueStateServiceImpl implements QueueStateService {
         }
         for (Object raw : expiredIds) {
             String userId = raw.toString();
-            ticketQueueEntrySyncService.markExpired(eventId, userId);
             log.debug("ACTIVE 만료 eventId={} userId={}", eventId, userId);
         }
         backfillFreedSlotsIfOpen(eventId, expiredIds.size());
@@ -163,7 +156,6 @@ public class QueueStateServiceImpl implements QueueStateService {
         }
         for (Object raw : expiredIds) {
             String userId = raw.toString();
-            ticketQueueEntrySyncService.markExpired(eventId, userId);
             log.debug("READY 만료 eventId={} userId={}", eventId, userId);
         }
         backfillFreedSlotsIfOpen(eventId, expiredIds.size());
@@ -250,7 +242,6 @@ public class QueueStateServiceImpl implements QueueStateService {
             redisTemplate.opsForHash().put(hashKey, FIELD_STATE, QueueUserState.CANCELLED.name());
             redisTemplate.opsForHash().put(hashKey, FIELD_CANCELLED_AT, String.valueOf(now));
             redisTemplate.delete(TicketRedisKeys.dedupKey(eventId, userId));
-            ticketQueueEntrySyncService.markCancelled(eventId, userId);
             count++;
         }
         return count;

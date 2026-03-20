@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/ads")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
 public class AdminAdvertisementController {
 
     private final AdminAdvertisementService adminAdvertisementService;

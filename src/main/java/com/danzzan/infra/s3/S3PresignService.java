@@ -78,10 +78,21 @@ public class S3PresignService {
      * - 5MB 제한 (fileSize가 넘어오면 서버에서도 1차 필터링)
      */
     public S3PresignedPutResult presignPutAdImage(String fileName, String contentType, Long fileSize) {
-        validateImageContentType(contentType);
+        if (contentType != null && !contentType.isBlank()) {
+            validateImageContentType(contentType.trim());
+        }
         validateMaxSize(fileSize);
+        ensureBucketConfigured();
         String key = s3PathGenerator.generateAdImageKey(fileName);
-        return presignPutObject(key, contentType);
+        try {
+            return presignPutObject(key, contentType);
+        } catch (Exception e) {
+            log.warn("광고 이미지 presign 실패 fileName={} contentType={}", fileName, contentType, e);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+            );
+        }
     }
 
     private S3PresignedPutResult presignPutObject(String key, String contentType) {

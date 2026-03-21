@@ -46,14 +46,14 @@ public class AdminAdvertisementController {
     }
 
     /**
-     * placement별 광고 노출 on/off. active=true면 해당 슬롯의 최신(미삭제) 광고만 활성화합니다.
+     * placement별 광고 노출 on/off. isActive=true면 해당 슬롯의 최신(미삭제) 광고만 활성화합니다.
      */
     @PatchMapping("/{placement}/active")
     public ResponseEntity<?> setPlacementActive(
             @PathVariable AdvertisementPlacement placement,
             @Valid @RequestBody SetAdvertisementActiveRequest request
     ) {
-        if (Boolean.TRUE.equals(request.getActive())) {
+        if (Boolean.TRUE.equals(request.getIsActive())) {
             return ResponseEntity.ok(adminAdvertisementService.activatePlacement(placement));
         }
         adminAdvertisementService.deactivatePlacement(placement);

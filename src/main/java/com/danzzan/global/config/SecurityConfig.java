@@ -51,10 +51,10 @@ public class SecurityConfig {
                                 "/user/login",
                                 "/user/reissue",
                                 "/user/dku/**",
-                                "/user/{signup-token}",
                                 "/user/password/reset/**"
                         )
                         .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/user/{signup-token}").permitAll()
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET,

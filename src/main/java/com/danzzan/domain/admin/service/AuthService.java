@@ -81,6 +81,19 @@ public class AuthService {
     }
 
     public void logout(String refreshToken, HttpServletResponse response) {
+        if (refreshToken != null && !refreshToken.isBlank() && jwtTokenProvider.validateToken(refreshToken)) {
+            Long userId = jwtTokenProvider.getUserId(refreshToken);
+            int tokenVersion = jwtTokenProvider.getTokenVersion(refreshToken);
+
+            userRepository.findById(userId)
+                    .filter(user -> user.getRole() == UserRole.ROLE_ADMIN)
+                    .filter(user -> user.getTokenVersion() == tokenVersion)
+                    .ifPresent(user -> {
+                        user.bumpTokenVersion();
+                        userRepository.save(user);
+                    });
+        }
+
         ResponseCookie clearCookie = ResponseCookie.from("refreshToken", "")
                 .httpOnly(true)
                 .secure(true)

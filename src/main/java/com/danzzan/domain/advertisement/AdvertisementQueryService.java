@@ -20,7 +20,7 @@ public class AdvertisementQueryService {
     @Transactional(readOnly = true)
     public Optional<AdvertisementResponse> getActiveAd(AdvertisementPlacement placement) {
         return advertisementRepository
-                .findFirstByPlacementAndIsActiveTrueOrderByCreatedAtDesc(placement)
+                .findFirstByPlacementAndIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc(placement)
                 .map(AdvertisementResponse::from);
     }
 }

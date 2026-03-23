@@ -1,4 +1,4 @@
-package com.danzzan.domain.advertisement.dto;
+package com.danzzan.domain.advertisement.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -15,11 +15,12 @@ public class PresignAdvertisementImageRequest {
 
     /**
      * 예: image/png
+     * (선택) 미입력 시 Content-Type 없이 presign이 발급됩니다. PUT 시에도 동일하게 맞춰 주세요.
      */
     private String contentType;
 
     /**
-     * 파일 크기 (byte 단위).
+     * 파일 크기(byte). 5MB 초과 시 서버에서 1차 검증합니다.
      */
     private Long fileSize;
 }

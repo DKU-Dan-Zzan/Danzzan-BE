@@ -31,6 +31,12 @@ public class Advertisement {
     @Column(nullable = false)
     private Boolean isActive = true;
 
+    /**
+     * 관리자 삭제(소프트 삭제). null이면 삭제되지 않은 행.
+     */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

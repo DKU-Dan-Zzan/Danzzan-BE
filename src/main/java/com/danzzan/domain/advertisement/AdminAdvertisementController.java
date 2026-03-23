@@ -1,15 +1,17 @@
 package com.danzzan.domain.advertisement;
 
-import com.danzzan.domain.advertisement.dto.AdvertisementImagePresignResponse;
 import com.danzzan.domain.advertisement.dto.AdvertisementResponse;
 import com.danzzan.domain.advertisement.dto.CreateAdvertisementRequest;
-import com.danzzan.domain.advertisement.dto.PresignAdvertisementImageRequest;
-import com.danzzan.infra.s3.S3PresignService;
-import com.danzzan.infra.s3.S3PresignedPutResult;
+import com.danzzan.domain.advertisement.dto.request.PresignAdvertisementImageRequest;
+import com.danzzan.domain.advertisement.dto.request.SetAdvertisementActiveRequest;
+import com.danzzan.domain.advertisement.dto.response.AdvertisementImagePresignResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminAdvertisementController {
 
     private final AdminAdvertisementService adminAdvertisementService;
-    private final S3PresignService s3PresignService;
 
     /**
      * 광고 생성 (같은 위치에 기존 광고가 있으면 교체)
@@ -35,13 +36,13 @@ public class AdminAdvertisementController {
     }
 
     /**
-     * 광고 이미지 Presigned PUT URL 발급.
+     * 광고 이미지 업로드용 S3 Presigned PUT URL 발급.
      */
     @PostMapping("/images/presign")
     public ResponseEntity<AdvertisementImagePresignResponse> presignAdImage(
             @Valid @RequestBody PresignAdvertisementImageRequest request
     ) {
-        return ResponseEntity.ok(buildPresignResponse(request));
+        return ResponseEntity.ok(adminAdvertisementService.presignAdImage(request));
     }
 
     /**
@@ -51,15 +52,30 @@ public class AdminAdvertisementController {
     public ResponseEntity<AdvertisementImagePresignResponse> uploadUrl(
             @Valid @RequestBody PresignAdvertisementImageRequest request
     ) {
-        return ResponseEntity.ok(buildPresignResponse(request));
+        return ResponseEntity.ok(adminAdvertisementService.presignAdImage(request));
     }
 
-    private AdvertisementImagePresignResponse buildPresignResponse(PresignAdvertisementImageRequest request) {
-        S3PresignedPutResult result = s3PresignService.presignPutAdImage(
-                request.getFileName(),
-                request.getContentType(),
-                request.getFileSize()
-        );
-        return AdvertisementImagePresignResponse.from(result);
+    /**
+     * placement별 광고 노출 on/off. isActive=true면 해당 슬롯의 최신(미삭제) 광고만 활성화합니다.
+     */
+    @PatchMapping("/{placement}/active")
+    public ResponseEntity<?> setPlacementActive(
+            @PathVariable AdvertisementPlacement placement,
+            @Valid @RequestBody SetAdvertisementActiveRequest request
+    ) {
+        if (Boolean.TRUE.equals(request.getIsActive())) {
+            return ResponseEntity.ok(adminAdvertisementService.activatePlacement(placement));
+        }
+        adminAdvertisementService.deactivatePlacement(placement);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 현재 노출 중인 광고 소프트 삭제(DB 행 유지, 공개 API에서는 미노출).
+     */
+    @DeleteMapping("/{placement}")
+    public ResponseEntity<Void> softDeleteByPlacement(@PathVariable AdvertisementPlacement placement) {
+        adminAdvertisementService.softDeleteByPlacement(placement);
+        return ResponseEntity.noContent().build();
     }
 }

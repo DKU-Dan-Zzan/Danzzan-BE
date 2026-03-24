@@ -11,11 +11,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin/lost-items")
 @RequiredArgsConstructor
+@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
 public class AdminLostItemController {
 
     private final LostItemService lostItemService;
@@ -59,4 +61,3 @@ public class AdminLostItemController {
         return ResponseEntity.noContent().build();
     }
 }
-

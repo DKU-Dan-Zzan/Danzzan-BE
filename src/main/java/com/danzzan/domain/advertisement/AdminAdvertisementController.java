@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/ads")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
 public class AdminAdvertisementController {
 
     private final AdminAdvertisementService adminAdvertisementService;
@@ -40,6 +40,16 @@ public class AdminAdvertisementController {
      */
     @PostMapping("/images/presign")
     public ResponseEntity<AdvertisementImagePresignResponse> presignAdImage(
+            @Valid @RequestBody PresignAdvertisementImageRequest request
+    ) {
+        return ResponseEntity.ok(adminAdvertisementService.presignAdImage(request));
+    }
+
+    /**
+     * 레거시 프론트 호환을 위한 광고 업로드 URL 발급 엔드포인트.
+     */
+    @PostMapping("/upload-url")
+    public ResponseEntity<AdvertisementImagePresignResponse> uploadUrl(
             @Valid @RequestBody PresignAdvertisementImageRequest request
     ) {
         return ResponseEntity.ok(adminAdvertisementService.presignAdImage(request));

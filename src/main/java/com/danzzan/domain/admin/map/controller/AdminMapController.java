@@ -6,6 +6,7 @@ import com.danzzan.domain.admin.map.dto.response.AdminMapResponse;
 import com.danzzan.domain.admin.map.service.AdminMapService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -13,6 +14,7 @@ import java.time.LocalDate;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/map")
+@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
 public class AdminMapController {
 
     private final AdminMapService adminMapService;

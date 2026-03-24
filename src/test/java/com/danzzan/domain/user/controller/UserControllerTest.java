@@ -19,10 +19,12 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -90,5 +92,13 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("비밀번호 확인이 일치하지 않습니다."));
 
         verify(signupService, never()).signup(any(), anyString());
+    }
+
+    @Test
+    void getMyInfoWithoutAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/user/me"))
+                .andExpect(status().isUnauthorized());
+
+        verify(userService, never()).getMyInfo(anyLong());
     }
 }

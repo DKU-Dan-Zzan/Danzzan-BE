@@ -64,10 +64,13 @@ public class MapController {
                                               "booths": [
                                                 {
                                                   "boothId": 3,
-                                                  "name": "심폐소생술 체험",
-                                                  "type": "EXPERIENCE",
+                                                  "name": "화장실",
+                                                  "type": "FACILITY",
+                                                  "subType": "TOILET",
                                                   "locationX": 210.2,
-                                                  "locationY": 95.1
+                                                  "locationY": 95.1,
+                                                  "startTime": "10:00",
+                                                  "endTime": "22:00"
                                                 }
                                               ]
                                             }

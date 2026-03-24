@@ -5,6 +5,7 @@ import com.danzzan.domain.boothmap.model.dto.BoothMapResponse;
 import com.danzzan.domain.boothmap.model.dto.CollegeMapItemResponse;
 import com.danzzan.domain.boothmap.model.entity.Booth;
 import com.danzzan.domain.boothmap.model.entity.BoothOperation;
+import com.danzzan.domain.boothmap.model.entity.BoothSubType;
 import com.danzzan.domain.boothmap.model.entity.College;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
 import com.danzzan.domain.boothmap.repository.CollegeRepository;
@@ -46,6 +47,7 @@ public class BoothMapService {
                             booth.getId(),
                             booth.getName(),
                             booth.getType(),
+                            BoothSubType.resolve(booth),
                             booth.getLocationX(),
                             booth.getLocationY(),
                             formatTime(boothOperation.getStartTime()),

@@ -15,6 +15,7 @@ import com.danzzan.domain.ticket.service.QueueStateService;
 import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.ticket.service.TicketService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
+import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +37,7 @@ public class TicketController {
     private final TicketStatusService ticketStatusService;
     private final QueueService queueService;
     private final QueueStateService queueStateService;
+    private final TicketingMetrics ticketingMetrics;
     @GetMapping("/events")
     @Operation(summary = "이벤트 목록 조회", description = "티켓팅 가능한 공연 목록을 조회합니다. 로그인 불필요.")
     public ResponseEntity<ResponseTicketEventListDto> getTicketingEvents() {
@@ -85,6 +87,7 @@ public class TicketController {
 
         // 현재 상태 조회 (스케줄러가 이미 READY 승격했을 수도 있음)
         TicketRequestStatus status = ticketStatusService.getStatus(eventIdStr, userIdStr);
+        ticketingMetrics.recordQueueEnter(status);
         return ResponseEntity.ok(buildQueueEnterResponse(eventIdStr, userIdStr, status));
     }
 

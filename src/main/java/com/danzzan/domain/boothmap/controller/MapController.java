@@ -7,6 +7,7 @@ import com.danzzan.domain.boothmap.model.dto.PubSummaryResponse;
 import com.danzzan.domain.boothmap.service.BoothMapService;
 import com.danzzan.domain.boothmap.service.BoothService;
 import com.danzzan.domain.boothmap.service.PubService;
+import com.danzzan.domain.admin.map.service.AdminMapService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -34,6 +35,7 @@ public class MapController {
     private final BoothMapService boothMapService;
     private final BoothService boothService;
     private final PubService pubService;
+    private final AdminMapService adminMapService;
 
     @GetMapping("/booth-map")
     @Operation(
@@ -62,10 +64,13 @@ public class MapController {
                                               "booths": [
                                                 {
                                                   "boothId": 3,
-                                                  "name": "심폐소생술 체험",
-                                                  "type": "EXPERIENCE",
+                                                  "name": "화장실",
+                                                  "type": "FACILITY",
+                                                  "subType": "TOILET",
                                                   "locationX": 210.2,
-                                                  "locationY": 95.1
+                                                  "locationY": 95.1,
+                                                  "startTime": "10:00",
+                                                  "endTime": "22:00"
                                                 }
                                               ]
                                             }
@@ -82,7 +87,7 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return boothMapService.getBoothMap(date);
+        return boothMapService.getBoothMap(resolveDate(date));
     }
 
     @GetMapping("/booths/{boothId}")
@@ -126,7 +131,7 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return boothService.getBoothSummary(boothId, date);
+        return boothService.getBoothSummary(boothId, resolveDate(date));
     }
 
     @GetMapping("/pubs")
@@ -181,7 +186,7 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return pubService.getPubs(date);
+        return pubService.getPubs(resolveDate(date));
     }
 
     @GetMapping("/pubs/{pubId}")
@@ -244,6 +249,10 @@ public class MapController {
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return pubService.getPubDetail(pubId, date);
+        return pubService.getPubDetail(pubId, resolveDate(date));
+    }
+
+    private LocalDate resolveDate(LocalDate date) {
+        return date != null ? date : adminMapService.getActiveOperationDate();
     }
 }

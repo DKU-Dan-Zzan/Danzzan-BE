@@ -8,6 +8,7 @@ build/
 ### application.yml ###
 application.yml
 src/main/resources/application.yml
+src/main/resources/application-dev.yml
 src/main/resources/application-local.yml
 src/main/resources/application-prod.yml
 *.pem
@@ -61,6 +62,7 @@ out/
 
 # Prevent accidental commit of local test overrides
 src/test/resources/application.yml
+src/test/resources/application.properties
 
 ### k6 load test ###
 k6-test/tokens*.json

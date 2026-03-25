@@ -31,6 +31,7 @@ import org.springframework.http.HttpStatus;
 @RequestMapping("/api/admin")
 @Tag(name = "관리자 공연", description = "관리자용 공연/운영 관련 API")
 @RequiredArgsConstructor
+@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
 public class AdminEventController {
 
     private final AdminEventService adminEventService;

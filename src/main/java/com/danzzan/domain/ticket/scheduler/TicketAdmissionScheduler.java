@@ -3,6 +3,7 @@ package com.danzzan.domain.ticket.scheduler;
 import com.danzzan.domain.event.model.entity.FestivalEvent;
 import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.event.repository.FestivalEventRepository;
+import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class TicketAdmissionScheduler {
     private final QueueStateService queueStateService;
     private final FestivalEventRepository eventRepository;
     private final StringRedisTemplate redisTemplate;
+    private final TicketingMetrics ticketingMetrics;
 
     @Value("${app.ticketing.max-concurrent-slots:100}")
     private int maxConcurrent;
@@ -84,12 +86,25 @@ public class TicketAdmissionScheduler {
             log.debug("ACTIVE 만료 정리 eventId={} count={}", eventId, expiredActive);
         }
 
+        // 2. 대기열 깊이 & 잔여 재고 Gauge 업데이트
+        Long queueDepth = redisTemplate.opsForZSet().zCard(TicketRedisKeys.queueKey(eventId));
+        ticketingMetrics.updateQueueDepth(eventId, queueDepth != null ? queueDepth : 0L);
+
+        String stockStr = redisTemplate.opsForValue().get(TicketRedisKeys.stockKey(eventId));
+        if (stockStr != null) {
+            try {
+                ticketingMetrics.updateStock(eventId, Long.parseLong(stockStr));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        // 3. WAITING → READY 승격
         long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
         for (int i = 0; i < BATCH_CEILING; i++) {
             boolean admitted = queueStateService.admitNextWaitingUser(eventId, readyUntilMs, maxConcurrent);
             if (!admitted) {
                 return;
             }
+            ticketingMetrics.incrementAdmission(eventId);
         }
     }
 }

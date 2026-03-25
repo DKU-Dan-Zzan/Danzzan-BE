@@ -7,6 +7,7 @@ import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
+import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
@@ -46,12 +47,13 @@ class TicketControllerTest {
     @Mock private TicketStatusService ticketStatusService;
     @Mock private QueueService queueService;
     @Mock private QueueStateService queueStateService;
+    @Mock private TicketingMetrics ticketingMetrics;
     private static final Principal USER_AUTH = new TestingAuthenticationToken(1L, null);
 
     @BeforeEach
     void setUp() {
         TicketController controller = new TicketController(
-                ticketService, claimService, ticketStatusService, queueService, queueStateService);
+                ticketService, claimService, ticketStatusService, queueService, queueStateService, ticketingMetrics);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();

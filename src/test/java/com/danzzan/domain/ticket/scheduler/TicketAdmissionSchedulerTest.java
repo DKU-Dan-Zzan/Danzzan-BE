@@ -3,6 +3,7 @@ package com.danzzan.domain.ticket.scheduler;
 import com.danzzan.domain.event.model.entity.FestivalEvent;
 import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.event.repository.FestivalEventRepository;
+import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -33,6 +35,8 @@ class TicketAdmissionSchedulerTest {
     @Mock QueueStateService queueStateService;
     @Mock StringRedisTemplate redisTemplate;
     @Mock ValueOperations<String, String> valueOperations;
+    @Mock ZSetOperations<String, String> zSetOperations;
+    @Mock TicketingMetrics ticketingMetrics;
 
     TicketAdmissionScheduler sut;
 
@@ -40,10 +44,12 @@ class TicketAdmissionSchedulerTest {
 
     @BeforeEach
     void setUp() {
-        sut = new TicketAdmissionScheduler(queueStateService, eventRepo, redisTemplate);
+        sut = new TicketAdmissionScheduler(queueStateService, eventRepo, redisTemplate, ticketingMetrics);
         ReflectionTestUtils.setField(sut, "maxConcurrent", 100);
         ReflectionTestUtils.setField(sut, "readyTtlSeconds", 180L);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
+        lenient().when(zSetOperations.zCard(anyString())).thenReturn(0L);
     }
 
     private FestivalEvent openEvent() {

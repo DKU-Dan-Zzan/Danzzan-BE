@@ -39,4 +39,14 @@ public class Booth {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
+
+    public void updateLocation(Double locationX, Double locationY) {
+        this.locationX = locationX;
+        this.locationY = locationY;
+    }
+
+    public void clearLocation() {
+        this.locationX = null;
+        this.locationY = null;
+    }
 }

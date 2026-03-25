@@ -8,7 +8,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetUrlRequest;
-import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
@@ -79,10 +78,21 @@ public class S3PresignService {
      * - 5MB 제한 (fileSize가 넘어오면 서버에서도 1차 필터링)
      */
     public S3PresignedPutResult presignPutAdImage(String fileName, String contentType, Long fileSize) {
-        validateImageContentType(contentType);
+        if (contentType != null && !contentType.isBlank()) {
+            validateImageContentType(contentType.trim());
+        }
         validateMaxSize(fileSize);
+        ensureBucketConfigured();
         String key = s3PathGenerator.generateAdImageKey(fileName);
-        return presignPutObject(key, contentType);
+        try {
+            return presignPutObject(key, contentType);
+        } catch (Exception e) {
+            log.warn("광고 이미지 presign 실패 fileName={} contentType={}", fileName, contentType, e);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+            );
+        }
     }
 
     private S3PresignedPutResult presignPutObject(String key, String contentType) {
@@ -93,9 +103,9 @@ public class S3PresignService {
         if (contentType != null && !contentType.isBlank()) {
             putReq = putReq.contentType(contentType.trim());
         }
-        if (publicRead) {
-            putReq = putReq.acl(ObjectCannedACL.PUBLIC_READ);
-        }
+        // (중요) Presigned PUT은 서명에 포함되는 헤더/필드를 클라이언트가 정확히 동일하게 보내야 합니다.
+        // 프론트에서 x-amz-acl 헤더가 누락/변형되는 경우 SignatureDoesNotMatch(403)가 발생할 수 있어
+        // presign 경로에서는 ACL을 서명에 포함하지 않습니다. (B 정책: 객체는 private 유지)
 
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
                 .signatureDuration(Duration.ofSeconds(putExpirationSec))

@@ -16,9 +16,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import com.danzzan.global.filter.JwtAuthenticationFilter;
-import com.danzzan.global.jwt.JwtProvider;
-
 import java.util.Arrays;
 import java.util.List;
 
@@ -36,7 +33,6 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
     private String allowedOriginPatterns;
 
-    private final JwtProvider jwtProvider;
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
 
     @Bean
@@ -55,10 +51,10 @@ public class SecurityConfig {
                                 "/user/login",
                                 "/user/reissue",
                                 "/user/dku/**",
-                                "/user/{signup-token}",
                                 "/user/password/reset/**"
                         )
                         .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/user/{signup-token}").permitAll()
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers("/actuator/health", "/actuator/prometheus")
@@ -76,12 +72,11 @@ public class SecurityConfig {
                                 "/api/ads"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
-                        .requestMatchers("/api/admin/events/**", "/api/admin/ticket/**", "/api/admin/ads/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**", "/admin/map/**").hasRole("ADMIN")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

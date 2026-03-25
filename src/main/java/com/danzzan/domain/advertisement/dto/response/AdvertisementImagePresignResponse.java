@@ -1,4 +1,4 @@
-package com.danzzan.domain.notice.dto.response;
+package com.danzzan.domain.advertisement.dto.response;
 
 import com.danzzan.infra.s3.S3PresignedPutResult;
 import lombok.Getter;
@@ -7,18 +7,20 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.Objects;
 
+/**
+ * 공지 {@link com.danzzan.domain.notice.dto.response.NoticeImagePresignResponse}와 동일한 JSON 키를 씁니다.
+ */
 @Getter
 @NoArgsConstructor
-public class NoticeImagePresignResponse {
+public class AdvertisementImagePresignResponse {
+
     /**
      * S3 Presigned PUT URL.
-     * 프론트에서 res.data.presignedUrl 로 접근합니다.
      */
     private String presignedUrl;
 
     /**
-     * 업로드 완료 후 접근할 파일 URL.
-     * 프론트에서 res.data.fileUrl 로 접근합니다.
+     * 업로드 완료 후 이미지 URL로 저장할 값.
      */
     private String fileUrl;
 
@@ -26,14 +28,13 @@ public class NoticeImagePresignResponse {
     private Instant expiresAt;
     private String method = "PUT";
 
-    public static NoticeImagePresignResponse from(S3PresignedPutResult result) {
+    public static AdvertisementImagePresignResponse from(S3PresignedPutResult result) {
         Objects.requireNonNull(result, "presign result must not be null");
-        NoticeImagePresignResponse res = new NoticeImagePresignResponse();
+        AdvertisementImagePresignResponse res = new AdvertisementImagePresignResponse();
         res.presignedUrl = Objects.requireNonNull(result.uploadUrl(), "presignedUrl must not be null");
         res.fileUrl = Objects.requireNonNull(result.publicUrl(), "fileUrl must not be null");
-        res.key = result.key();
+        res.key = Objects.requireNonNull(result.key(), "key must not be null");
         res.expiresAt = result.expiresAt();
         return res;
     }
 }
-

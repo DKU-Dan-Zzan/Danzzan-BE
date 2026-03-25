@@ -5,6 +5,7 @@ import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
 import com.danzzan.domain.ticket.service.support.ClaimLuaProtocol;
+import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.service.support.ClaimOutcomeMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ public class ClaimServiceImpl implements ClaimService {
     @Qualifier("claimRollbackScript")
     private final RedisScript<Long> claimRollbackScript;
     private final ClaimOutcomeMetrics claimOutcomeMetrics;
+    private final TicketingMetrics ticketingMetrics;
 
     @Override
     public ClaimResult claim(String eventId, String userId) {
@@ -113,6 +115,7 @@ public class ClaimServiceImpl implements ClaimService {
 
     private ClaimResult recordOutcome(String eventId, String userId, ClaimResult result) {
         long count = claimOutcomeMetrics.increment(result.status());
+        ticketingMetrics.recordClaim(result.status());
         log.info(
                 "claim_v2 outcome eventId={} userId={} status={} remaining={} total={}",
                 eventId,

@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import os
 import socket
@@ -70,10 +71,6 @@ def fetch_user_ids():
                 (f"{STUDENT_ID_PREFIX}%", LIMIT),
             )
             user_ids = [str(row[0]) for row in cursor.fetchall()]
-            cursor.execute(
-                "delete from ticket_queue_entries where event_id = %s",
-                (EVENT_ID,),
-            )
             if user_ids:
                 placeholders = ",".join(["%s"] * len(user_ids))
                 cursor.execute(

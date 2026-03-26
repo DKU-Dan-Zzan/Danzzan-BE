@@ -83,21 +83,24 @@ const reserveSuccessRate = new Rate('reserve_success_rate');
 const pollWaitTrend = new Trend('queue_poll_wait_ms');
 
 export function setup() {
-  if (INIT_STOCK === null || !ADMIN_TOKEN) {
+  if (!ADMIN_TOKEN) {
     return;
   }
 
-  const response = http.post(
-    `${BASE_URL}/api/admin/ticket/init`,
-    JSON.stringify({ eventId: EVENT_ID, stock: INIT_STOCK }),
+  // 이벤트를 OPEN 상태로 전환 + Redis stock 자동 초기화
+  // (스케줄러와 동일한 EventOpenService.openNow() 사용)
+  const response = http.patch(
+    `${BASE_URL}/api/admin/events/${EVENT_ID}/open`,
+    null,
     {
       headers: withJsonAuth(ADMIN_TOKEN),
-      tags: { name: 'admin_init' },
+      tags: { name: 'admin_open' },
     }
   );
 
+  // 200 = 이번에 OPEN 전환 성공, 409 = 이미 OPEN (둘 다 정상)
   check(response, {
-    'admin init ok': (r) => r.status === 200,
+    'admin open ok': (r) => r.status === 200 || r.status === 409,
   });
 }
 

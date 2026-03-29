@@ -247,6 +247,46 @@ public class QueueStateServiceImpl implements QueueStateService {
         return count;
     }
 
+    @Override
+    public void leaveQueue(String eventId, String userId) {
+        String hashKey = TicketRedisKeys.queueUserHashKey(eventId, userId);
+        String dedupKey = TicketRedisKeys.dedupKey(eventId, userId);
+
+        Object rawState = redisTemplate.opsForHash().get(hashKey, FIELD_STATE);
+        if (rawState == null) {
+            return;
+        }
+
+        String state = rawState.toString();
+        long now = System.currentTimeMillis();
+
+        switch (state) {
+            case "WAITING" -> {
+                redisTemplate.opsForZSet().remove(TicketRedisKeys.queueKey(eventId), userId);
+                redisTemplate.opsForHash().put(hashKey, FIELD_STATE, QueueUserState.CANCELLED.name());
+                redisTemplate.opsForHash().put(hashKey, FIELD_CANCELLED_AT, String.valueOf(now));
+                redisTemplate.delete(dedupKey);
+            }
+            case "READY" -> {
+                redisTemplate.opsForZSet().remove(TicketRedisKeys.readyKey(eventId), userId);
+                redisTemplate.opsForHash().put(hashKey, FIELD_STATE, QueueUserState.CANCELLED.name());
+                redisTemplate.opsForHash().put(hashKey, FIELD_CANCELLED_AT, String.valueOf(now));
+                redisTemplate.delete(dedupKey);
+                backfillFreedSlotsIfOpen(eventId, 1);
+            }
+            case "ACTIVE" -> {
+                redisTemplate.opsForZSet().remove(TicketRedisKeys.activeKey(eventId), userId);
+                redisTemplate.opsForHash().put(hashKey, FIELD_STATE, QueueUserState.CANCELLED.name());
+                redisTemplate.opsForHash().put(hashKey, FIELD_CANCELLED_AT, String.valueOf(now));
+                redisTemplate.delete(dedupKey);
+                backfillFreedSlotsIfOpen(eventId, 1);
+            }
+            default -> {
+                // DONE, CANCELLED, EXPIRED — 이미 처리된 상태, 무시
+            }
+        }
+    }
+
     private void backfillFreedSlotsIfOpen(String eventId, int freedSlots) {
         if (freedSlots <= 0 || !isEventOpen(eventId)) {
             return;

@@ -91,6 +91,17 @@ public class TicketController {
         return ResponseEntity.ok(buildQueueEnterResponse(eventIdStr, userIdStr, status));
     }
 
+    @DeleteMapping("/{eventId}/queue/leave")
+    @Operation(summary = "대기열 이탈", description = "WAITING/READY/ACTIVE 상태에서 자발적으로 대기열을 이탈합니다. 슬롯은 즉시 반환됩니다.")
+    public ResponseEntity<Void> leaveQueue(
+            @PathVariable Long eventId,
+            Authentication authentication
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+        queueStateService.leaveQueue(String.valueOf(eventId), String.valueOf(userId));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{eventId}/queue/status")
     @Operation(summary = "대기열 상태 조회", description = "현재 대기열 상태를 polling합니다.")
     public ResponseEntity<TicketStatusResponseDTO> getQueueStatus(

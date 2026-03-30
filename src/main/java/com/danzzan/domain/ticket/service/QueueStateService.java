@@ -31,6 +31,9 @@ public interface QueueStateService {
     /** 이벤트 마감 시 queue/ready/active에 남아있는 사용자를 CANCELLED 처리 — 처리된 유저 수 반환 */
     int cancelWaitingQueue(String eventId);
 
+    /** 사용자 자발적 이탈 — WAITING/READY/ACTIVE 상태를 CANCELLED로 전환하고 슬롯 반환 */
+    void leaveQueue(String eventId, String userId);
+
     QueueUserState getState(String eventId, String userId);
 
     long readyCount(String eventId);

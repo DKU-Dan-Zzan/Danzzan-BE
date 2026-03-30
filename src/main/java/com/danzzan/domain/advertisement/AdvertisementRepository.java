@@ -14,4 +14,6 @@ public interface AdvertisementRepository extends JpaRepository<Advertisement, Lo
 
     Optional<Advertisement> findFirstByPlacementAndDeletedAtIsNullOrderByCreatedAtDesc(
             AdvertisementPlacement placement);
+
+    List<Advertisement> findAllByIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc();
 }

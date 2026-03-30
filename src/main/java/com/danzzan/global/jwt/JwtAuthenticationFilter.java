@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,7 +33,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
 
-        if (token != null && jwtTokenProvider.validateToken(token)) {
+        if (token != null) {
+            // 토큰이 있지만 서명/만료 검증 실패 → 401 반환 (프론트 갱신 트리거)
+            if (!jwtTokenProvider.validateToken(token)) {
+                sendUnauthorized(response, "토큰이 만료되었거나 유효하지 않습니다.");
+                return;
+            }
+
             Long userId = jwtTokenProvider.getUserId(token);
             String role = jwtTokenProvider.getRole(token);
             if (role == null || role.isBlank()) {
@@ -42,13 +49,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             int tokenVersion = jwtTokenProvider.getTokenVersion(token);
             User user = userRepository.findById(userId).orElse(null);
+
+            // tokenVersion 불일치(비밀번호 변경 등) → 401 반환 (프론트 갱신 트리거)
             if (user == null || user.getTokenVersion() != tokenVersion) {
-                filterChain.doFilter(request, response);
+                sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
                 return;
             }
 
-            // SecurityContext???몄쬆 ?뺣낫 ?ㅼ젙
-            // principal??userId瑜??ｌ뼱??而⑦듃濡ㅻ윭/?쒕퉬?ㅼ뿉??爰쇰궡 ?????덈룄濡???
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             userId,
@@ -69,5 +76,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return bearerToken.substring(7);
         }
         return null;
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write("{\"error\":\"" + message + "\",\"status\":401}");
     }
 }

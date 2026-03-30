@@ -78,4 +78,13 @@ public class AdminAdvertisementController {
         adminAdvertisementService.softDeleteByPlacement(placement);
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * ID로 특정 광고를 소프트 삭제합니다.
+     */
+    @DeleteMapping("/item/{id}")
+    public ResponseEntity<Void> deleteById(@PathVariable Long id) {
+        adminAdvertisementService.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
 }

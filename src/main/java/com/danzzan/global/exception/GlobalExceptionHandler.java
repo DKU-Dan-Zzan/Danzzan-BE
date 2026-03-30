@@ -19,6 +19,7 @@ import com.danzzan.global.model.ApiResponse;
 import com.danzzan.infra.dku.exception.DkuFailedCrawlingException;
 import com.danzzan.infra.dku.exception.DkuFailedLoginException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -204,6 +205,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleDkuFailedCrawling(DkuFailedCrawlingException e) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<?> handleDataIntegrity(DataIntegrityViolationException e) {
+        String message = e.getMostSpecificCause().getMessage();
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("데이터 저장 중 오류가 발생했습니다: " + message, 409));
     }
 
     private boolean isTicketingApi(HttpServletRequest request) {

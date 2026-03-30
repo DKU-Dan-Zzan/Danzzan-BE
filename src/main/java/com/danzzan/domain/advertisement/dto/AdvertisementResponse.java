@@ -14,6 +14,7 @@ public class AdvertisementResponse {
     private Long id;
     private String title;
     private String imageUrl;
+    private String objectPosition;
     private AdvertisementPlacement placement;
     private Boolean isActive;
     private LocalDateTime createdAt;
@@ -24,6 +25,7 @@ public class AdvertisementResponse {
         res.id = ad.getId();
         res.title = ad.getTitle();
         res.imageUrl = ad.getImageUrl();
+        res.objectPosition = ad.getObjectPosition();
         res.placement = ad.getPlacement();
         res.isActive = ad.getIsActive();
         res.createdAt = ad.getCreatedAt();

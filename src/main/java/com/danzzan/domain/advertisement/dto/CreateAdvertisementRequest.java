@@ -24,4 +24,10 @@ public class CreateAdvertisementRequest {
     @NotNull(message = "광고 노출 위치를 선택해 주세요.")
     @JsonAlias({"adLocation", "ad_location"})
     private AdvertisementPlacement placement;
+
+    /** 이미지 표시 위치 (CSS object-position 값, 예: "50% 30%"). null이면 기본값 사용. */
+    private String objectPosition;
+
+    /** 광고 노출 종료 일시. null이면 종료일 없음. */
+    private java.time.LocalDateTime endDate;
 }

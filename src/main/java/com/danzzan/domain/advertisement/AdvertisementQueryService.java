@@ -5,7 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,5 +24,17 @@ public class AdvertisementQueryService {
         return advertisementRepository
                 .findFirstByPlacementAndIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc(placement)
                 .map(AdvertisementResponse::from);
+    }
+
+    /**
+     * 활성화된 모든 광고를 반환합니다 (placement 구분 없음).
+     */
+    @Transactional(readOnly = true)
+    public List<AdvertisementResponse> getAllActiveAds() {
+        return advertisementRepository
+                .findAllByIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc()
+                .stream()
+                .map(AdvertisementResponse::from)
+                .collect(Collectors.toList());
     }
 }

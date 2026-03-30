@@ -53,7 +53,8 @@ public class TicketStatusServiceImpl implements TicketStatusService {
             case READY, ACTIVE -> TicketRequestStatus.ADMITTED;
             case DONE -> TicketRequestStatus.SUCCESS;
             case EXPIRED -> TicketRequestStatus.NONE;
-            case CANCELLED -> TicketRequestStatus.SOLD_OUT;
+            // 자발적 이탈은 매진이 아니라 "대기열 미참여"로 보는 편이 UI/재진입 흐름에 자연스럽다.
+            case CANCELLED -> TicketRequestStatus.NONE;
         };
     }
 

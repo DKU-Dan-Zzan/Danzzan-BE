@@ -75,6 +75,9 @@ public class PubService {
                 .stream()
                 .map(PubImage::getImageUrl)
                 .toList();
+        List<String> thumbnailImageUrls = imageUrls.stream()
+                .map(ThumbnailUrlResolver::toThumbnailUrl)
+                .toList();
 
         return new PubDetailResponse(
                 pub.getId(),
@@ -85,6 +88,7 @@ public class PubService {
                 pub.getCollege().getName(),
                 pub.getInstagram(),
                 imageUrls,
+                thumbnailImageUrls,
                 formatTime(pubOperation.getStartTime()),
                 formatTime(pubOperation.getEndTime())
         );

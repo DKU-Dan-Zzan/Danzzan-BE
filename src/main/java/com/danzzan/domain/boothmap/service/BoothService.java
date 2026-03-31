@@ -4,6 +4,7 @@ import com.danzzan.domain.boothmap.model.dto.BoothSummaryResponse;
 import com.danzzan.domain.boothmap.model.entity.Booth;
 import com.danzzan.domain.boothmap.model.entity.BoothOperation;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
+import com.danzzan.domain.boothmap.util.ThumbnailUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class BoothService {
                 booth.getName(),
                 booth.getDescription(),
                 booth.getImageUrl(),
+                ThumbnailUrlResolver.toThumbnailUrl(booth.getImageUrl()),
                 formatTime(boothOperation.getStartTime()),
                 formatTime(boothOperation.getEndTime())
         );

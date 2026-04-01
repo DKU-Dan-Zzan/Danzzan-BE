@@ -15,6 +15,17 @@ public class UserAdminAuthorizationService {
     private final UserRepository userRepository;
 
     public boolean hasAdminRole(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+
+        // Admin JWT filter already grants ROLE_ADMIN authority — trust it directly
+        boolean hasAdminAuthority = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        if (hasAdminAuthority) {
+            return true;
+        }
+
         Long userId = extractUserId(authentication);
         if (userId == null) {
             return false;

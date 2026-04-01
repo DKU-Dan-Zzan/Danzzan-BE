@@ -16,6 +16,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.danzzan.global.filter.JwtAuthenticationFilter;
+import com.danzzan.global.jwt.JwtProvider;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -33,6 +36,7 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
     private String allowedOriginPatterns;
 
+    private final JwtProvider jwtProvider;
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
 
     @Bean
@@ -69,14 +73,16 @@ public class SecurityConfig {
                                 "/booths/**",
                                 "/lost-items/**",
                                 "/tickets/events",
-                                "/api/ads"
+                                "/api/ads",
+                                "/api/ads/list"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
                         .requestMatchers("/api/admin/**", "/admin/map/**").hasRole("ADMIN")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -101,10 +107,10 @@ public class SecurityConfig {
         ticketingCors.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/auth/**", ticketingCors);
         source.registerCorsConfiguration("/user/**", ticketingCors);
         source.registerCorsConfiguration("/tickets/**", ticketingCors);
-        source.registerCorsConfiguration("/api/admin/events/**", ticketingCors);
-        source.registerCorsConfiguration("/api/admin/ticket/**", ticketingCors);
+        source.registerCorsConfiguration("/api/admin/**", ticketingCors);
         source.registerCorsConfiguration("/**", festivalCors);
         return source;
     }

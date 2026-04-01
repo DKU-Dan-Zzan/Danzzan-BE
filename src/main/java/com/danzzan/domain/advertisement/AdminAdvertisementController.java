@@ -10,12 +10,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/ads")
@@ -24,6 +27,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminAdvertisementController {
 
     private final AdminAdvertisementService adminAdvertisementService;
+
+    /**
+     * 삭제되지 않은 모든 광고 목록 조회.
+     */
+    @GetMapping
+    public ResponseEntity<List<AdvertisementResponse>> getAllAds() {
+        return ResponseEntity.ok(adminAdvertisementService.getAllAds());
+    }
 
     /**
      * 광고 생성 (같은 위치에 기존 광고가 있으면 교체)
@@ -76,6 +87,15 @@ public class AdminAdvertisementController {
     @DeleteMapping("/{placement}")
     public ResponseEntity<Void> softDeleteByPlacement(@PathVariable AdvertisementPlacement placement) {
         adminAdvertisementService.softDeleteByPlacement(placement);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * ID로 특정 광고 소프트 삭제.
+     */
+    @DeleteMapping("/item/{id}")
+    public ResponseEntity<Void> softDeleteById(@PathVariable Long id) {
+        adminAdvertisementService.softDeleteById(id);
         return ResponseEntity.noContent().build();
     }
 }

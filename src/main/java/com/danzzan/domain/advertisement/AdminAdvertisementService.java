@@ -35,26 +35,14 @@ public class AdminAdvertisementService {
     }
 
     /**
-     * 새 광고를 생성하면서, 같은 placement의 기존 활성 광고는 모두 비활성화합니다.
+     * 새 광고를 추가합니다. 기존 광고는 유지되며 함께 캐러셀에 노출됩니다.
      */
     @Transactional
     public AdvertisementResponse createOrReplace(CreateAdvertisementRequest request) {
-        AdvertisementPlacement placement = request.getPlacement();
-
-        List<Advertisement> existing = advertisementRepository.findByPlacementOrderByCreatedAtDesc(placement);
-        for (Advertisement ad : existing) {
-            if (ad.getDeletedAt() != null) {
-                continue;
-            }
-            if (Boolean.TRUE.equals(ad.getIsActive())) {
-                ad.setIsActive(false);
-            }
-        }
-
         Advertisement ad = new Advertisement();
         ad.setTitle(request.getTitle());
         ad.setImageUrl(request.getImageUrl());
-        ad.setPlacement(placement);
+        ad.setPlacement(request.getPlacement());
         ad.setIsActive(true);
         ad.setDeletedAt(null);
 

@@ -35,30 +35,32 @@ public class AdminAdvertisementService {
     }
 
     /**
-     * 새 광고를 생성하면서, 같은 placement의 기존 활성 광고는 모두 비활성화합니다.
+     * 새 광고를 생성합니다. 기존 광고를 비활성화하지 않고 추가만 합니다.
      */
     @Transactional
     public AdvertisementResponse createOrReplace(CreateAdvertisementRequest request) {
-        AdvertisementPlacement placement = request.getPlacement();
-
-        List<Advertisement> existing = advertisementRepository.findByPlacementOrderByCreatedAtDesc(placement);
-        for (Advertisement ad : existing) {
-            if (ad.getDeletedAt() != null) {
-                continue;
-            }
-            if (Boolean.TRUE.equals(ad.getIsActive())) {
-                ad.setIsActive(false);
-            }
-        }
-
         Advertisement ad = new Advertisement();
         ad.setTitle(request.getTitle());
         ad.setImageUrl(request.getImageUrl());
-        ad.setPlacement(placement);
+        ad.setObjectPosition(request.getObjectPosition());
+        ad.setPlacement(request.getPlacement());
         ad.setIsActive(true);
+        ad.setEndDate(request.getEndDate());
         ad.setDeletedAt(null);
 
         return AdvertisementResponse.from(advertisementRepository.save(ad));
+    }
+
+    /**
+     * ID로 광고를 소프트 삭제합니다(DB 행 유지, 공개 API에서 미노출).
+     */
+    @Transactional
+    public void deleteById(Long id) {
+        advertisementRepository.findById(id)
+                .ifPresent(ad -> {
+                    ad.setIsActive(false);
+                    ad.setDeletedAt(LocalDateTime.now());
+                });
     }
 
     /**

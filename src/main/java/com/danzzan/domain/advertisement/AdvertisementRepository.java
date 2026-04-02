@@ -9,11 +9,16 @@ public interface AdvertisementRepository extends JpaRepository<Advertisement, Lo
 
     List<Advertisement> findByPlacementOrderByCreatedAtDesc(AdvertisementPlacement placement);
 
+    List<Advertisement> findAllByDeletedAtIsNullOrderByCreatedAtDesc();
+
+    List<Advertisement> findAllByIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc();
+
     Optional<Advertisement> findFirstByPlacementAndIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc(
+            AdvertisementPlacement placement);
+
+    List<Advertisement> findAllByPlacementAndIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc(
             AdvertisementPlacement placement);
 
     Optional<Advertisement> findFirstByPlacementAndDeletedAtIsNullOrderByCreatedAtDesc(
             AdvertisementPlacement placement);
-
-    List<Advertisement> findAllByIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc();
 }

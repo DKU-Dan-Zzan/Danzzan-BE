@@ -35,14 +35,13 @@ public class AdminAdvertisementService {
     }
 
     /**
-     * 새 광고를 생성합니다. 기존 광고를 비활성화하지 않고 추가만 합니다.
+     * 새 광고를 추가합니다. 기존 광고는 유지되며 함께 캐러셀에 노출됩니다.
      */
     @Transactional
     public AdvertisementResponse createOrReplace(CreateAdvertisementRequest request) {
         Advertisement ad = new Advertisement();
         ad.setTitle(request.getTitle());
         ad.setImageUrl(request.getImageUrl());
-        ad.setObjectPosition(request.getObjectPosition());
         ad.setPlacement(request.getPlacement());
         ad.setIsActive(true);
         ad.setEndDate(request.getEndDate());
@@ -110,6 +109,30 @@ public class AdminAdvertisementService {
     public void softDeleteByPlacement(AdvertisementPlacement placement) {
         advertisementRepository
                 .findFirstByPlacementAndIsActiveTrueAndDeletedAtIsNullOrderByCreatedAtDesc(placement)
+                .ifPresent(ad -> {
+                    ad.setIsActive(false);
+                    ad.setDeletedAt(LocalDateTime.now());
+                });
+    }
+
+    /**
+     * 삭제되지 않은 모든 광고를 최신순으로 반환합니다.
+     */
+    @Transactional(readOnly = true)
+    public List<AdvertisementResponse> getAllAds() {
+        return advertisementRepository.findAllByDeletedAtIsNullOrderByCreatedAtDesc()
+                .stream()
+                .map(AdvertisementResponse::from)
+                .toList();
+    }
+
+    /**
+     * ID로 특정 광고를 소프트 삭제합니다.
+     */
+    @Transactional
+    public void softDeleteById(Long id) {
+        advertisementRepository.findById(id)
+                .filter(ad -> ad.getDeletedAt() == null)
                 .ifPresent(ad -> {
                     ad.setIsActive(false);
                     ad.setDeletedAt(LocalDateTime.now());

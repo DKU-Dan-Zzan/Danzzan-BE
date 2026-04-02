@@ -1,5 +1,6 @@
 package com.danzzan.global.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,10 +17,14 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import com.danzzan.global.filter.JwtAuthenticationFilter;
+import com.danzzan.global.jwt.JwtProvider;
+
 import java.util.Arrays;
 import java.util.List;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 
 @Configuration
 @EnableWebSecurity
@@ -33,6 +38,7 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
     private String allowedOriginPatterns;
 
+    private final JwtProvider jwtProvider;
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
 
     @Bean
@@ -70,14 +76,20 @@ public class SecurityConfig {
                                 "/lost-items/**",
                                 "/tickets/events",
                                 "/api/ads",
-                                "/api/ads/**"
+                                "/api/ads/list"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
                         .requestMatchers("/api/admin/**", "/admin/map/**").hasRole("ADMIN")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) ->
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
+                        .accessDeniedHandler((request, response, accessDeniedException) ->
+                                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden")));
 
         return http.build();
     }
@@ -102,10 +114,10 @@ public class SecurityConfig {
         ticketingCors.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/auth/**", ticketingCors);
         source.registerCorsConfiguration("/user/**", ticketingCors);
         source.registerCorsConfiguration("/tickets/**", ticketingCors);
-        source.registerCorsConfiguration("/api/admin/events/**", ticketingCors);
-        source.registerCorsConfiguration("/api/admin/ticket/**", ticketingCors);
+        source.registerCorsConfiguration("/api/admin/**", ticketingCors);
         source.registerCorsConfiguration("/**", festivalCors);
         return source;
     }
@@ -115,6 +127,15 @@ public class SecurityConfig {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
+    }
+
+    @Bean
+    public FilterRegistrationBean<com.danzzan.global.jwt.JwtAuthenticationFilter> userJwtFilterRegistration(
+            com.danzzan.global.jwt.JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<com.danzzan.global.jwt.JwtAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

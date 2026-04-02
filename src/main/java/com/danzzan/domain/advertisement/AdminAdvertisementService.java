@@ -44,9 +44,22 @@ public class AdminAdvertisementService {
         ad.setImageUrl(request.getImageUrl());
         ad.setPlacement(request.getPlacement());
         ad.setIsActive(true);
+        ad.setEndDate(request.getEndDate());
         ad.setDeletedAt(null);
 
         return AdvertisementResponse.from(advertisementRepository.save(ad));
+    }
+
+    /**
+     * ID로 광고를 소프트 삭제합니다(DB 행 유지, 공개 API에서 미노출).
+     */
+    @Transactional
+    public void deleteById(Long id) {
+        advertisementRepository.findById(id)
+                .ifPresent(ad -> {
+                    ad.setIsActive(false);
+                    ad.setDeletedAt(LocalDateTime.now());
+                });
     }
 
     /**

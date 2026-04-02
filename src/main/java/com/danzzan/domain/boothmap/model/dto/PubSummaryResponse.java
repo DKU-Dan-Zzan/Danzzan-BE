@@ -13,6 +13,7 @@ public class PubSummaryResponse {
     private Long collegeId;
     private String collegeName;
     private String mainImageUrl;
+    private String thumbnailUrl;
     private String startTime;
     private String endTime;
 }

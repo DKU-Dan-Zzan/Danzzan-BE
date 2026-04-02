@@ -8,6 +8,7 @@ import com.danzzan.domain.boothmap.model.entity.PubOperation;
 import com.danzzan.domain.boothmap.repository.PubImageRepository;
 import com.danzzan.domain.boothmap.repository.PubOperationRepository;
 import com.danzzan.domain.boothmap.repository.PubRepository;
+import com.danzzan.domain.boothmap.util.ThumbnailUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +53,7 @@ public class PubService {
                             pub.getCollege().getId(),
                             pub.getCollege().getName(),
                             mainImageUrl,
+                            ThumbnailUrlResolver.toThumbnailUrl(mainImageUrl),
                             startTime,
                             endTime
                     );
@@ -73,6 +75,9 @@ public class PubService {
                 .stream()
                 .map(PubImage::getImageUrl)
                 .toList();
+        List<String> thumbnailImageUrls = imageUrls.stream()
+                .map(ThumbnailUrlResolver::toThumbnailUrl)
+                .toList();
 
         return new PubDetailResponse(
                 pub.getId(),
@@ -83,6 +88,7 @@ public class PubService {
                 pub.getCollege().getName(),
                 pub.getInstagram(),
                 imageUrls,
+                thumbnailImageUrls,
                 formatTime(pubOperation.getStartTime()),
                 formatTime(pubOperation.getEndTime())
         );

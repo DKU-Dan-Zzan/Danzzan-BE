@@ -110,6 +110,7 @@ public class MapController {
                                               "name": "심폐소생술 체험",
                                               "description": "응급상황 대처 체험 부스",
                                               "imageUrl": "https://cdn.example.com/booth3.jpg",
+                                              "thumbnailUrl": "https://cdn.example.com/thumb/booth3.webp",
                                               "startTime": "18:00",
                                               "endTime": "21:00"
                                             }
@@ -158,6 +159,7 @@ public class MapController {
                                                 "collegeId": 1,
                                                 "collegeName": "SW융합대학",
                                                 "mainImageUrl": "https://image.url/main.png",
+                                                "thumbnailUrl": "https://image.url/thumb/main.webp",
                                                 "startTime": "18:00",
                                                 "endTime": "23:00"
                                               },
@@ -169,6 +171,7 @@ public class MapController {
                                                 "collegeId": 2,
                                                 "collegeName": "공과대학",
                                                 "mainImageUrl": "https://image.url/main2.png",
+                                                "thumbnailUrl": "https://image.url/thumb/main2.webp",
                                                 "startTime": "18:00",
                                                 "endTime": "23:00"
                                               }
@@ -215,6 +218,10 @@ public class MapController {
                                               "imageUrls": [
                                                 "https://cdn.xxx/pub1_main.jpg",
                                                 "https://cdn.xxx/pub1_2.jpg"
+                                              ],
+                                              "thumbnailImageUrls": [
+                                                "https://cdn.xxx/thumb/pub1_main.webp",
+                                                "https://cdn.xxx/thumb/pub1_2.webp"
                                               ],
                                               "startTime": "18:00",
                                               "endTime": "23:00"

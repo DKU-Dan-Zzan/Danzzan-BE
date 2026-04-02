@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.List;
 import java.util.Optional;
 
 @RestController
@@ -32,10 +33,10 @@ public class AdvertisementController {
     }
 
     /**
-     * 활성화된 모든 광고 목록 조회 (홈/내티켓 캐러셀용).
+     * 활성화된 모든 광고 목록 조회 (홈 화면 캐러셀용).
      */
     @GetMapping("/list")
-    public ResponseEntity<List<AdvertisementResponse>> getAllActiveAds() {
+    public ResponseEntity<List<AdvertisementResponse>> listActiveAds() {
         return ResponseEntity.ok(advertisementQueryService.getAllActiveAds());
     }
 }

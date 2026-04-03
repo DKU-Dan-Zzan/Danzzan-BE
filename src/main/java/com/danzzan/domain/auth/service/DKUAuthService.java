@@ -45,9 +45,9 @@ public class DKUAuthService {
         // 학적 상태 변환
         AcademicStatus academicStatus = parseAcademicStatus(studentInfo.getAcademicStatus());
 
-        // 재학생만 가입 가능
-        if (academicStatus != AcademicStatus.ENROLLED) {
-            throw new IllegalStateException("재학생만 회원가입이 가능합니다.");
+        // 재학생·수료생만 가입 가능
+        if (academicStatus != AcademicStatus.ENROLLED && academicStatus != AcademicStatus.COMPLETED) {
+            throw new IllegalStateException("재학생 및 수료생만 회원가입이 가능합니다.");
         }
 
         // 회원가입 토큰 생성
@@ -97,6 +97,8 @@ public class DKUAuthService {
             return AcademicStatus.LEAVE;
         } else if (normalized.contains("졸업") || normalized.equals("GRADUATED")) {
             return AcademicStatus.GRADUATED;
+        } else if (normalized.contains("수료") || normalized.equals("COMPLETED")) {
+            return AcademicStatus.COMPLETED;
         }
 
         // 알 수 없는 상태는 일단 재학으로 처리

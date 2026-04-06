@@ -52,6 +52,16 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/logout")
+    @Operation(summary = "로그아웃", description = "학생 로그아웃 - tokenVersion 무효화로 기존 토큰 전체 폐기")
+    public ResponseEntity<Void> logout(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        userService.logout(userId);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/me")
     @Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자 정보를 조회합니다.")
     public ResponseEntity<ResponseLoginDto.UserInfo> getMyInfo(Authentication authentication) {

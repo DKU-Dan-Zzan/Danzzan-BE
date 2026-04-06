@@ -26,10 +26,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
 
-    // CORS preflight(OPTIONS)는 CorsFilter가 전담 처리하므로 이 필터에서 건너뜁니다.
+    private static final java.util.Set<String> PUBLIC_PATHS = java.util.Set.of(
+            "/user/login",
+            "/user/reissue",
+            "/auth/login",
+            "/auth/reissue",
+            "/auth/logout"
+    );
+
+    // CORS preflight(OPTIONS)와 인증 불필요 공개 경로는 건너뜁니다.
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return "OPTIONS".equalsIgnoreCase(request.getMethod());
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) return true;
+        String path = request.getRequestURI();
+        return PUBLIC_PATHS.contains(path)
+                || path.startsWith("/user/dku/")
+                || path.startsWith("/user/password/reset/");
     }
 
     @Override

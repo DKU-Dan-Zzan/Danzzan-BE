@@ -51,11 +51,20 @@ public class UserService {
         return toUserInfo(user);
     }
 
+    // 로그아웃 처리
+    // tokenVersion을 올려 기존 토큰 전체 무효화
+    @Transactional
+    public void logout(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+        user.bumpTokenVersion();
+    }
+
     // 토큰 재발급
     // 만료된 Access Token에서 userId를 추출하고, 유효한 Refresh Token이면 새 토큰 발급
     public ResponseRefreshTokenDto refreshToken(String accessToken, String refreshToken) {
         // Refresh Token 유효성 검증
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
+        if (refreshToken == null || refreshToken.isBlank() || !jwtTokenProvider.validateToken(refreshToken)) {
             throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
         }
 

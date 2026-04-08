@@ -89,7 +89,7 @@ public class DKUAuthService {
 
     // 천안캠퍼스 단과대학 키워드 블랙리스트 (죽전에 없는 단과대학명 기준)
     private static final List<String> CHEONAN_COLLEGE_KEYWORDS = List.of(
-            "간호", "의과", "치과", "약학", "과학기술", "바이오융합", "스포츠", "외국어", "공공·보건"
+            "간호", "의과", "치과", "약학", "과학기술", "바이오융합", "스포츠", "외국어", "공공", "보건"
     );
 
     // 죽전캠퍼스 학생 여부 검증
@@ -108,7 +108,10 @@ public class DKUAuthService {
         boolean isCheonan = CHEONAN_COLLEGE_KEYWORDS.stream()
                 .anyMatch(collegeName::contains);
 
-        if (isCheonan) {
+        // 예술대학(천안) vs 음악·예술대학(죽전) 별도 구분
+        boolean isCheonanArts = collegeName.contains("예술대학") && !collegeName.contains("음악·예술대학");
+
+        if (isCheonan || isCheonanArts) {
             throw new CheonanCampusException();
         }
     }

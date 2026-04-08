@@ -9,6 +9,7 @@ import com.danzzan.domain.ticket.exception.TicketEventMismatchException;
 import com.danzzan.domain.ticket.exception.TicketNotFoundException;
 import com.danzzan.domain.ticket.exception.TicketNotIssuedException;
 import com.danzzan.domain.user.exception.AlreadyStudentIdException;
+import com.danzzan.domain.user.exception.CheonanCampusException;
 import com.danzzan.domain.user.exception.UserNotFoundException;
 import com.danzzan.domain.user.exception.WrongPasswordException;
 import com.danzzan.domain.user.passwordreset.exception.PasswordResetException;
@@ -100,6 +101,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AlreadyStudentIdException.class)
     public ResponseEntity<Map<String, String>> handleAlreadyStudentId(AlreadyStudentIdException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(CheonanCampusException.class)
+    public ResponseEntity<Map<String, String>> handleCheonanCampus(CheonanCampusException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("error", e.getMessage()));
     }
 

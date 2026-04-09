@@ -57,7 +57,8 @@ public class SecurityConfig {
                                 "/user/login",
                                 "/user/reissue",
                                 "/user/dku/**",
-                                "/user/password/reset/**"
+                                "/user/password/reset/**",
+                                "/user/phone-verifications/**"
                         )
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/user/{signup-token}").permitAll()

@@ -4,6 +4,7 @@ import com.danzzan.domain.auth.service.SignupService;
 import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
+import com.danzzan.domain.user.phoneverification.service.PhoneVerificationService;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,16 +15,29 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@org.springframework.test.context.TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:signup-flow;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "spring.data.redis.host=localhost",
+        "spring.data.redis.port=6379",
+        "octomo.api-key=test-octomo-api-key",
+        "phone-verification.code-encryption-secret=test-secret-for-phone-verification"
+})
 class SignupFlowE2ETest {
 
     @Autowired
@@ -41,9 +55,14 @@ class SignupFlowE2ETest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @MockitoBean
+    private PhoneVerificationService phoneVerificationService;
+
     @BeforeEach
     void setUp() {
         userRepository.deleteAll();
+        when(phoneVerificationService.consumeVerifiedPhoneNumber("signup-token-123", "phone-session-123"))
+                .thenReturn("01012345678");
     }
 
     @Test
@@ -52,7 +71,7 @@ class SignupFlowE2ETest {
         signupService.cacheStudentInfo(
                 signupToken,
                 "32100000",
-                "테스터",
+                "테스트",
                 "공과대학",
                 "컴퓨터공학과",
                 AcademicStatus.ENROLLED
@@ -62,7 +81,8 @@ class SignupFlowE2ETest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "password", "MySecure!123",
-                                "confirmPassword", "MySecure!123"
+                                "confirmPassword", "MySecure!123",
+                                "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isOk());
 
@@ -70,11 +90,14 @@ class SignupFlowE2ETest {
                 .orElseThrow(() -> new AssertionError("회원이 생성되지 않았습니다."));
 
         assertThat(user.getStudentId()).isEqualTo("32100000");
-        assertThat(user.getName()).isEqualTo("테스터");
+        assertThat(user.getName()).isEqualTo("테스트");
         assertThat(user.getCollege()).isEqualTo("공과대학");
         assertThat(user.getMajor()).isEqualTo("컴퓨터공학과");
         assertThat(user.getAcademicStatus()).isEqualTo(AcademicStatus.ENROLLED);
         assertThat(user.getRole()).isEqualTo(UserRole.ROLE_USER);
+        assertThat(user.getPhoneNumber()).isEqualTo("01012345678");
+        assertThat(user.isPhoneVerified()).isTrue();
+        assertThat(user.getPhoneVerifiedAt()).isNotNull();
         assertThat(user.getPassword()).isNotEqualTo("MySecure!123");
         assertThat(passwordEncoder.matches("MySecure!123", user.getPassword())).isTrue();
 

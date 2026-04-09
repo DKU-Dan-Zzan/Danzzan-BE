@@ -1,7 +1,11 @@
 package com.danzzan.domain.user.model.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -37,6 +41,15 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column(name = "phone_number", unique = true, length = 32)
+    private String phoneNumber;
+
+    @Column(name = "is_phone_verified", nullable = false)
+    private boolean phoneVerified;
+
+    @Column(name = "phone_verified_at")
+    private LocalDateTime phoneVerifiedAt;
+
     @Column(name = "token_version", nullable = false, columnDefinition = "int default 0")
     private int tokenVersion;
 
@@ -44,8 +57,18 @@ public class User {
     private LocalDateTime createdAt;
 
     @Builder
-    public User(String studentId, String password, String name,
-                String college, String major, AcademicStatus academicStatus, UserRole role) {
+    public User(
+            String studentId,
+            String password,
+            String name,
+            String college,
+            String major,
+            AcademicStatus academicStatus,
+            UserRole role,
+            String phoneNumber,
+            boolean phoneVerified,
+            LocalDateTime phoneVerifiedAt
+    ) {
         this.studentId = studentId;
         this.password = password;
         this.name = name;
@@ -53,6 +76,9 @@ public class User {
         this.major = major;
         this.academicStatus = academicStatus;
         this.role = role != null ? role : UserRole.ROLE_USER;
+        this.phoneNumber = phoneNumber;
+        this.phoneVerified = phoneVerified;
+        this.phoneVerifiedAt = phoneVerifiedAt;
         this.tokenVersion = 0;
         this.createdAt = LocalDateTime.now();
     }
@@ -67,5 +93,11 @@ public class User {
 
     public void bumpTokenVersion() {
         this.tokenVersion += 1;
+    }
+
+    public void markPhoneVerified(String phoneNumber, LocalDateTime verifiedAt) {
+        this.phoneNumber = phoneNumber;
+        this.phoneVerified = true;
+        this.phoneVerifiedAt = verifiedAt;
     }
 }

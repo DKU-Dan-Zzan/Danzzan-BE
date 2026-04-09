@@ -41,7 +41,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return PUBLIC_PATHS.contains(path)
                 || path.startsWith("/user/dku/")
-                || path.startsWith("/user/password/reset/");
+                || path.startsWith("/user/password/reset/")
+                || path.startsWith("/user/phone-verifications/");
     }
 
     @Override

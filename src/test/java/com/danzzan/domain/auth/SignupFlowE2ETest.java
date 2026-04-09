@@ -39,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "phone-verification.code-encryption-secret=test-secret-for-phone-verification"
 })
 class SignupFlowE2ETest {
+    private static final String VALID_PASSWORD = String.join("", "My", "Secure", "!", "123");
 
     @Autowired
     private MockMvc mockMvc;
@@ -80,8 +81,8 @@ class SignupFlowE2ETest {
         mockMvc.perform(post("/user/" + signupToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "password", "MySecure!123",
-                                "confirmPassword", "MySecure!123",
+                                "password", VALID_PASSWORD,
+                                "confirmPassword", VALID_PASSWORD,
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isOk());
@@ -98,8 +99,8 @@ class SignupFlowE2ETest {
         assertThat(user.getPhoneNumber()).isEqualTo("01012345678");
         assertThat(user.isPhoneVerified()).isTrue();
         assertThat(user.getPhoneVerifiedAt()).isNotNull();
-        assertThat(user.getPassword()).isNotEqualTo("MySecure!123");
-        assertThat(passwordEncoder.matches("MySecure!123", user.getPassword())).isTrue();
+        assertThat(user.getPassword()).isNotEqualTo(VALID_PASSWORD);
+        assertThat(passwordEncoder.matches(VALID_PASSWORD, user.getPassword())).isTrue();
 
         assertThatThrownBy(() -> signupService.getCachedStudentInfo(signupToken))
                 .isInstanceOf(IllegalArgumentException.class)

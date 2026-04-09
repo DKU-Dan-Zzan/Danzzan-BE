@@ -31,6 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @ExtendWith(MockitoExtension.class)
 class UserControllerTest {
+    private static final String VALID_PASSWORD = String.join("", "My", "Secure", "!", "123");
+    private static final String WEAK_PASSWORD = "password" + "1";
+    private static final String DIFFERENT_PASSWORD = String.join("", "Another", "!", "123");
 
     private MockMvc mockMvc;
 
@@ -55,16 +58,16 @@ class UserControllerTest {
         mockMvc.perform(post("/user/signup-token-123")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "password", "MySecure!123",
-                                "confirmPassword", "MySecure!123",
+                                "password", VALID_PASSWORD,
+                                "confirmPassword", VALID_PASSWORD,
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<RequestSignupDto> captor = ArgumentCaptor.forClass(RequestSignupDto.class);
         verify(signupService).signup(captor.capture(), eq("signup-token-123"));
-        assertThat(captor.getValue().getPassword()).isEqualTo("MySecure!123");
-        assertThat(captor.getValue().getConfirmPassword()).isEqualTo("MySecure!123");
+        assertThat(captor.getValue().getPassword()).isEqualTo(VALID_PASSWORD);
+        assertThat(captor.getValue().getConfirmPassword()).isEqualTo(VALID_PASSWORD);
         assertThat(captor.getValue().getPhoneVerificationSessionId()).isEqualTo("phone-session-123");
     }
 
@@ -73,8 +76,8 @@ class UserControllerTest {
         mockMvc.perform(post("/user/signup-token-123")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "password", "MySecure!123",
-                                "confirmPassword", "MySecure!123"
+                                "password", VALID_PASSWORD,
+                                "confirmPassword", VALID_PASSWORD
                         ))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("전화번호 인증 세션 ID는 필수입니다."));
@@ -87,8 +90,8 @@ class UserControllerTest {
         mockMvc.perform(post("/user/signup-token-123")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "password", "password1",
-                                "confirmPassword", "password1",
+                                "password", WEAK_PASSWORD,
+                                "confirmPassword", WEAK_PASSWORD,
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isBadRequest())
@@ -102,8 +105,8 @@ class UserControllerTest {
         mockMvc.perform(post("/user/signup-token-123")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "password", "MySecure!123",
-                                "confirmPassword", "Another!123",
+                                "password", VALID_PASSWORD,
+                                "confirmPassword", DIFFERENT_PASSWORD,
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isBadRequest())

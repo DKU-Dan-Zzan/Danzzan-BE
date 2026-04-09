@@ -248,6 +248,15 @@ public class PhoneVerificationService {
         return phoneNumber.replaceAll("[^0-9+]", "");
     }
 
+    private String maskPhoneNumber(String phoneNumber) {
+        if (!StringUtils.hasText(phoneNumber) || phoneNumber.length() < 7) {
+            return phoneNumber;
+        }
+        return phoneNumber.substring(0, 3)
+                + "****"
+                + phoneNumber.substring(phoneNumber.length() - 4);
+    }
+
     private String hash(String sessionId, String rawValue) {
         return sha256(sessionId + ":" + rawValue);
     }

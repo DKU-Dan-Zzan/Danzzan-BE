@@ -1,6 +1,7 @@
 package com.danzzan.domain.auth.service;
 
 import com.danzzan.domain.user.exception.AlreadyStudentIdException;
+import com.danzzan.domain.user.exception.CheonanCampusException;
 import com.danzzan.domain.auth.dto.RequestDkuStudentDto;
 import com.danzzan.domain.auth.dto.ResponseScrappedStudentInfoDto;
 import com.danzzan.domain.auth.dto.ResponseVerifyStudentDto;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -44,6 +46,9 @@ public class DKUAuthService {
 
         // 학적 상태 변환
         AcademicStatus academicStatus = parseAcademicStatus(studentInfo.getAcademicStatus());
+
+        // 죽전캠퍼스 학생만 가입 가능 (학부: 3xxxxx, 대학원: 7xxxxx)
+        validateJukjeonCampus(studentInfo.getStudentId(), studentInfo.getCollege());
 
         // 재학생·수료생만 가입 가능
         if (academicStatus != AcademicStatus.ENROLLED && academicStatus != AcademicStatus.COMPLETED) {
@@ -80,6 +85,35 @@ public class DKUAuthService {
         return new ResponseScrappedStudentInfoDto(
                 cache.name(), cache.studentId(), cache.college(), cache.major()
         );
+    }
+
+    // 천안캠퍼스 단과대학 키워드 블랙리스트 (죽전에 없는 단과대학명 기준)
+    private static final List<String> CHEONAN_COLLEGE_KEYWORDS = List.of(
+            "간호", "의과", "치과", "약학", "과학기술", "바이오융합", "스포츠", "외국어", "공공", "보건"
+    );
+
+    // 죽전캠퍼스 학생 여부 검증
+    // - 학부생(3xxxxx): 단과대학명이 천안 블랙리스트에 없으면 죽전으로 판단
+    // - 대학원생(7xxxxx): 단과대학명이 천안 블랙리스트에 없으면 죽전으로 판단
+    // - 그 외 학번: 차단
+    private void validateJukjeonCampus(String studentId, String college) {
+        boolean isUndergrad = studentId.startsWith("3");
+        boolean isGrad = studentId.startsWith("7");
+
+        if (!isUndergrad && !isGrad) {
+            throw new CheonanCampusException();
+        }
+
+        String collegeName = college != null ? college : "";
+        boolean isCheonan = CHEONAN_COLLEGE_KEYWORDS.stream()
+                .anyMatch(collegeName::contains);
+
+        // 예술대학(천안) vs 음악·예술대학(죽전) 별도 구분
+        boolean isCheonanArts = collegeName.contains("예술대학") && !collegeName.contains("음악·예술대학");
+
+        if (isCheonan || isCheonanArts) {
+            throw new CheonanCampusException();
+        }
     }
 
     // 학적 상태 문자열을 AcademicStatus enum으로 변환

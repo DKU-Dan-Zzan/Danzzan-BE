@@ -12,7 +12,6 @@ import com.danzzan.domain.user.phoneverification.repository.PhoneVerificationSes
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.infra.octomo.OctomoMessageClient;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -31,7 +30,6 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -66,8 +64,6 @@ public class PhoneVerificationService {
                 expiresAt
         );
         phoneVerificationSessionRepository.save(session);
-
-        log.info("phone verification session created sessionId={} signupToken={}", sessionId, signupToken);
         return ResponsePhoneVerificationCreateDto.builder()
                 .sessionId(sessionId)
                 .status(session.getStatus())
@@ -84,6 +80,7 @@ public class PhoneVerificationService {
         PhoneVerificationSession session = getSession(sessionId);
         LocalDateTime now = LocalDateTime.now();
         String normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+        String rawCode = decryptCode(session.getCodeCiphertext());
 
         syncExpiredStatus(session, now);
         if (session.getStatus() == PhoneVerificationStatus.EXPIRED) {
@@ -102,9 +99,8 @@ public class PhoneVerificationService {
 
         boolean verified;
         try {
-            verified = octomoMessageClient.existsRecentMessage(normalizedPhoneNumber, decryptCode(session.getCodeCiphertext()));
+            verified = octomoMessageClient.existsRecentMessage(normalizedPhoneNumber, rawCode);
         } catch (Exception e) {
-            log.warn("OCTOMO lookup failed sessionId={} reason={}", sessionId, e.getMessage());
             throw new PhoneVerificationException(PhoneVerificationErrorType.OCTOMO_LOOKUP_FAILED);
         }
 
@@ -250,13 +246,6 @@ public class PhoneVerificationService {
             return phoneNumber;
         }
         return phoneNumber.replaceAll("[^0-9+]", "");
-    }
-
-    private String maskPhoneNumber(String phoneNumber) {
-        if (!StringUtils.hasText(phoneNumber) || phoneNumber.length() < 8) {
-            return phoneNumber;
-        }
-        return phoneNumber.substring(0, 3) + "****" + phoneNumber.substring(phoneNumber.length() - 4);
     }
 
     private String hash(String sessionId, String rawValue) {

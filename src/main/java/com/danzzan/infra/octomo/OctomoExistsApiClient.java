@@ -3,7 +3,6 @@ package com.danzzan.infra.octomo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OctomoExistsApiClient implements OctomoMessageClient {
@@ -38,9 +36,10 @@ public class OctomoExistsApiClient implements OctomoMessageClient {
 
         try {
             JsonNode root = objectMapper.readTree(rawResponse);
-            return root.path("verified").asBoolean(false);
+            boolean exists = root.path("exists").asBoolean(false);
+            boolean verified = root.path("verified").asBoolean(false);
+            return exists || verified;
         } catch (Exception e) {
-            log.warn("Failed to parse OCTOMO exists response: {}", e.getMessage());
             throw new IllegalStateException("Failed to parse OCTOMO response", e);
         }
     }

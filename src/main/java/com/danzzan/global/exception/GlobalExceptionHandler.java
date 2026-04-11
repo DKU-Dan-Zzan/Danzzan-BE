@@ -4,6 +4,7 @@ import com.danzzan.domain.event.exception.EventNotFoundException;
 import com.danzzan.domain.ticket.exception.AlreadyReservedException;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
+import com.danzzan.domain.ticket.exception.ReserveProcessingException;
 import com.danzzan.domain.ticket.exception.TicketAlreadyIssuedException;
 import com.danzzan.domain.ticket.exception.TicketEventMismatchException;
 import com.danzzan.domain.ticket.exception.TicketNotFoundException;
@@ -181,6 +182,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleAlreadyReserved(AlreadyReservedException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(Map.of("code", "RESERVE_ALREADY_RESERVED", "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ReserveProcessingException.class)
+    public ResponseEntity<Map<String, String>> handleReserveProcessing(ReserveProcessingException e) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("code", "RESERVE_PROCESSING_FAILED", "message", e.getMessage()));
     }
 
     @ExceptionHandler(AdminAuthenticationException.class)

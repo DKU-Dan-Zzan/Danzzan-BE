@@ -11,6 +11,7 @@ import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
+import com.danzzan.domain.ticket.service.TicketIssueEnqueueService;
 import com.danzzan.domain.ticket.service.TicketService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
@@ -48,12 +49,14 @@ class TicketControllerTest {
     @Mock private QueueService queueService;
     @Mock private QueueStateService queueStateService;
     @Mock private TicketingMetrics ticketingMetrics;
+    @Mock private TicketIssueEnqueueService ticketIssueEnqueueService;
     private static final Principal USER_AUTH = new TestingAuthenticationToken(1L, null);
 
     @BeforeEach
     void setUp() {
         TicketController controller = new TicketController(
-                ticketService, claimService, ticketStatusService, queueService, queueStateService, ticketingMetrics);
+                ticketService, claimService, ticketStatusService, queueService, queueStateService, ticketingMetrics,
+                ticketIssueEnqueueService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();

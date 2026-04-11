@@ -8,11 +8,13 @@ import com.danzzan.domain.ticket.dto.TicketStatusResponseDTO;
 import com.danzzan.domain.ticket.exception.AlreadyReservedException;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
+import com.danzzan.domain.ticket.exception.ReserveProcessingException;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import com.danzzan.domain.event.model.entity.TicketingStatus;
+import com.danzzan.domain.ticket.service.TicketIssueEnqueueService;
 import com.danzzan.domain.ticket.service.TicketService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import com.danzzan.domain.ticket.metrics.TicketingMetrics;
@@ -21,9 +23,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/tickets")
@@ -38,6 +43,14 @@ public class TicketController {
     private final QueueService queueService;
     private final QueueStateService queueStateService;
     private final TicketingMetrics ticketingMetrics;
+    private final TicketIssueEnqueueService ticketIssueEnqueueService;
+
+    @Value("${app.ticketing.async.reserve.enabled:false}")
+    private boolean asyncReserveEnabled;
+
+    @Value("${app.ticketing.async.reserve.processing-ttl-seconds:600}")
+    private long processingTtlSeconds;
+
     @GetMapping("/events")
     @Operation(summary = "이벤트 목록 조회", description = "티켓팅 가능한 공연 목록을 조회합니다. 로그인 불필요.")
     public ResponseEntity<ResponseTicketEventListDto> getTicketingEvents() {
@@ -56,10 +69,18 @@ public class TicketController {
 
         // 이미 터미널 상태면 바로 반환 (Redis 기반)
         TicketRequestStatus currentStatus = ticketStatusService.getStatus(eventIdStr, userIdStr);
+        if (currentStatus == TicketRequestStatus.FAILED) {
+            ticketStatusService.clearProcessing(eventIdStr, userIdStr);
+            currentStatus = TicketRequestStatus.NONE;
+        }
         if (isTerminal(currentStatus)) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(currentStatus)
-                    .build());
+            TicketRequestResponseDTO.TicketRequestResponseDTOBuilder builder = TicketRequestResponseDTO.builder()
+                    .status(currentStatus);
+            if (currentStatus == TicketRequestStatus.PROCESSING) {
+                builder.requestId(ticketStatusService.getProcessingRequestId(eventIdStr, userIdStr))
+                        .acceptedAt(ticketStatusService.getProcessingAcceptedAt(eventIdStr, userIdStr));
+            }
+            return ResponseEntity.ok(builder.build());
         }
 
         // DB 이중 예매 방지 (Redis 초기화 이후에도 보장)
@@ -138,10 +159,16 @@ public class TicketController {
 
     @PostMapping("/{eventId}/reserve")
     @Operation(summary = "티켓 예매", description = "ACTIVE 상태(유의사항 화면)에서 예매완료 버튼 클릭. 재고 차감 후 DB 저장.")
-    public ResponseEntity<ResponseReserveTicketDto> reserveTicket(
+    public ResponseEntity<?> reserveTicket(
             @PathVariable Long eventId,
             Authentication authentication
     ) {
+        return asyncReserveEnabled
+                ? reserveTicketAsync(eventId, authentication)
+                : reserveTicketSync(eventId, authentication);
+    }
+
+    private ResponseEntity<ResponseReserveTicketDto> reserveTicketSync(Long eventId, Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         String eventIdStr = String.valueOf(eventId);
         String userIdStr = String.valueOf(userId);
@@ -169,6 +196,60 @@ public class TicketController {
 
         } finally {
             // 성공/실패 무관하게 active ZSet 제거 → 슬롯 반환
+            queueStateService.releaseActive(eventIdStr, userIdStr);
+        }
+    }
+
+    private ResponseEntity<TicketRequestResponseDTO> reserveTicketAsync(Long eventId, Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        String eventIdStr = String.valueOf(eventId);
+        String userIdStr = String.valueOf(userId);
+
+        try {
+            TicketRequestStatus currentStatus = ticketStatusService.getStatus(eventIdStr, userIdStr);
+            if (currentStatus == TicketRequestStatus.PROCESSING) {
+                return ResponseEntity.accepted().body(TicketRequestResponseDTO.builder()
+                        .status(TicketRequestStatus.PROCESSING)
+                        .requestId(ticketStatusService.getProcessingRequestId(eventIdStr, userIdStr))
+                        .acceptedAt(ticketStatusService.getProcessingAcceptedAt(eventIdStr, userIdStr))
+                        .build());
+            }
+
+            ClaimResult claimResult = claimService.claim(eventIdStr, userIdStr);
+            if (claimResult.status() == TicketRequestStatus.SOLD_OUT) {
+                throw new EventSoldOutException();
+            }
+            if (claimResult.status() == TicketRequestStatus.ALREADY) {
+                throw new AlreadyReservedException();
+            }
+
+            String requestId = UUID.randomUUID().toString();
+            long acceptedAt = System.currentTimeMillis();
+            ticketStatusService.setProcessing(eventIdStr, userIdStr, requestId, acceptedAt, processingTtlSeconds);
+
+            try {
+                Long seq = ticketStatusService.getMySequence(eventIdStr, userIdStr);
+                requestId = ticketIssueEnqueueService.enqueueIssueRequest(
+                        eventId,
+                        userId,
+                        requestId,
+                        claimResult.remaining(),
+                        seq,
+                        acceptedAt
+                );
+            } catch (Exception e) {
+                ticketStatusService.clearProcessing(eventIdStr, userIdStr);
+                claimService.rollback(eventIdStr, userIdStr);
+                throw new ReserveProcessingException();
+            }
+
+            return ResponseEntity.accepted().body(TicketRequestResponseDTO.builder()
+                    .status(TicketRequestStatus.PROCESSING)
+                    .requestId(requestId)
+                    .acceptedAt(acceptedAt)
+                    .build());
+
+        } finally {
             queueStateService.releaseActive(eventIdStr, userIdStr);
         }
     }
@@ -222,6 +303,7 @@ public class TicketController {
     private boolean isTerminal(TicketRequestStatus status) {
         return status == TicketRequestStatus.SUCCESS
                 || status == TicketRequestStatus.SOLD_OUT
-                || status == TicketRequestStatus.ALREADY;
+                || status == TicketRequestStatus.ALREADY
+                || status == TicketRequestStatus.PROCESSING;
     }
 }

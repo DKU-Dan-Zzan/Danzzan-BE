@@ -1,0 +1,107 @@
+package com.danzzan.domain.ticket.model.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(
+        name = "outbox_events",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_outbox_aggregate", columnNames = {"aggregate_type", "aggregate_id"})
+        }
+)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class OutboxEvent {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "aggregate_type", nullable = false, length = 50)
+    private String aggregateType;
+
+    @Column(name = "aggregate_id", nullable = false, length = 100)
+    private String aggregateId;
+
+    @Column(nullable = false, length = 200)
+    private String topic;
+
+    @Column(name = "event_key", nullable = false, length = 100)
+    private String eventKey;
+
+    @Lob
+    @Column(nullable = false)
+    private String payload;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OutboxEventStatus status;
+
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
+    @Column(name = "last_error", length = 1000)
+    private String lastError;
+
+    @Column(name = "sent_at")
+    private LocalDateTime sentAt;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Builder
+    public OutboxEvent(
+            String aggregateType,
+            String aggregateId,
+            String topic,
+            String eventKey,
+            String payload,
+            OutboxEventStatus status,
+            int retryCount,
+            LocalDateTime nextRetryAt
+    ) {
+        this.aggregateType = aggregateType;
+        this.aggregateId = aggregateId;
+        this.topic = topic;
+        this.eventKey = eventKey;
+        this.payload = payload;
+        this.status = status;
+        this.retryCount = retryCount;
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+}

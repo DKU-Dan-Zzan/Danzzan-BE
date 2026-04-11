@@ -12,6 +12,7 @@ import com.danzzan.domain.user.exception.AlreadyStudentIdException;
 import com.danzzan.domain.user.exception.CheonanCampusException;
 import com.danzzan.domain.user.exception.UserNotFoundException;
 import com.danzzan.domain.user.exception.WrongPasswordException;
+import com.danzzan.domain.user.phoneverification.exception.PhoneVerificationException;
 import com.danzzan.domain.user.passwordreset.exception.PasswordResetException;
 import com.danzzan.global.exception.AdminAuthenticationException;
 import com.danzzan.global.exception.AdminForbiddenException;
@@ -124,6 +125,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(PasswordResetException.class)
     public ResponseEntity<Map<String, String>> handlePasswordResetException(PasswordResetException e) {
+        return ResponseEntity.status(e.getErrorType().getStatus())
+                .body(Map.of(
+                        "error", e.getMessage(),
+                        "errorCode", e.getErrorType().getErrorCode()
+                ));
+    }
+
+    @ExceptionHandler(PhoneVerificationException.class)
+    public ResponseEntity<Map<String, String>> handlePhoneVerificationException(PhoneVerificationException e) {
         return ResponseEntity.status(e.getErrorType().getStatus())
                 .body(Map.of(
                         "error", e.getMessage(),

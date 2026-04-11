@@ -1,18 +1,18 @@
 package com.danzzan.domain.auth.service;
 
-import com.danzzan.domain.user.exception.AlreadyStudentIdException;
 import com.danzzan.domain.auth.dto.RequestSignupDto;
+import com.danzzan.domain.user.exception.AlreadyStudentIdException;
 import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
+import com.danzzan.domain.user.phoneverification.service.PhoneVerificationService;
 import com.danzzan.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -20,37 +20,39 @@ public class SignupService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SignupTokenStore signupTokenStore;
+    private final PhoneVerificationService phoneVerificationService;
 
-    // TODO: Redis로 교체 예정
-    private final Map<String, StudentInfoCache> signupCache = new ConcurrentHashMap<>();
-
-    // 학생 정보 임시 저장
     public void cacheStudentInfo(String signupToken, String studentId, String name,
-                                  String college, String major, AcademicStatus academicStatus) {
-        signupCache.put(signupToken, new StudentInfoCache(studentId, name, college, major, academicStatus));
+                                 String college, String major, AcademicStatus academicStatus) {
+        signupTokenStore.cacheStudentInfo(signupToken, studentId, name, college, major, academicStatus);
     }
 
-    // 캐시에서 학생 정보 조회
     public StudentInfoCache getCachedStudentInfo(String signupToken) {
-        StudentInfoCache cache = signupCache.get(signupToken);
-        if (cache == null) {
-            throw new IllegalArgumentException("유효하지 않은 회원가입 토큰입니다.");
-        }
-        return cache;
+        SignupTokenStore.StudentInfoCache cache = signupTokenStore.getCachedStudentInfo(signupToken);
+        return new StudentInfoCache(
+                cache.studentId(),
+                cache.name(),
+                cache.college(),
+                cache.major(),
+                cache.academicStatus()
+        );
     }
 
-    // 회원가입 처리
     @Transactional
     public void signup(RequestSignupDto dto, String signupToken) {
         StudentInfoCache cache = getCachedStudentInfo(signupToken);
+        String verifiedPhoneNumber = phoneVerificationService.consumeVerifiedPhoneNumber(
+                signupToken,
+                dto.getPhoneVerificationSessionId().trim()
+        );
 
-        // 학번 중복 체크
         if (userRepository.existsByStudentId(cache.studentId())) {
             throw new AlreadyStudentIdException();
         }
 
-        // 비밀번호 암호화 후 저장
         String encodedPassword = passwordEncoder.encode(dto.getPassword());
+        LocalDateTime phoneVerifiedAt = LocalDateTime.now();
 
         User user = User.builder()
                 .studentId(cache.studentId())
@@ -60,10 +62,13 @@ public class SignupService {
                 .major(cache.major())
                 .academicStatus(cache.academicStatus())
                 .role(UserRole.ROLE_USER)
+                .phoneNumber(verifiedPhoneNumber)
+                .phoneVerified(true)
+                .phoneVerifiedAt(phoneVerifiedAt)
                 .build();
 
         userRepository.save(user);
-        signupCache.remove(signupToken);
+        signupTokenStore.remove(signupToken);
     }
 
     public record StudentInfoCache(

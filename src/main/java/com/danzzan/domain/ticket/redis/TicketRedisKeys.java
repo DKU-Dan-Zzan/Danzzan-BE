@@ -23,6 +23,11 @@ public final class TicketRedisKeys {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":status:" + keyPart(userId, "userId");
     }
 
+    /** 비동기 예매 요청 메타 키 (requestId, acceptedAt) */
+    public static String processingMetaKey(String eventId, String userId) {
+        return PREFIX + ":" + keyPart(eventId, "eventId") + ":processing:" + keyPart(userId, "userId");
+    }
+
     /** 대기열 ZSet (score = INCR sequence, WAITING 유저만 존재) */
     public static String queueKey(String eventId) {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":queue";

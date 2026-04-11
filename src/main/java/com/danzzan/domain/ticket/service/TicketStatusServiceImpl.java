@@ -8,12 +8,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.TimeUnit;
+
 @Service
 @RequiredArgsConstructor
 public class TicketStatusServiceImpl implements TicketStatusService {
 
     private static final String FIELD_SEQ = "seq";
     private static final String FIELD_READY_UNTIL = "readyUntil";
+    private static final String FIELD_REQUEST_ID = "requestId";
+    private static final String FIELD_ACCEPTED_AT = "acceptedAt";
 
     private final StringRedisTemplate redisTemplate;
     private final QueueService queueService;
@@ -34,7 +38,9 @@ public class TicketStatusServiceImpl implements TicketStatusService {
                 TicketRequestStatus s = TicketRequestStatus.valueOf(claimStatus);
                 if (s == TicketRequestStatus.SUCCESS
                         || s == TicketRequestStatus.SOLD_OUT
-                        || s == TicketRequestStatus.ALREADY) {
+                        || s == TicketRequestStatus.ALREADY
+                        || s == TicketRequestStatus.PROCESSING
+                        || s == TicketRequestStatus.FAILED) {
                     return s;
                 }
             } catch (IllegalArgumentException ignored) {
@@ -111,6 +117,33 @@ public class TicketStatusServiceImpl implements TicketStatusService {
         return null;
     }
 
+    @Override
+    public void setProcessing(String eventId, String userId, String requestId, long acceptedAt, long ttlSeconds) {
+        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+        String metaKey = TicketRedisKeys.processingMetaKey(eventId, userId);
+        redisTemplate.opsForValue().set(statusKey, TicketRequestStatus.PROCESSING.name(), ttlSeconds, TimeUnit.SECONDS);
+        redisTemplate.opsForHash().put(metaKey, FIELD_REQUEST_ID, requestId);
+        redisTemplate.opsForHash().put(metaKey, FIELD_ACCEPTED_AT, String.valueOf(acceptedAt));
+        redisTemplate.expire(metaKey, ttlSeconds, TimeUnit.SECONDS);
+    }
+
+    @Override
+    public String getProcessingRequestId(String eventId, String userId) {
+        Object raw = redisTemplate.opsForHash().get(TicketRedisKeys.processingMetaKey(eventId, userId), FIELD_REQUEST_ID);
+        return raw == null ? null : raw.toString();
+    }
+
+    @Override
+    public Long getProcessingAcceptedAt(String eventId, String userId) {
+        return getHashLong(TicketRedisKeys.processingMetaKey(eventId, userId), FIELD_ACCEPTED_AT);
+    }
+
+    @Override
+    public void clearProcessing(String eventId, String userId) {
+        redisTemplate.delete(TicketRedisKeys.statusKey(eventId, userId));
+        redisTemplate.delete(TicketRedisKeys.processingMetaKey(eventId, userId));
+    }
+
     private boolean isStockExhausted(String eventId) {
         String stock = redisTemplate.opsForValue().get(TicketRedisKeys.stockKey(eventId));
         if (stock == null) {
@@ -126,7 +159,11 @@ public class TicketStatusServiceImpl implements TicketStatusService {
     }
 
     private Long getHashLong(String eventId, String userId, String field) {
-        Object raw = redisTemplate.opsForHash().get(TicketRedisKeys.queueUserHashKey(eventId, userId), field);
+        return getHashLong(TicketRedisKeys.queueUserHashKey(eventId, userId), field);
+    }
+
+    private Long getHashLong(String key, String field) {
+        Object raw = redisTemplate.opsForHash().get(key, field);
         if (raw == null) {
             return null;
         }

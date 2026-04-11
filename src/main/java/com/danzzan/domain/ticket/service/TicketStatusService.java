@@ -18,4 +18,12 @@ public interface TicketStatusService {
     Long getReadyUntil(String eventId, String userId);
 
     QueueUserState getAdmissionState(String eventId, String userId);
+
+    void setProcessing(String eventId, String userId, String requestId, long acceptedAt, long ttlSeconds);
+
+    String getProcessingRequestId(String eventId, String userId);
+
+    Long getProcessingAcceptedAt(String eventId, String userId);
+
+    void clearProcessing(String eventId, String userId);
 }

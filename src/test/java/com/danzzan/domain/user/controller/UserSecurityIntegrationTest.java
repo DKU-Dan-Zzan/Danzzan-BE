@@ -9,6 +9,8 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
@@ -18,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "jwt.access-token-expiration=3600000",
         "jwt.refresh-token-expiration=604800000",
         "app.cors.allowed-origins=http://localhost:5173",
+        "app.cors.allowed-origin-patterns=http://localhost:*,http://127.0.0.1:*,http://10.*:*,http://172.*:*,http://192.168.*:*,http://169.254.*:*",
         "aws.region=ap-northeast-2",
         "aws.s3.bucket=test-bucket",
         "spring.mail.host=localhost",
@@ -32,11 +35,22 @@ class UserSecurityIntegrationTest {
     private MockMvc mockMvc;
 
     @Test
-    void getMyInfo_비인증_요청은_403과_빈본문을_반환한다() throws Exception {
+    void getMyInfo_비인증_요청은_401과_빈본문을_반환한다() throws Exception {
         MvcResult result = mockMvc.perform(get("/user/me"))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isUnauthorized())
                 .andReturn();
 
         assertThat(result.getResponse().getContentAsString()).isEmpty();
+    }
+
+    @Test
+    void dkuVerify_개발용_LAN_Origin_프리플라이트를_허용한다() throws Exception {
+        mockMvc.perform(options("/user/dku/verify")
+                        .header("Origin", "http://172.31.93.16:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://172.31.93.16:5173"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
     }
 }

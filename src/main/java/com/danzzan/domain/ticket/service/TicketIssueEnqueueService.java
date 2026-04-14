@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +29,21 @@ public class TicketIssueEnqueueService {
     private final TicketIssueRequestRepository ticketIssueRequestRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+
+    public record InFlightProcessingRequest(String requestId, Long acceptedAt) {
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<InFlightProcessingRequest> findProcessingRequest(Long eventId, Long userId) {
+        return ticketIssueRequestRepository
+                .findByEventIdAndUserIdAndStatus(eventId, userId, TicketIssueRequestStatus.PROCESSING)
+                .map(request -> new InFlightProcessingRequest(
+                        request.getRequestId(),
+                        request.getCreatedAt() == null
+                                ? null
+                                : request.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                ));
+    }
 
     @Transactional
     public String enqueueIssueRequest(

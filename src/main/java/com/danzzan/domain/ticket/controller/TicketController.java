@@ -208,11 +208,7 @@ public class TicketController {
         try {
             TicketRequestStatus currentStatus = ticketStatusService.getStatus(eventIdStr, userIdStr);
             if (currentStatus == TicketRequestStatus.PROCESSING) {
-                return ResponseEntity.accepted().body(TicketRequestResponseDTO.builder()
-                        .status(TicketRequestStatus.PROCESSING)
-                        .requestId(ticketStatusService.getProcessingRequestId(eventIdStr, userIdStr))
-                        .acceptedAt(ticketStatusService.getProcessingAcceptedAt(eventIdStr, userIdStr))
-                        .build());
+                return processingAcceptedResponse(eventId, userId, eventIdStr, userIdStr);
             }
 
             ClaimResult claimResult = claimService.claim(eventIdStr, userIdStr);
@@ -252,6 +248,35 @@ public class TicketController {
         } finally {
             queueStateService.releaseActive(eventIdStr, userIdStr);
         }
+    }
+
+    private ResponseEntity<TicketRequestResponseDTO> processingAcceptedResponse(
+            Long eventId,
+            Long userId,
+            String eventIdStr,
+            String userIdStr
+    ) {
+        String requestId = ticketStatusService.getProcessingRequestId(eventIdStr, userIdStr);
+        Long acceptedAt = ticketStatusService.getProcessingAcceptedAt(eventIdStr, userIdStr);
+
+        if (requestId == null || acceptedAt == null) {
+            TicketIssueEnqueueService.InFlightProcessingRequest inFlight =
+                    ticketIssueEnqueueService.findProcessingRequest(eventId, userId).orElse(null);
+            if (inFlight != null) {
+                if (requestId == null) {
+                    requestId = inFlight.requestId();
+                }
+                if (acceptedAt == null) {
+                    acceptedAt = inFlight.acceptedAt();
+                }
+            }
+        }
+
+        return ResponseEntity.accepted().body(TicketRequestResponseDTO.builder()
+                .status(TicketRequestStatus.PROCESSING)
+                .requestId(requestId)
+                .acceptedAt(acceptedAt)
+                .build());
     }
 
     @GetMapping("/me")

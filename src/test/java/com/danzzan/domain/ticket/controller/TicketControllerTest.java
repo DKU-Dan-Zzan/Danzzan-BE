@@ -23,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -30,6 +31,7 @@ import java.security.Principal;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,6 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TicketControllerTest {
 
     private MockMvc mockMvc;
+    private TicketController controller;
 
     @Mock private TicketService ticketService;
     @Mock private ClaimService claimService;
@@ -55,12 +58,14 @@ class TicketControllerTest {
 
     @BeforeEach
     void setUp() {
-        TicketController controller = new TicketController(
+        controller = new TicketController(
                 ticketService, claimService, ticketStatusService, queueService, queueStateService, ticketingMetrics,
                 ticketIssueEnqueueService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", false);
+        ReflectionTestUtils.setField(controller, "processingTtlSeconds", 600L);
     }
 
     // ── POST /queue/enter ─────────────────────────────────────────────────────
@@ -257,6 +262,76 @@ class TicketControllerTest {
         mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RESERVE_PROCESSING_FAILED"));
+    }
+
+    @Test
+    void reserve_async_PROCESSING이면_claim없이_기존요청정보로_202를_반환한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.PROCESSING);
+        when(ticketStatusService.getProcessingRequestId(eq("10"), eq("1"))).thenReturn("req-redis-1");
+        when(ticketStatusService.getProcessingAcceptedAt(eq("10"), eq("1"))).thenReturn(1773486180000L);
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-redis-1"))
+                .andExpect(jsonPath("$.acceptedAt").value(1773486180000L));
+
+        verify(claimService, never()).claim(any(), any());
+    }
+
+    @Test
+    void reserve_async_PROCESSING이고_redis메타가_없으면_DB_inflight로_202를_반환한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.PROCESSING);
+        when(ticketStatusService.getProcessingRequestId(eq("10"), eq("1"))).thenReturn(null);
+        when(ticketStatusService.getProcessingAcceptedAt(eq("10"), eq("1"))).thenReturn(null);
+        when(ticketIssueEnqueueService.findProcessingRequest(eq(10L), eq(1L)))
+                .thenReturn(java.util.Optional.of(new TicketIssueEnqueueService.InFlightProcessingRequest("req-db-1", 1773486190000L)));
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-db-1"))
+                .andExpect(jsonPath("$.acceptedAt").value(1773486190000L));
+
+        verify(claimService, never()).claim(any(), any());
+    }
+
+    @Test
+    void reserve_async_접수성공이면_202와_PROCESSING을_반환한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.NONE);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(7L);
+        when(ticketIssueEnqueueService.enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong()))
+                .thenReturn("req-new-1");
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-new-1"));
+
+        verify(ticketStatusService).setProcessing(eq("10"), eq("1"), any(), anyLong(), eq(600L));
+        verify(queueStateService).releaseActive(eq("10"), eq("1"));
+    }
+
+    @Test
+    void reserve_async_DB저장실패면_clearProcessing과_claimRollback후_409를_반환한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.NONE);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(7L);
+        when(ticketIssueEnqueueService.enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong()))
+                .thenThrow(new RuntimeException("db fail"));
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESERVE_PROCESSING_FAILED"));
+
+        verify(ticketStatusService).clearProcessing(eq("10"), eq("1"));
+        verify(claimService).rollback(eq("10"), eq("1"));
+        verify(queueStateService).releaseActive(eq("10"), eq("1"));
     }
 
     // ── GET /queue/status ─────────────────────────────────────────────────────

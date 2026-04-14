@@ -26,4 +26,6 @@ public interface TicketStatusService {
     Long getProcessingAcceptedAt(String eventId, String userId);
 
     void clearProcessing(String eventId, String userId);
+
+    void setFailed(String eventId, String userId, long ttlSeconds);
 }

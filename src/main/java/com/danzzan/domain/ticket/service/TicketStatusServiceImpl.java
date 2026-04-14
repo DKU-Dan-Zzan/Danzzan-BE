@@ -144,6 +144,17 @@ public class TicketStatusServiceImpl implements TicketStatusService {
         redisTemplate.delete(TicketRedisKeys.processingMetaKey(eventId, userId));
     }
 
+    @Override
+    public void setFailed(String eventId, String userId, long ttlSeconds) {
+        redisTemplate.opsForValue().set(
+                TicketRedisKeys.statusKey(eventId, userId),
+                TicketRequestStatus.FAILED.name(),
+                ttlSeconds,
+                TimeUnit.SECONDS
+        );
+        redisTemplate.delete(TicketRedisKeys.processingMetaKey(eventId, userId));
+    }
+
     private boolean isStockExhausted(String eventId) {
         String stock = redisTemplate.opsForValue().get(TicketRedisKeys.stockKey(eventId));
         if (stock == null) {

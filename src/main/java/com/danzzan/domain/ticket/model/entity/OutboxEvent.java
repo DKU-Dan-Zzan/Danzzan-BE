@@ -109,4 +109,35 @@ public class OutboxEvent {
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
+
+    public void markSent(LocalDateTime now) {
+        this.status = OutboxEventStatus.SENT;
+        this.sentAt = now;
+        this.nextRetryAt = null;
+        this.lastError = null;
+    }
+
+    public int increaseRetryCount() {
+        this.retryCount += 1;
+        return this.retryCount;
+    }
+
+    public void markRetry(LocalDateTime nextRetryAt, String lastError) {
+        this.status = OutboxEventStatus.PENDING;
+        this.nextRetryAt = nextRetryAt;
+        this.lastError = truncate(lastError);
+    }
+
+    public void markFailed(String lastError) {
+        this.status = OutboxEventStatus.FAILED;
+        this.nextRetryAt = null;
+        this.lastError = truncate(lastError);
+    }
+
+    private String truncate(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= 1000 ? value : value.substring(0, 1000);
+    }
 }

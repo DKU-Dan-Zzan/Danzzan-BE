@@ -186,7 +186,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ReserveProcessingException.class)
     public ResponseEntity<Map<String, String>> handleReserveProcessing(ReserveProcessingException e) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(Map.of("code", "RESERVE_PROCESSING_FAILED", "message", e.getMessage()));
     }
 

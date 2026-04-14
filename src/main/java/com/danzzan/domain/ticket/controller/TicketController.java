@@ -263,6 +263,7 @@ public class TicketController {
 
     private TicketStatusResponseDTO buildStatusResponse(String eventId, String userId) {
         TicketRequestStatus status = ticketStatusService.getStatus(eventId, userId);
+        boolean hideAdmissionDetails = status == TicketRequestStatus.PROCESSING || status == TicketRequestStatus.FAILED;
         Long aheadCount = ticketStatusService.getAheadCount(eventId, userId);
         return TicketStatusResponseDTO.builder()
                 .status(status)
@@ -272,8 +273,8 @@ public class TicketController {
                 .mySequence(ticketStatusService.getMySequence(eventId, userId))
                 .aheadCount(aheadCount)
                 .estimatedWaitSeconds(ticketStatusService.getEstimatedWaitSeconds(aheadCount))
-                .readyUntil(ticketStatusService.getReadyUntil(eventId, userId))
-                .admissionState(ticketStatusService.getAdmissionState(eventId, userId))
+                .readyUntil(hideAdmissionDetails ? null : ticketStatusService.getReadyUntil(eventId, userId))
+                .admissionState(hideAdmissionDetails ? null : ticketStatusService.getAdmissionState(eventId, userId))
                 .build();
     }
 

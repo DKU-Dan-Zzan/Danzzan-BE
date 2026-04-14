@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -22,6 +23,10 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "outbox_events",
+        indexes = {
+                @Index(name = "idx_outbox_status_next_retry", columnList = "status,next_retry_at"),
+                @Index(name = "idx_outbox_aggregate", columnList = "aggregate_type,aggregate_id")
+        },
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_outbox_aggregate", columnNames = {"aggregate_type", "aggregate_id"})
         }

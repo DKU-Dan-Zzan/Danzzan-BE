@@ -24,6 +24,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      TICKETING_ASYNC_RESERVE_ENABLED: ${TICKETING_ASYNC_RESERVE_ENABLED:-true}
+      TICKETING_ASYNC_RESERVE_SHADOW_PUBLISH_ENABLED: ${TICKETING_ASYNC_RESERVE_SHADOW_PUBLISH_ENABLED:-false}
+      TICKETING_ASYNC_RESERVE_ROLLOUT_PERCENT: ${TICKETING_ASYNC_RESERVE_ROLLOUT_PERCENT:-100}
+      TICKETING_ASYNC_RESERVE_ALLOWED_EVENT_IDS: ${TICKETING_ASYNC_RESERVE_ALLOWED_EVENT_IDS:-}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
@@ -92,7 +96,7 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -109,10 +113,10 @@ services:
       - -c
       - |
         set -e
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1 --partitions 3 --replication-factor 1
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1.dlq --partitions 3 --replication-factor 1
-        kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic ticket.issue.requested.v1
-        kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic ticket.issue.requested.v1.dlq
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1 --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1.dlq --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic ticket.issue.requested.v1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic ticket.issue.requested.v1.dlq
     restart: "no"
 
 volumes:

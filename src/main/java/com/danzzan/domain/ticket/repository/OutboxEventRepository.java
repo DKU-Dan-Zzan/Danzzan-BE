@@ -15,12 +15,12 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
             SELECT *
             FROM outbox_events
             WHERE status = 'PENDING'
-              AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP)
+              AND (next_retry_at IS NULL OR next_retry_at <= :now)
             ORDER BY created_at ASC
             LIMIT :batchSize
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
-    List<OutboxEvent> findPendingBatchForPublish(@Param("batchSize") int batchSize);
+    List<OutboxEvent> findPendingBatchForPublish(@Param("batchSize") int batchSize, @Param("now") LocalDateTime now);
 
     long countByStatus(OutboxEventStatus status);
 

@@ -9,5 +9,5 @@ public interface ClaimService {
     /**
      * DB 저장 실패 시 Redis 재고·상태를 원복합니다.
      */
-    void rollback(String eventId, String userId);
+    boolean rollback(String eventId, String userId);
 }

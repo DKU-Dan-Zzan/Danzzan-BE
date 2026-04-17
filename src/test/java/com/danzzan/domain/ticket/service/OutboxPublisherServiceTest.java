@@ -49,7 +49,7 @@ class OutboxPublisherServiceTest {
     @Test
     void publishPendingBatch_성공시_SENT로_전환하고_헤더를_포함한다() {
         OutboxEvent event = pendingEvent(0);
-        when(outboxEventRepository.findPendingBatchForPublish(eq(100))).thenReturn(List.of(event));
+        when(outboxEventRepository.findPendingBatchForPublish(eq(100), any())).thenReturn(List.of(event));
         when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING)).thenReturn(0L);
         when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING)).thenReturn(null);
@@ -74,7 +74,7 @@ class OutboxPublisherServiceTest {
     @Test
     void publishPendingBatch_실패시_retryCount증가와_백오프를_설정한다() {
         OutboxEvent event = pendingEvent(0);
-        when(outboxEventRepository.findPendingBatchForPublish(eq(100))).thenReturn(List.of(event));
+        when(outboxEventRepository.findPendingBatchForPublish(eq(100), any())).thenReturn(List.of(event));
         when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("kafka unavailable")));
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING)).thenReturn(1L);
@@ -93,7 +93,7 @@ class OutboxPublisherServiceTest {
     @Test
     void publishPendingBatch_10회째_실패면_FAILED로_전환한다() {
         OutboxEvent event = pendingEvent(9);
-        when(outboxEventRepository.findPendingBatchForPublish(eq(100))).thenReturn(List.of(event));
+        when(outboxEventRepository.findPendingBatchForPublish(eq(100), any())).thenReturn(List.of(event));
         when(kafkaTemplate.send(any(ProducerRecord.class)))
                 .thenReturn(CompletableFuture.failedFuture(new RuntimeException("permanent failure")));
         when(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING)).thenReturn(0L);

@@ -33,7 +33,7 @@ public class OutboxPublisherService {
     @Transactional
     public void publishPendingBatch() {
         LocalDateTime now = LocalDateTime.now();
-        List<OutboxEvent> batch = outboxEventRepository.findPendingBatchForPublish(BATCH_SIZE);
+        List<OutboxEvent> batch = outboxEventRepository.findPendingBatchForPublish(BATCH_SIZE, now);
 
         for (OutboxEvent outboxEvent : batch) {
             try {

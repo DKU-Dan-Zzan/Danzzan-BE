@@ -62,6 +62,12 @@ public class TicketIssueRequest {
     @Column(name = "compensated_at")
     private LocalDateTime compensatedAt;
 
+    @Column(name = "compensation_pending", nullable = false)
+    private boolean compensationPending;
+
+    @Column(name = "compensation_attempts", nullable = false)
+    private int compensationAttempts;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -80,6 +86,8 @@ public class TicketIssueRequest {
         this.userId = userId;
         this.status = status;
         this.compensated = false;
+        this.compensationPending = false;
+        this.compensationAttempts = 0;
     }
 
     @PrePersist
@@ -92,5 +100,41 @@ public class TicketIssueRequest {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public void markSuccess(LocalDateTime completedAt) {
+        this.status = TicketIssueRequestStatus.SUCCESS;
+        this.errorCode = null;
+        this.errorReason = null;
+        this.completedAt = completedAt;
+        this.compensationPending = false;
+    }
+
+    public void markFailed(String errorCode, String errorReason, LocalDateTime completedAt) {
+        this.status = TicketIssueRequestStatus.FAILED;
+        this.errorCode = errorCode;
+        this.errorReason = errorReason;
+        this.completedAt = completedAt;
+        this.compensationPending = false;
+    }
+
+    public void markCompensatedFailure(String errorCode, String errorReason, LocalDateTime completedAt) {
+        this.status = TicketIssueRequestStatus.FAILED;
+        this.errorCode = errorCode;
+        this.errorReason = errorReason;
+        this.completedAt = completedAt;
+        this.compensated = true;
+        this.compensatedAt = completedAt;
+        this.compensationPending = false;
+    }
+
+    public int markCompensationPending() {
+        this.compensationPending = true;
+        this.compensationAttempts += 1;
+        return this.compensationAttempts;
+    }
+
+    public void clearCompensationPending() {
+        this.compensationPending = false;
     }
 }

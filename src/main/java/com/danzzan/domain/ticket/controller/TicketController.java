@@ -3,8 +3,10 @@ package com.danzzan.domain.ticket.controller;
 import com.danzzan.domain.ticket.dto.ResponseMyTicketListDto;
 import com.danzzan.domain.ticket.dto.ResponseReserveTicketDto;
 import com.danzzan.domain.ticket.dto.ResponseTicketEventListDto;
+import com.danzzan.domain.ticket.dto.TicketIssueRequestStatusResponseDTO;
 import com.danzzan.domain.ticket.dto.TicketRequestResponseDTO;
 import com.danzzan.domain.ticket.dto.TicketStatusResponseDTO;
+import com.danzzan.domain.ticket.model.entity.TicketIssueRequestStatus;
 import com.danzzan.domain.ticket.exception.AlreadyReservedException;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
@@ -28,6 +30,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -47,6 +52,15 @@ public class TicketController {
 
     @Value("${app.ticketing.async.reserve.enabled:false}")
     private boolean asyncReserveEnabled;
+
+    @Value("${app.ticketing.async.reserve.shadow-publish.enabled:false}")
+    private boolean asyncReserveShadowPublishEnabled;
+
+    @Value("${app.ticketing.async.reserve.rollout-percent:0}")
+    private int asyncReserveRolloutPercent;
+
+    @Value("${app.ticketing.async.reserve.allowed-event-ids:}")
+    private String asyncReserveAllowedEventIds;
 
     @Value("${app.ticketing.async.reserve.processing-ttl-seconds:600}")
     private long processingTtlSeconds;
@@ -133,6 +147,25 @@ public class TicketController {
         return ResponseEntity.ok(buildStatusResponse(String.valueOf(eventId), String.valueOf(userId)));
     }
 
+    @GetMapping("/{eventId}/requests/{requestId}")
+    @Operation(summary = "비동기 발급 요청 상태 조회", description = "requestId 기준으로 비동기 발급 요청의 현재 상태를 조회합니다.")
+    public ResponseEntity<TicketIssueRequestStatusResponseDTO> getRequestStatus(
+            @PathVariable Long eventId,
+            @PathVariable String requestId,
+            Authentication authentication
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ticketIssueEnqueueService.findRequestStatus(eventId, userId, requestId)
+                .map(snapshot -> ResponseEntity.ok(TicketIssueRequestStatusResponseDTO.builder()
+                        .requestId(snapshot.requestId())
+                        .eventId(snapshot.eventId())
+                        .status(snapshot.status())
+                        .errorCode(snapshot.status() == TicketIssueRequestStatus.FAILED ? snapshot.errorCode() : null)
+                        .updatedAt(snapshot.updatedAt())
+                        .build()))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/{eventId}/activate")
     @Operation(summary = "유의사항 화면 진입", description = "READY 상태에서 호출. Lua로 READY→ACTIVE 원자 전환.")
     public ResponseEntity<TicketRequestResponseDTO> activateTicket(
@@ -163,13 +196,14 @@ public class TicketController {
             @PathVariable Long eventId,
             Authentication authentication
     ) {
-        return asyncReserveEnabled
-                ? reserveTicketAsync(eventId, authentication)
-                : reserveTicketSync(eventId, authentication);
+        Long userId = (Long) authentication.getPrincipal();
+        boolean useAsync = shouldUseAsyncReserve(eventId, userId);
+        return useAsync
+                ? reserveTicketAsync(eventId, userId)
+                : reserveTicketSync(eventId, userId, shouldShadowPublish(eventId, useAsync));
     }
 
-    private ResponseEntity<ResponseReserveTicketDto> reserveTicketSync(Long eventId, Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+    private ResponseEntity<ResponseReserveTicketDto> reserveTicketSync(Long eventId, Long userId, boolean shadowPublish) {
         String eventIdStr = String.valueOf(eventId);
         String userIdStr = String.valueOf(userId);
 
@@ -192,6 +226,9 @@ public class TicketController {
             }
 
             markDoneAfterPersistence(eventIdStr, userIdStr);
+            if (shadowPublish) {
+                publishShadowIssueRequest(eventId, userId, eventIdStr, userIdStr, claimResult.remaining());
+            }
             return ResponseEntity.ok(response);
 
         } finally {
@@ -200,8 +237,7 @@ public class TicketController {
         }
     }
 
-    private ResponseEntity<TicketRequestResponseDTO> reserveTicketAsync(Long eventId, Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
+    private ResponseEntity<TicketRequestResponseDTO> reserveTicketAsync(Long eventId, Long userId) {
         String eventIdStr = String.valueOf(eventId);
         String userIdStr = String.valueOf(userId);
 
@@ -324,6 +360,99 @@ public class TicketController {
         } catch (Exception e) {
             log.error("markDone 실패, 예매는 이미 DB에 저장됨 eventId={} userId={}", eventId, userId, e);
         }
+    }
+
+    private void publishShadowIssueRequest(
+            Long eventId,
+            Long userId,
+            String eventIdStr,
+            String userIdStr,
+            long remaining
+    ) {
+        try {
+            Long seq = ticketStatusService.getMySequence(eventIdStr, userIdStr);
+            ticketIssueEnqueueService.enqueueIssueRequest(
+                    eventId,
+                    userId,
+                    UUID.randomUUID().toString(),
+                    remaining,
+                    seq,
+                    System.currentTimeMillis()
+            );
+        } catch (Exception e) {
+            log.warn(
+                    "shadow publish enqueue 실패 eventId={} userId={} remaining={}",
+                    eventId,
+                    userId,
+                    remaining,
+                    e
+            );
+        }
+    }
+
+    private boolean shouldUseAsyncReserve(Long eventId, Long userId) {
+        if (!asyncReserveEnabled) {
+            return false;
+        }
+        if (!isAllowedEvent(eventId)) {
+            return false;
+        }
+        int rolloutPercent = normalizeRolloutPercent(asyncReserveRolloutPercent);
+        if (rolloutPercent <= 0) {
+            return false;
+        }
+        if (rolloutPercent >= 100) {
+            return true;
+        }
+        int bucket = Math.floorMod((eventId + ":" + userId).hashCode(), 100);
+        return bucket < rolloutPercent;
+    }
+
+    private boolean shouldShadowPublish(Long eventId, boolean asyncSelected) {
+        return asyncReserveShadowPublishEnabled && !asyncSelected && isAllowedEvent(eventId);
+    }
+
+    private boolean isAllowedEvent(Long eventId) {
+        Set<Long> allowedEventIds = parseAllowedEventIds();
+        return allowedEventIds.isEmpty() || allowedEventIds.contains(eventId);
+    }
+
+    private Set<Long> parseAllowedEventIds() {
+        if (asyncReserveAllowedEventIds == null || asyncReserveAllowedEventIds.isBlank()) {
+            return Collections.emptySet();
+        }
+        Set<Long> allowed = new HashSet<>();
+        String[] tokens = asyncReserveAllowedEventIds.split(",");
+        for (String token : tokens) {
+            Long parsedId = safeParseLong(token);
+            if (parsedId != null) {
+                allowed.add(parsedId);
+            }
+        }
+        return allowed;
+    }
+
+    private Long safeParseLong(String rawValue) {
+        if (rawValue == null) {
+            return null;
+        }
+        String value = rawValue.trim();
+        if (value.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            log.warn("allowed-event-id 파싱 실패 value={}", value);
+            return null;
+        }
+    }
+
+    private int normalizeRolloutPercent(int rolloutPercent) {
+        if (rolloutPercent < 0) {
+            return 0;
+        }
+        return Math.min(rolloutPercent, 100);
     }
 
     private boolean isTerminal(TicketRequestStatus status) {

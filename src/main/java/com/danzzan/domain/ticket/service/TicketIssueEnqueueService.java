@@ -33,6 +33,15 @@ public class TicketIssueEnqueueService {
     public record InFlightProcessingRequest(String requestId, Long acceptedAt) {
     }
 
+    public record IssueRequestStatusSnapshot(
+            String requestId,
+            Long eventId,
+            TicketIssueRequestStatus status,
+            String errorCode,
+            Long updatedAt
+    ) {
+    }
+
     @Transactional(readOnly = true)
     public Optional<InFlightProcessingRequest> findProcessingRequest(Long eventId, Long userId) {
         return ticketIssueRequestRepository
@@ -42,6 +51,21 @@ public class TicketIssueEnqueueService {
                         request.getCreatedAt() == null
                                 ? null
                                 : request.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                ));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<IssueRequestStatusSnapshot> findRequestStatus(Long eventId, Long userId, String requestId) {
+        return ticketIssueRequestRepository
+                .findByRequestIdAndEventIdAndUserId(requestId, eventId, userId)
+                .map(request -> new IssueRequestStatusSnapshot(
+                        request.getRequestId(),
+                        request.getEventId(),
+                        request.getStatus(),
+                        request.getErrorCode(),
+                        request.getUpdatedAt() == null
+                                ? null
+                                : request.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 ));
     }
 

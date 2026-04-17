@@ -20,8 +20,13 @@ import org.slf4j.MDC;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
 
 @ExtendWith(MockitoExtension.class)
 class TicketIssueEnqueueServiceTest {
@@ -43,9 +48,9 @@ class TicketIssueEnqueueServiceTest {
                 objectMapper
         );
 
-        when(ticketIssueRequestRepository.save(any(TicketIssueRequest.class)))
+        lenient().when(ticketIssueRequestRepository.save(any(TicketIssueRequest.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(outboxEventRepository.save(any(OutboxEvent.class)))
+        lenient().when(outboxEventRepository.save(any(OutboxEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -121,5 +126,41 @@ class TicketIssueEnqueueServiceTest {
         ArgumentCaptor<TicketIssueRequest> requestCaptor = ArgumentCaptor.forClass(TicketIssueRequest.class);
         verify(ticketIssueRequestRepository).save(requestCaptor.capture());
         assertThat(requestCaptor.getValue().getStatus()).isEqualTo(TicketIssueRequestStatus.PROCESSING);
+    }
+
+    @Test
+    void findRequestStatus_요청이있으면_snapshot을_반환한다() {
+        TicketIssueRequest request = TicketIssueRequest.builder()
+                .requestId("req-1")
+                .eventId(10L)
+                .userId(1L)
+                .status(TicketIssueRequestStatus.SUCCESS)
+                .build();
+        request.prePersist();
+        request.markSuccess(LocalDateTime.of(2026, 4, 17, 13, 10, 11));
+
+        when(ticketIssueRequestRepository.findByRequestIdAndEventIdAndUserId(eq("req-1"), eq(10L), eq(1L)))
+                .thenReturn(Optional.of(request));
+
+        Optional<TicketIssueEnqueueService.IssueRequestStatusSnapshot> result =
+                ticketIssueEnqueueService.findRequestStatus(10L, 1L, "req-1");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().requestId()).isEqualTo("req-1");
+        assertThat(result.get().eventId()).isEqualTo(10L);
+        assertThat(result.get().status()).isEqualTo(TicketIssueRequestStatus.SUCCESS);
+        assertThat(result.get().errorCode()).isNull();
+        assertThat(result.get().updatedAt()).isNotNull();
+    }
+
+    @Test
+    void findRequestStatus_요청이없으면_empty를_반환한다() {
+        when(ticketIssueRequestRepository.findByRequestIdAndEventIdAndUserId(eq("req-none"), eq(10L), eq(1L)))
+                .thenReturn(Optional.empty());
+
+        Optional<TicketIssueEnqueueService.IssueRequestStatusSnapshot> result =
+                ticketIssueEnqueueService.findRequestStatus(10L, 1L, "req-none");
+
+        assertThat(result).isEmpty();
     }
 }

@@ -14,6 +14,8 @@ const HOLD = __ENV.HOLD || '30s';
 const RAMP_DOWN = __ENV.RAMP_DOWN || '10s';
 const POLL_INTERVAL_MS = Number(__ENV.POLL_INTERVAL_MS || 1000);
 const POLL_TIMEOUT_MS = Number(__ENV.POLL_TIMEOUT_MS || 180000);
+const REQUEST_POLL_INTERVAL_MS = Number(__ENV.REQUEST_POLL_INTERVAL_MS || 1000);
+const REQUEST_POLL_TIMEOUT_MS = Number(__ENV.REQUEST_POLL_TIMEOUT_MS || 180000);
 const TOKENS_FILE = __ENV.TOKENS_FILE || './tokens.json';
 const ADMIN_TOKEN = __ENV.ADMIN_TOKEN || '';
 const INIT_STOCK = __ENV.INIT_STOCK ? Number(__ENV.INIT_STOCK) : null;
@@ -63,6 +65,7 @@ export const options = {
           'http_req_duration{name:queue_status}': ['p(95)<300'],
           'http_req_duration{name:activate}': ['p(95)<500'],
           'http_req_duration{name:reserve}': ['p(95)<700'],
+          'http_req_duration{name:request_status}': ['p(95)<700'],
           reserve_success_rate: ['rate>0'],
         }
       : {}),
@@ -75,12 +78,17 @@ const queuePolls = new Counter('queue_status_polls');
 const activateSuccess = new Counter('activate_success');
 const reserveSuccess = new Counter('reserve_success');
 const reserveFailed = new Counter('reserve_failed');
+const reserveAsyncAccepted = new Counter('reserve_async_accepted');
+const reserveAsyncFailed = new Counter('reserve_async_failed');
+const reserveAsyncTimeout = new Counter('reserve_async_timeout');
 const terminalSoldOut = new Counter('queue_terminal_sold_out');
 const terminalAlready = new Counter('queue_terminal_already');
 const terminalSuccess = new Counter('queue_terminal_success');
 const queueTimeout = new Counter('queue_timeout');
 const reserveSuccessRate = new Rate('reserve_success_rate');
 const pollWaitTrend = new Trend('queue_poll_wait_ms');
+const requestPolls = new Counter('request_status_polls');
+const requestWaitTrend = new Trend('request_status_wait_ms');
 
 export function setup() {
   if (!ADMIN_TOKEN) {
@@ -218,6 +226,70 @@ export default function () {
         return body && typeof body.queueNumber === 'number';
       },
     });
+    return;
+  }
+
+  if (reserveRes.status === 202) {
+    const reserveBody = parseJson(reserveRes);
+    if (!reserveBody || reserveBody.status !== 'PROCESSING' || !reserveBody.requestId) {
+      reserveAsyncFailed.add(1);
+      reserveFailed.add(1);
+      reserveSuccessRate.add(false);
+      return;
+    }
+
+    reserveAsyncAccepted.add(1);
+    const requestId = reserveBody.requestId;
+    const requestWaitStart = Date.now();
+
+    while (Date.now() - requestWaitStart < REQUEST_POLL_TIMEOUT_MS) {
+      sleep(REQUEST_POLL_INTERVAL_MS / 1000);
+      const requestStatusRes = http.get(
+        `${BASE_URL}/tickets/${EVENT_ID}/requests/${requestId}`,
+        {
+          headers: authHeaders,
+          tags: { name: 'request_status' },
+        }
+      );
+      requestPolls.add(1);
+
+      if (requestStatusRes.status === 404) {
+        continue;
+      }
+      if (requestStatusRes.status !== 200) {
+        reserveAsyncFailed.add(1);
+        reserveFailed.add(1);
+        reserveSuccessRate.add(false);
+        return;
+      }
+
+      const requestBody = parseJson(requestStatusRes);
+      if (!requestBody || !requestBody.status) {
+        reserveAsyncFailed.add(1);
+        reserveFailed.add(1);
+        reserveSuccessRate.add(false);
+        return;
+      }
+
+      if (requestBody.status === 'SUCCESS') {
+        requestWaitTrend.add(Date.now() - requestWaitStart);
+        reserveSuccess.add(1);
+        reserveSuccessRate.add(true);
+        return;
+      }
+      if (requestBody.status === 'FAILED' || requestBody.status === 'SOLD_OUT' || requestBody.status === 'ALREADY') {
+        requestWaitTrend.add(Date.now() - requestWaitStart);
+        reserveAsyncFailed.add(1);
+        reserveFailed.add(1);
+        reserveSuccessRate.add(false);
+        return;
+      }
+    }
+
+    requestWaitTrend.add(Date.now() - requestWaitStart);
+    reserveAsyncTimeout.add(1);
+    reserveFailed.add(1);
+    reserveSuccessRate.add(false);
     return;
   }
 

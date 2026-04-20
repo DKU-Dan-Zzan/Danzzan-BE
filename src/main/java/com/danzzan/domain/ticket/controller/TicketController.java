@@ -103,7 +103,7 @@ public class TicketController {
                     .status(TicketRequestStatus.ALREADY)
                     .build());
         }
-        // 이벤트 상태를 한 번만 조회해서 CLOSED/READY 모두 처리 (DB 1회)
+        // 이벤트 상태를 Redis 우선 조회해 CLOSED/READY 모두 처리
         TicketingStatus ticketingStatus = ticketService.getTicketingStatus(eventId);
         if (ticketingStatus == TicketingStatus.CLOSED) {
             return ResponseEntity.ok(TicketRequestResponseDTO.builder()

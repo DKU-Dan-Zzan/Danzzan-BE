@@ -92,13 +92,33 @@ public class TicketService {
     }
 
     public boolean hasTicket(Long userId, Long eventId) {
-        return ticketRepository.existsByUserIdAndEventId(userId, eventId);
+        String userKey = TicketRedisKeys.userKey(String.valueOf(eventId), String.valueOf(userId));
+        return Boolean.TRUE.equals(redisTemplate.hasKey(userKey));
     }
 
     public TicketingStatus getTicketingStatus(Long eventId) {
-        return eventRepository.findById(eventId)
+        String eventIdStr = String.valueOf(eventId);
+        TicketingStatus cached = parseStatus(redisTemplate.opsForValue().get(TicketRedisKeys.eventStatusKey(eventIdStr)));
+        if (cached != null) {
+            return cached;
+        }
+
+        TicketingStatus status = eventRepository.findById(eventId)
                 .orElseThrow(EventNotFoundException::new)
                 .getTicketingStatus();
+        redisTemplate.opsForValue().set(TicketRedisKeys.eventStatusKey(eventIdStr), status.name());
+        return status;
+    }
+
+    private TicketingStatus parseStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return TicketingStatus.valueOf(raw);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     // 내 티켓 목록 조회 (로그인 필요)

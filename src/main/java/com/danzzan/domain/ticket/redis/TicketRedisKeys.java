@@ -13,6 +13,11 @@ public final class TicketRedisKeys {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":stock";
     }
 
+    /** 이벤트 상태 캐시 키 (READY/OPEN/CLOSED) */
+    public static String eventStatusKey(String eventId) {
+        return PREFIX + ":" + keyPart(eventId, "eventId") + ":event-status";
+    }
+
     /** Lua claim 중복 방지 키 (claim 여부 저장) */
     public static String userKey(String eventId, String userId) {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":user:" + keyPart(userId, "userId");

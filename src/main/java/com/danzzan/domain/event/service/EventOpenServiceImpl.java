@@ -2,12 +2,16 @@ package com.danzzan.domain.event.service;
 
 import com.danzzan.domain.event.exception.EventNotFoundException;
 import com.danzzan.domain.event.model.entity.FestivalEvent;
+import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.event.repository.FestivalEventRepository;
+import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import com.danzzan.domain.ticket.service.TicketInitService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @Slf4j
@@ -16,6 +20,7 @@ public class EventOpenServiceImpl implements EventOpenService {
 
     private final FestivalEventRepository eventRepository;
     private final TicketInitService ticketInitService;
+    private final UserTicketRepository userTicketRepository;
 
     /**
      * 조건부 DB 업데이트 (WHERE ticketing_status = 'READY')로 멱등성을 보장합니다.
@@ -36,7 +41,15 @@ public class EventOpenServiceImpl implements EventOpenService {
 
         // DB 전환 성공한 경우에만 Redis 초기화
         ticketInitService.initStock(String.valueOf(eventId), (long) event.getTotalCapacity());
-        log.info("이벤트 OPEN 전환 완료 eventId={} stock={}", eventId, event.getTotalCapacity());
+        ticketInitService.setEventStatus(String.valueOf(eventId), TicketingStatus.OPEN);
+        List<Long> issuedUserIds = userTicketRepository.findUserIdsByEventId(eventId);
+        long synced = ticketInitService.syncIssuedUsers(String.valueOf(eventId), issuedUserIds);
+        log.info(
+                "이벤트 OPEN 전환 완료 eventId={} stock={} syncedUsers={}",
+                eventId,
+                event.getTotalCapacity(),
+                synced
+        );
         return true;
     }
 }

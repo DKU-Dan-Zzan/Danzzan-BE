@@ -1,7 +1,9 @@
 package com.danzzan.domain.ticket.service;
 
+import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.ticket.dto.AdminTicketInitResponseDTO;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
+import com.danzzan.domain.ticket.service.support.ClaimLuaProtocol;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
@@ -9,7 +11,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -81,6 +85,38 @@ public class TicketInitServiceImpl implements TicketInitService {
         String stockKey = TicketRedisKeys.stockKey(eventId);
         Boolean set = redisTemplate.opsForValue().setIfAbsent(stockKey, String.valueOf(stock));
         return Boolean.TRUE.equals(set);
+    }
+
+    @Override
+    public long syncIssuedUsers(String eventId, List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return 0L;
+        }
+
+        Map<String, String> userKeys = new LinkedHashMap<>(userIds.size());
+        for (Long userId : userIds) {
+            if (userId == null) {
+                continue;
+            }
+            userKeys.put(
+                    TicketRedisKeys.userKey(eventId, String.valueOf(userId)),
+                    ClaimLuaProtocol.USER_CLAIMED_VALUE
+            );
+        }
+
+        if (userKeys.isEmpty()) {
+            return 0L;
+        }
+        redisTemplate.opsForValue().multiSet(userKeys);
+        return userKeys.size();
+    }
+
+    @Override
+    public void setEventStatus(String eventId, TicketingStatus status) {
+        if (status == null) {
+            return;
+        }
+        redisTemplate.opsForValue().set(TicketRedisKeys.eventStatusKey(eventId), status.name());
     }
 
     private void unlinkBatch(List<String> batch) {

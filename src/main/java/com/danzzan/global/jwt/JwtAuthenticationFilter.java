@@ -65,13 +65,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            int tokenVersion = jwtTokenProvider.getTokenVersion(token);
-            User user = userRepository.findById(userId).orElse(null);
+            if (requiresTokenVersionValidation(request)) {
+                int tokenVersion = jwtTokenProvider.getTokenVersion(token);
+                User user = userRepository.findById(userId).orElse(null);
 
-            // tokenVersion 불일치(비밀번호 변경 등) → 401 반환 (프론트 갱신 트리거)
-            if (user == null || user.getTokenVersion() != tokenVersion) {
-                sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
-                return;
+                // tokenVersion 불일치(비밀번호 변경 등) → 401 반환 (프론트 갱신 트리거)
+                if (user == null || user.getTokenVersion() != tokenVersion) {
+                    sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
+                    return;
+                }
             }
 
             UsernamePasswordAuthenticationToken authentication =
@@ -101,5 +103,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write("{\"error\":\"" + message + "\",\"status\":401}");
+    }
+
+    private boolean requiresTokenVersionValidation(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path == null || !path.startsWith("/tickets/");
     }
 }

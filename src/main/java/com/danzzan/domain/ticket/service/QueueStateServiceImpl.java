@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -42,6 +43,9 @@ public class QueueStateServiceImpl implements QueueStateService {
 
     @Qualifier("admitOneWaitingUserScript")
     private final RedisScript<String> admitOneWaitingUserScript;
+
+    @Qualifier("admitNWaitingUsersScript")
+    private final RedisScript<List> admitNWaitingUsersScript;
 
     @Qualifier("expireReadyUsersScript")
     private final RedisScript<List> expireReadyUsersScript;
@@ -77,6 +81,29 @@ public class QueueStateServiceImpl implements QueueStateService {
             return false;
         }
         return true;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<String> admitWaitingUsers(String eventId, long readyUntilMs, int maxConcurrent, int batchCeiling) {
+        List<Object> raw = redisTemplate.execute(
+                admitNWaitingUsersScript,
+                List.of(
+                        TicketRedisKeys.queueKey(eventId),
+                        TicketRedisKeys.readyKey(eventId),
+                        TicketRedisKeys.activeKey(eventId),
+                        TicketRedisKeys.stockKey(eventId)
+                ),
+                TicketRedisKeys.queueUserPrefix(eventId),
+                String.valueOf(System.currentTimeMillis()),
+                String.valueOf(readyUntilMs),
+                String.valueOf(maxConcurrent),
+                String.valueOf(batchCeiling)
+        );
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return raw.stream().map(Object::toString).toList();
     }
 
     @Override
@@ -291,15 +318,9 @@ public class QueueStateServiceImpl implements QueueStateService {
         if (freedSlots <= 0 || !isEventOpen(eventId)) {
             return;
         }
-
-        int attempts = Math.min(freedSlots, EVENT_TRIGGER_BATCH_LIMIT);
-        for (int i = 0; i < attempts; i++) {
-            long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
-            boolean admitted = admitNextWaitingUser(eventId, readyUntilMs, maxConcurrent);
-            if (!admitted) {
-                return;
-            }
-        }
+        int ceiling = Math.min(freedSlots, EVENT_TRIGGER_BATCH_LIMIT);
+        long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
+        admitWaitingUsers(eventId, readyUntilMs, maxConcurrent, ceiling);
     }
 
     private boolean isEventOpen(String eventId) {

@@ -2,6 +2,8 @@ package com.danzzan.domain.ticket.service;
 
 import com.danzzan.domain.ticket.redis.QueueUserState;
 
+import java.util.List;
+
 public interface QueueStateService {
 
     /**
@@ -9,6 +11,12 @@ public interface QueueStateService {
      * @return true면 승격 성공, false면 승격할 사용자가 없거나 슬롯/재고가 없음
      */
     boolean admitNextWaitingUser(String eventId, long readyUntilMs, int maxConcurrent);
+
+    /**
+     * WAITING 선두 최대 batchCeiling명을 한 번의 Lua 호출로 READY 원자 승격합니다.
+     * @return 승격된 userId 목록 (빈 리스트 = 승격 없음)
+     */
+    List<String> admitWaitingUsers(String eventId, long readyUntilMs, int maxConcurrent, int batchCeiling);
 
     /**
      * Lua로 READY → ACTIVE 원자 전환.

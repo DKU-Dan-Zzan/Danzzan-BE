@@ -11,6 +11,7 @@ import com.danzzan.domain.ticket.exception.AlreadyReservedException;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.exception.ReserveProcessingException;
+import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
@@ -21,6 +22,7 @@ import com.danzzan.domain.ticket.service.TicketService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
+import com.danzzan.domain.ticket.service.model.QueueStatusSnapshot;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -120,10 +122,11 @@ public class TicketController {
         // 대기열 진입 — Lua로 dedup + INCR seq + ZADD + HSET state=WAITING 원자 처리
         queueService.enterQueue(eventIdStr, userIdStr);
 
-        // 현재 상태 조회 (스케줄러가 이미 READY 승격했을 수도 있음)
-        TicketRequestStatus status = ticketStatusService.getStatus(eventIdStr, userIdStr);
+        // 단일 Pipeline 스냅샷으로 상태 조회 (스케줄러가 이미 READY 승격했을 수도 있음)
+        QueueStatusSnapshot snap = ticketStatusService.fetchSnapshot(eventIdStr, userIdStr);
+        TicketRequestStatus status = resolveStatus(snap);
         ticketingMetrics.recordQueueEnter(status);
-        return ResponseEntity.ok(buildQueueEnterResponse(eventIdStr, userIdStr, status));
+        return ResponseEntity.ok(buildQueueEnterResponseFromSnapshot(snap, status));
     }
 
     @DeleteMapping("/{eventId}/queue/leave")
@@ -323,35 +326,84 @@ public class TicketController {
     }
 
     private TicketStatusResponseDTO buildStatusResponse(String eventId, String userId) {
-        TicketRequestStatus status = ticketStatusService.getStatus(eventId, userId);
-        boolean hideAdmissionDetails = status == TicketRequestStatus.PROCESSING || status == TicketRequestStatus.FAILED;
-        Long aheadCount = ticketStatusService.getAheadCount(eventId, userId);
+        QueueStatusSnapshot snap = ticketStatusService.fetchSnapshot(eventId, userId);
+        TicketRequestStatus status = resolveStatus(snap);
+        Long aheadCount = resolveAheadCount(snap, status);
         return TicketStatusResponseDTO.builder()
                 .status(status)
-                .queuePosition(status == TicketRequestStatus.WAITING
-                        ? ticketStatusService.getQueuePosition(eventId, userId)
+                .queuePosition(status == TicketRequestStatus.WAITING && snap.queueRank() != null
+                        ? snap.queueRank() + 1
                         : null)
-                .mySequence(ticketStatusService.getMySequence(eventId, userId))
+                .mySequence(parseLong(snap.seq()))
                 .aheadCount(aheadCount)
                 .estimatedWaitSeconds(ticketStatusService.getEstimatedWaitSeconds(aheadCount))
-                .readyUntil(hideAdmissionDetails ? null : ticketStatusService.getReadyUntil(eventId, userId))
-                .admissionState(hideAdmissionDetails ? null : ticketStatusService.getAdmissionState(eventId, userId))
+                .readyUntil("READY".equals(snap.state()) ? parseLong(snap.readyUntil()) : null)
+                .admissionState(resolveAdmissionState(snap.state()))
                 .build();
     }
 
-    private TicketRequestResponseDTO buildQueueEnterResponse(String eventId, String userId, TicketRequestStatus status) {
-        Long aheadCount = ticketStatusService.getAheadCount(eventId, userId);
+    private TicketRequestResponseDTO buildQueueEnterResponseFromSnapshot(QueueStatusSnapshot snap, TicketRequestStatus status) {
+        Long aheadCount = resolveAheadCount(snap, status);
         return TicketRequestResponseDTO.builder()
                 .status(status)
-                .queuePosition(status == TicketRequestStatus.WAITING
-                        ? ticketStatusService.getQueuePosition(eventId, userId)
+                .queuePosition(status == TicketRequestStatus.WAITING && snap.queueRank() != null
+                        ? snap.queueRank() + 1
                         : null)
-                .mySequence(ticketStatusService.getMySequence(eventId, userId))
+                .mySequence(parseLong(snap.seq()))
                 .aheadCount(aheadCount)
                 .estimatedWaitSeconds(ticketStatusService.getEstimatedWaitSeconds(aheadCount))
-                .readyUntil(ticketStatusService.getReadyUntil(eventId, userId))
-                .admissionState(ticketStatusService.getAdmissionState(eventId, userId))
+                .readyUntil("READY".equals(snap.state()) ? parseLong(snap.readyUntil()) : null)
+                .admissionState(resolveAdmissionState(snap.state()))
                 .build();
+    }
+
+    private TicketRequestStatus resolveStatus(QueueStatusSnapshot snap) {
+        String claimStatus = snap.claimStatus();
+        if (claimStatus != null && !claimStatus.isBlank()) {
+            try {
+                TicketRequestStatus s = TicketRequestStatus.valueOf(claimStatus);
+                if (s == TicketRequestStatus.SUCCESS
+                        || s == TicketRequestStatus.SOLD_OUT
+                        || s == TicketRequestStatus.ALREADY) {
+                    return s;
+                }
+            } catch (IllegalArgumentException ignored) {}
+        }
+        String state = snap.state();
+        if (state == null) return TicketRequestStatus.NONE;
+        return switch (state) {
+            case "WAITING" -> (snap.stock() == null || snap.stock() <= 0)
+                    ? TicketRequestStatus.SOLD_OUT
+                    : TicketRequestStatus.WAITING;
+            case "READY", "ACTIVE" -> TicketRequestStatus.ADMITTED;
+            case "DONE"            -> TicketRequestStatus.SUCCESS;
+            default                -> TicketRequestStatus.NONE; // EXPIRED, CANCELLED
+        };
+    }
+
+    private Long resolveAheadCount(QueueStatusSnapshot snap, TicketRequestStatus status) {
+        if (status == TicketRequestStatus.WAITING) {
+            return snap.queueRank() != null ? Math.max(snap.queueRank(), 0L) : null;
+        }
+        if (status == TicketRequestStatus.ADMITTED) {
+            return 0L;
+        }
+        return null;
+    }
+
+    private QueueUserState resolveAdmissionState(String state) {
+        if ("READY".equals(state))  return QueueUserState.READY;
+        if ("ACTIVE".equals(state)) return QueueUserState.ACTIVE;
+        return null;
+    }
+
+    private Long parseLong(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private void markDoneAfterPersistence(String eventId, String userId) {

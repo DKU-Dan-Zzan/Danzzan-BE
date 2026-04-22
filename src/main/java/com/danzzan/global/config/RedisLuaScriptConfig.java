@@ -59,6 +59,14 @@ public class RedisLuaScriptConfig {
         return script;
     }
 
+    @Bean("admitNWaitingUsersScript")
+    public RedisScript<List> admitNWaitingUsersScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/admit_n_waiting_users.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
+
     @Bean("expireReadyUsersScript")
     public RedisScript<List> expireReadyUsersScript() {
         DefaultRedisScript<List> script = new DefaultRedisScript<>();

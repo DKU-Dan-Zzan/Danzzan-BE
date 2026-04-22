@@ -3,11 +3,15 @@ package com.danzzan.domain.ticket.service;
 import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
+import com.danzzan.domain.ticket.service.model.QueueStatusSnapshot;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.StringRedisConnection;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -28,6 +32,39 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
     @Value("${app.ticketing.gate-ttl-seconds:180}")
     private long readyTtlSeconds;
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public QueueStatusSnapshot fetchSnapshot(String eventId, String userId) {
+        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+        String hashKey   = TicketRedisKeys.queueUserHashKey(eventId, userId);
+        String queueKey  = TicketRedisKeys.queueKey(eventId);
+        String stockKey  = TicketRedisKeys.stockKey(eventId);
+
+        // Pipeline: 4개 커맨드를 단일 RTT로 전송
+        List<Object> results = redisTemplate.executePipelined((RedisCallback<Object>) conn -> {
+            StringRedisConnection c = (StringRedisConnection) conn;
+            c.get(statusKey);                               // [0] claimStatus
+            c.hMGet(hashKey, "state", "seq", "readyUntil"); // [1] List<String>
+            c.zRank(queueKey, userId);                      // [2] queueRank (Long, 0-based)
+            c.get(stockKey);                                // [3] stock
+            return null;
+        });
+
+        String claimStatus = (String) results.get(0);
+        List<String> hashFields = (List<String>) results.get(1);
+        Long rank      = (Long) results.get(2);
+        String stockStr = (String) results.get(3);
+
+        return new QueueStatusSnapshot(
+                claimStatus,
+                hashFields.get(0),  // state
+                hashFields.get(1),  // seq
+                hashFields.get(2),  // readyUntil
+                rank,
+                parseLong(stockStr)
+        );
+    }
 
     @Override
     public TicketRequestStatus getStatus(String eventId, String userId) {
@@ -180,6 +217,17 @@ public class TicketStatusServiceImpl implements TicketStatusService {
         }
         try {
             return Long.parseLong(raw.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Long parseLong(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
         } catch (NumberFormatException e) {
             return null;
         }

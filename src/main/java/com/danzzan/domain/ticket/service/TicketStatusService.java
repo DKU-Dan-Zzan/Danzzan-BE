@@ -2,8 +2,15 @@ package com.danzzan.domain.ticket.service;
 
 import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
+import com.danzzan.domain.ticket.service.model.QueueStatusSnapshot;
 
 public interface TicketStatusService {
+
+    /**
+     * Redis Pipeline으로 단일 RTT에 유저 대기열 상태 전체를 수집합니다.
+     * status 폴링과 queue/enter 응답 빌드에 사용하세요.
+     */
+    QueueStatusSnapshot fetchSnapshot(String eventId, String userId);
 
     TicketRequestStatus getStatus(String eventId, String userId);
 

@@ -97,14 +97,10 @@ public class TicketAdmissionScheduler {
             } catch (NumberFormatException ignored) {}
         }
 
-        // 3. WAITING → READY 승격
+        // 3. WAITING → READY 승격 (단일 Lua 호출로 최대 BATCH_CEILING명 일괄 처리)
         long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
-        for (int i = 0; i < BATCH_CEILING; i++) {
-            boolean admitted = queueStateService.admitNextWaitingUser(eventId, readyUntilMs, maxConcurrent);
-            if (!admitted) {
-                return;
-            }
-            ticketingMetrics.incrementAdmission(eventId);
-        }
+        List<String> admitted = queueStateService.admitWaitingUsers(
+                eventId, readyUntilMs, maxConcurrent, (int) BATCH_CEILING);
+        admitted.forEach(uid -> ticketingMetrics.incrementAdmission(eventId));
     }
 }

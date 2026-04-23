@@ -38,6 +38,9 @@ class TicketIssueCompensationServiceTest {
     private TicketStatusService ticketStatusService;
 
     @Mock
+    private TicketIssueRequestStatusCacheService ticketIssueRequestStatusCacheService;
+
+    @Mock
     private TicketIssueCompensationMetrics ticketIssueCompensationMetrics;
 
     private TicketIssueCompensationService service;
@@ -49,6 +52,7 @@ class TicketIssueCompensationServiceTest {
                 ticketIssueCompensationLogRepository,
                 claimService,
                 ticketStatusService,
+                ticketIssueRequestStatusCacheService,
                 ticketIssueCompensationMetrics
         );
     }
@@ -72,6 +76,8 @@ class TicketIssueCompensationServiceTest {
         assertThat(request.isCompensationPending()).isFalse();
         assertThat(request.getCompletedAt()).isNotNull();
         verify(ticketStatusService).setFailed(eq("10"), eq("1"), eq(300L));
+        verify(ticketIssueRequestStatusCacheService)
+                .setFailed(eq(10L), eq(1L), eq("req-1"), eq("RESERVE_PROCESSING_FAILED"), anyLong());
         verify(ticketIssueCompensationMetrics).incrementSuccess();
         verify(ticketIssueCompensationLogRepository).save(any());
     }
@@ -136,6 +142,8 @@ class TicketIssueCompensationServiceTest {
         assertThat(pending.isCompensated()).isTrue();
         assertThat(pending.isCompensationPending()).isFalse();
         verify(ticketStatusService).setFailed(eq("11"), eq("2"), eq(300L));
+        verify(ticketIssueRequestStatusCacheService)
+                .setFailed(eq(11L), eq(2L), eq("req-2"), eq("RESERVE_PROCESSING_FAILED"), anyLong());
         verify(ticketIssueCompensationMetrics).incrementSuccess();
     }
 }

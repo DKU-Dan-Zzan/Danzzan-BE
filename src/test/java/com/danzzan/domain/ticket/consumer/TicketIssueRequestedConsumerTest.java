@@ -6,6 +6,7 @@ import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import com.danzzan.domain.ticket.service.TicketIssueCompensationService;
 import com.danzzan.domain.ticket.service.TicketIssueConsumerService;
+import com.danzzan.domain.ticket.service.TicketIssueRequestStatusCacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,9 @@ class TicketIssueRequestedConsumerTest {
     private TicketIssueCompensationService ticketIssueCompensationService;
 
     @Mock
+    private TicketIssueRequestStatusCacheService ticketIssueRequestStatusCacheService;
+
+    @Mock
     private StringRedisTemplate redisTemplate;
 
     @Mock
@@ -56,6 +60,7 @@ class TicketIssueRequestedConsumerTest {
                 ticketIssueConsumerService,
                 queueStateService,
                 ticketIssueCompensationService,
+                ticketIssueRequestStatusCacheService,
                 redisTemplate
         );
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
@@ -75,6 +80,7 @@ class TicketIssueRequestedConsumerTest {
         consumer.consume(record, acknowledgment);
 
         verify(valueOperations).set(eq("ticket:10:status:1"), eq(TicketRequestStatus.SUCCESS.name()));
+        verify(ticketIssueRequestStatusCacheService).setSuccess(eq(10L), eq(1L), eq("req-1"), any(Long.class));
         verify(queueStateService).markDone(eq("10"), eq("1"));
         verify(acknowledgment).acknowledge();
     }

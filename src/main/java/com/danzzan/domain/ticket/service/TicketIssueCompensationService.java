@@ -30,6 +30,7 @@ public class TicketIssueCompensationService {
     private final TicketIssueCompensationLogRepository ticketIssueCompensationLogRepository;
     private final ClaimService claimService;
     private final TicketStatusService ticketStatusService;
+    private final TicketIssueRequestStatusCacheService ticketIssueRequestStatusCacheService;
     private final TicketIssueCompensationMetrics ticketIssueCompensationMetrics;
 
     @Value("${app.ticketing.async.reserve.failed-ttl-seconds:300}")
@@ -81,6 +82,13 @@ public class TicketIssueCompensationService {
             LocalDateTime now = LocalDateTime.now();
             request.markCompensatedFailure(PROCESSING_FAILED_CODE, trimReason(errorReason), now);
             ticketStatusService.setFailed(eventId, userId, failedTtlSeconds);
+            ticketIssueRequestStatusCacheService.setFailed(
+                    request.getEventId(),
+                    request.getUserId(),
+                    request.getRequestId(),
+                    PROCESSING_FAILED_CODE,
+                    now.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            );
             upsertCompensationLog(request, ROLLBACK_RESULT_SUCCESS, currentAttempt, errorReason);
             ticketIssueCompensationMetrics.incrementSuccess();
             log.info(

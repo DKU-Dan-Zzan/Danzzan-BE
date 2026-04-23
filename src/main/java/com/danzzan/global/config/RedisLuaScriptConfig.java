@@ -75,4 +75,12 @@ public class RedisLuaScriptConfig {
         return script;
     }
 
+    @Bean("queueStatusSnapshotScript")
+    public RedisScript<List> queueStatusSnapshotScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/queue_status_snapshot.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
+
 }

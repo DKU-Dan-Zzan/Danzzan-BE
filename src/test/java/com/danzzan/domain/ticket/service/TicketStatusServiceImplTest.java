@@ -8,17 +8,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.HashOperations;
-import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.Mockito.lenient;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +42,9 @@ class TicketStatusServiceImplTest {
     @Mock
     private HashOperations<String, Object, Object> hashOperations;
 
+    @Mock
+    private RedisScript<List> queueStatusSnapshotScript;
+
     private TicketStatusServiceImpl ticketStatusService;
 
     @BeforeEach
@@ -47,7 +52,8 @@ class TicketStatusServiceImplTest {
         ticketStatusService = new TicketStatusServiceImpl(
                 redisTemplate,
                 queueService,
-                queueStateService
+                queueStateService,
+                queueStatusSnapshotScript
         );
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(redisTemplate.opsForHash()).thenReturn(hashOperations);
@@ -55,8 +61,8 @@ class TicketStatusServiceImplTest {
 
     @Test
     void getQueueStatusSnapshot_WAITING상태면_순번과_앞대기인원을_계산한다() {
-        when(redisTemplate.executePipelined(org.mockito.ArgumentMatchers.<RedisCallback<Object>>any()))
-                .thenReturn(List.of("", "100", "500", List.of("WAITING", "105", "")));
+        when(redisTemplate.execute(eq(queueStatusSnapshotScript), anyList()))
+                .thenReturn(List.of("", "WAITING", "105", "", "", "100", "500"));
 
         TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot("2", "11");
 
@@ -70,8 +76,8 @@ class TicketStatusServiceImplTest {
 
     @Test
     void getQueueStatusSnapshot_ACTIVE상태면_activeUntil을_반환한다() {
-        when(redisTemplate.executePipelined(org.mockito.ArgumentMatchers.<RedisCallback<Object>>any()))
-                .thenReturn(List.of("", "100", "500", List.of("ACTIVE", "105", "", "1770000000000")));
+        when(redisTemplate.execute(eq(queueStatusSnapshotScript), anyList()))
+                .thenReturn(List.of("", "ACTIVE", "105", "", "1770000000000", "", ""));
 
         TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot("2", "11");
 

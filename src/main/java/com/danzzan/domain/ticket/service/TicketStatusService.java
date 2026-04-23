@@ -5,6 +5,17 @@ import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 
 public interface TicketStatusService {
 
+    record QueueStatusSnapshot(
+            TicketRequestStatus status,
+            Long queuePosition,
+            Long mySequence,
+            Long aheadCount,
+            Long readyUntil,
+            QueueUserState admissionState
+    ) {}
+
+    QueueStatusSnapshot getQueueStatusSnapshot(String eventId, String userId);
+
     TicketRequestStatus getStatus(String eventId, String userId);
 
     Long getQueuePosition(String eventId, String userId);

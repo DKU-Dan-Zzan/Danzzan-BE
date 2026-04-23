@@ -30,8 +30,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TicketAdmissionScheduler {
 
-    private static final long BATCH_CEILING = 100L;
-
     private final QueueStateService queueStateService;
     private final FestivalEventRepository eventRepository;
     private final StringRedisTemplate redisTemplate;
@@ -43,7 +41,10 @@ public class TicketAdmissionScheduler {
     @Value("${app.ticketing.gate-ttl-seconds:180}")
     private long readyTtlSeconds;
 
-    @Scheduled(fixedDelay = 1000)
+    @Value("${app.ticketing.admission.batch-ceiling:100}")
+    private int batchCeiling;
+
+    @Scheduled(fixedDelayString = "${app.ticketing.admission.fixed-delay-ms:1000}")
     public void admitFromQueue() {
         List<FestivalEvent> openEvents = eventRepository.findAllByTicketingStatus(TicketingStatus.OPEN);
         for (FestivalEvent event : openEvents) {
@@ -99,11 +100,8 @@ public class TicketAdmissionScheduler {
 
         // 3. WAITING → READY 승격
         long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
-        for (int i = 0; i < BATCH_CEILING; i++) {
-            boolean admitted = queueStateService.admitNextWaitingUser(eventId, readyUntilMs, maxConcurrent);
-            if (!admitted) {
-                return;
-            }
+        int admittedCount = queueStateService.admitWaitingUsers(eventId, readyUntilMs, maxConcurrent, batchCeiling);
+        for (int i = 0; i < admittedCount; i++) {
             ticketingMetrics.incrementAdmission(eventId);
         }
     }

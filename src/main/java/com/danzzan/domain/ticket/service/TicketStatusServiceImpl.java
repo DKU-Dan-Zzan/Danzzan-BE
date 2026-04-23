@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -28,6 +29,56 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
     @Value("${app.ticketing.gate-ttl-seconds:180}")
     private long readyTtlSeconds;
+
+    @Override
+    public QueueStatusSnapshot getQueueStatusSnapshot(String eventId, String userId) {
+        List<String> keyValues = redisTemplate.opsForValue().multiGet(
+                List.of(
+                        TicketRedisKeys.statusKey(eventId, userId),
+                        TicketRedisKeys.admittedSeqKey(eventId),
+                        TicketRedisKeys.stockKey(eventId)
+                )
+        );
+        List<Object> hashValues = redisTemplate.opsForHash().multiGet(
+                TicketRedisKeys.queueUserHashKey(eventId, userId),
+                List.of("state", "seq", "readyUntil")
+        );
+
+        String claimRaw = getListString(keyValues, 0);
+        long admittedSeq = parseLongOrZero(getListString(keyValues, 1));
+        String stockRaw = getListString(keyValues, 2);
+        String stateRaw = getListString(hashValues, 0);
+        Long mySequence = parseLong(getListString(hashValues, 1));
+        Long readyUntilRaw = parseLong(getListString(hashValues, 2));
+
+        QueueUserState state = parseQueueState(stateRaw);
+        TicketRequestStatus status = resolveStatus(claimRaw, state, stockRaw);
+
+        Long queuePosition = null;
+        Long aheadCount = null;
+        if (state == QueueUserState.WAITING && mySequence != null) {
+            long position = mySequence - admittedSeq;
+            if (position > 0) {
+                queuePosition = position;
+                aheadCount = Math.max(queuePosition - 1L, 0L);
+            }
+        } else if (state == QueueUserState.READY || state == QueueUserState.ACTIVE) {
+            aheadCount = 0L;
+        }
+
+        QueueUserState admissionState =
+                (state == QueueUserState.READY || state == QueueUserState.ACTIVE) ? state : null;
+        Long readyUntil = state == QueueUserState.READY ? readyUntilRaw : null;
+
+        return new QueueStatusSnapshot(
+                status,
+                queuePosition,
+                mySequence,
+                aheadCount,
+                readyUntil,
+                admissionState
+        );
+    }
 
     @Override
     public TicketRequestStatus getStatus(String eventId, String userId) {
@@ -157,6 +208,10 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
     private boolean isStockExhausted(String eventId) {
         String stock = redisTemplate.opsForValue().get(TicketRedisKeys.stockKey(eventId));
+        return isStockExhaustedValue(stock);
+    }
+
+    private boolean isStockExhaustedValue(String stock) {
         if (stock == null) {
             // stock 키 없음 = 미초기화. admit_one_waiting_user.lua도 동일하게 승격 거부하므로
             // WAITING 유저가 영원히 진행 불가 → SOLD_OUT으로 표시해 혼란 방지
@@ -166,6 +221,74 @@ public class TicketStatusServiceImpl implements TicketStatusService {
             return Long.parseLong(stock) <= 0;
         } catch (NumberFormatException e) {
             return true;
+        }
+    }
+
+    private TicketRequestStatus resolveStatus(String claimRaw, QueueUserState state, String stockRaw) {
+        TicketRequestStatus claimStatus = parseStatus(claimRaw);
+        if (claimStatus == TicketRequestStatus.SUCCESS
+                || claimStatus == TicketRequestStatus.SOLD_OUT
+                || claimStatus == TicketRequestStatus.ALREADY
+                || claimStatus == TicketRequestStatus.PROCESSING
+                || claimStatus == TicketRequestStatus.FAILED) {
+            return claimStatus;
+        }
+        if (state == null) {
+            return TicketRequestStatus.NONE;
+        }
+        return switch (state) {
+            case WAITING -> isStockExhaustedValue(stockRaw)
+                    ? TicketRequestStatus.SOLD_OUT
+                    : TicketRequestStatus.WAITING;
+            case READY, ACTIVE -> TicketRequestStatus.ADMITTED;
+            case DONE -> TicketRequestStatus.SUCCESS;
+            case EXPIRED, CANCELLED -> TicketRequestStatus.NONE;
+        };
+    }
+
+    private TicketRequestStatus parseStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return TicketRequestStatus.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private QueueUserState parseQueueState(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return QueueUserState.valueOf(raw);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private String getListString(List<?> list, int index) {
+        if (list == null || index < 0 || index >= list.size()) {
+            return null;
+        }
+        Object value = list.get(index);
+        return value == null ? null : value.toString();
+    }
+
+    private long parseLongOrZero(String raw) {
+        Long parsed = parseLong(raw);
+        return parsed == null ? 0L : parsed;
+    }
+
+    private Long parseLong(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(raw);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

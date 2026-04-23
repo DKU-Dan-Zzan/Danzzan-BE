@@ -41,7 +41,7 @@ public class QueueStateServiceImpl implements QueueStateService {
     private final RedisScript<Long> readyToActiveScript;
 
     @Qualifier("admitOneWaitingUserScript")
-    private final RedisScript<String> admitOneWaitingUserScript;
+    private final RedisScript<Long> admitOneWaitingUserScript;
 
     @Qualifier("expireReadyUsersScript")
     private final RedisScript<List> expireReadyUsersScript;
@@ -58,25 +58,27 @@ public class QueueStateServiceImpl implements QueueStateService {
     @Value("${app.ticketing.gate-ttl-seconds:180}")
     private long readyTtlSeconds;
 
+    @Value("${app.ticketing.expire.batch-size:200}")
+    private int expireBatchSize;
+
     @Override
-    public boolean admitNextWaitingUser(String eventId, long readyUntilMs, int maxConcurrent) {
-        String promotedUserId = redisTemplate.execute(
+    public int admitWaitingUsers(String eventId, long readyUntilMs, int maxConcurrent, int batchLimit) {
+        Long promotedCount = redisTemplate.execute(
                 admitOneWaitingUserScript,
                 List.of(
                         TicketRedisKeys.queueKey(eventId),
                         TicketRedisKeys.readyKey(eventId),
                         TicketRedisKeys.activeKey(eventId),
-                        TicketRedisKeys.stockKey(eventId)
+                        TicketRedisKeys.stockKey(eventId),
+                        TicketRedisKeys.admittedSeqKey(eventId)
                 ),
                 TicketRedisKeys.queueUserPrefix(eventId),
                 String.valueOf(System.currentTimeMillis()),
                 String.valueOf(readyUntilMs),
-                String.valueOf(maxConcurrent)
+                String.valueOf(maxConcurrent),
+                String.valueOf(Math.max(1, batchLimit))
         );
-        if (promotedUserId == null || promotedUserId.isBlank()) {
-            return false;
-        }
-        return true;
+        return promotedCount == null ? 0 : Math.max(0, promotedCount.intValue());
     }
 
     @Override
@@ -114,7 +116,6 @@ public class QueueStateServiceImpl implements QueueStateService {
     public void releaseActive(String eventId, String userId) {
         try {
             redisTemplate.opsForZSet().remove(TicketRedisKeys.activeKey(eventId), userId);
-            backfillFreedSlotsIfOpen(eventId, 1);
         } catch (Exception e) {
             log.error("releaseActive 실패 eventId={} userId={}", eventId, userId, e);
         }
@@ -123,12 +124,14 @@ public class QueueStateServiceImpl implements QueueStateService {
     @Override
     public int expireActiveUsers(String eventId) {
         String nowMs = String.valueOf(System.currentTimeMillis());
+        String batchLimit = String.valueOf(Math.max(1, expireBatchSize));
         List<Object> expiredIds = redisTemplate.execute(
                 expireActiveUsersScript,
                 List.of(TicketRedisKeys.activeKey(eventId)),
                 TicketRedisKeys.queueUserPrefix(eventId),
                 TicketRedisKeys.dedupKeyPrefix(eventId),
-                nowMs
+                nowMs,
+                batchLimit
         );
         if (expiredIds == null || expiredIds.isEmpty()) {
             return 0;
@@ -144,12 +147,14 @@ public class QueueStateServiceImpl implements QueueStateService {
     @Override
     public int expireReadyUsers(String eventId) {
         String nowMs = String.valueOf(System.currentTimeMillis());
+        String batchLimit = String.valueOf(Math.max(1, expireBatchSize));
         List<Object> expiredIds = redisTemplate.execute(
                 expireReadyUsersScript,
                 List.of(TicketRedisKeys.readyKey(eventId)),
                 TicketRedisKeys.queueUserPrefix(eventId),
                 TicketRedisKeys.dedupKeyPrefix(eventId),
-                nowMs
+                nowMs,
+                batchLimit
         );
         if (expiredIds == null || expiredIds.isEmpty()) {
             return 0;
@@ -293,13 +298,8 @@ public class QueueStateServiceImpl implements QueueStateService {
         }
 
         int attempts = Math.min(freedSlots, EVENT_TRIGGER_BATCH_LIMIT);
-        for (int i = 0; i < attempts; i++) {
-            long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
-            boolean admitted = admitNextWaitingUser(eventId, readyUntilMs, maxConcurrent);
-            if (!admitted) {
-                return;
-            }
-        }
+        long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
+        admitWaitingUsers(eventId, readyUntilMs, maxConcurrent, attempts);
     }
 
     private boolean isEventOpen(String eventId) {

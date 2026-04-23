@@ -47,6 +47,7 @@ class TicketAdmissionSchedulerTest {
         sut = new TicketAdmissionScheduler(queueStateService, eventRepo, redisTemplate, ticketingMetrics);
         ReflectionTestUtils.setField(sut, "maxConcurrent", 100);
         ReflectionTestUtils.setField(sut, "readyTtlSeconds", 180L);
+        ReflectionTestUtils.setField(sut, "batchCeiling", 100);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
         lenient().when(zSetOperations.zCard(anyString())).thenReturn(0L);
@@ -65,11 +66,12 @@ class TicketAdmissionSchedulerTest {
                 .thenReturn(List.of(event));
         when(queueStateService.expireReadyUsers(EVENT_ID)).thenReturn(0);
         when(queueStateService.expireActiveUsers(EVENT_ID)).thenReturn(0);
-        when(queueStateService.admitNextWaitingUser(eq(EVENT_ID), anyLong(), eq(100))).thenReturn(false);
+        when(queueStateService.admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(100))).thenReturn(0);
 
         sut.admitFromQueue();
 
-        verify(queueStateService).admitNextWaitingUser(eq(EVENT_ID), anyLong(), eq(100));
+        verify(queueStateService).admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(100));
+        verify(ticketingMetrics, never()).incrementAdmission(anyString());
     }
 
     @Test
@@ -79,26 +81,42 @@ class TicketAdmissionSchedulerTest {
                 .thenReturn(List.of(event));
         when(queueStateService.expireReadyUsers(EVENT_ID)).thenReturn(0);
         when(queueStateService.expireActiveUsers(EVENT_ID)).thenReturn(0);
-        when(queueStateService.admitNextWaitingUser(eq(EVENT_ID), anyLong(), eq(100))).thenReturn(true);
+        when(queueStateService.admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(100))).thenReturn(100);
 
         sut.admitFromQueue();
 
-        verify(queueStateService, times(100)).admitNextWaitingUser(eq(EVENT_ID), anyLong(), eq(100));
+        verify(queueStateService).admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(100));
+        verify(ticketingMetrics, times(100)).incrementAdmission(EVENT_ID);
     }
 
     @Test
-    void 중간에_승격대상이_없어지면_반복을_멈춘다() {
+    void 배치승격_반환개수만큼_메트릭을_증가시킨다() {
         FestivalEvent event = openEvent();
         when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
                 .thenReturn(List.of(event));
         when(queueStateService.expireReadyUsers(EVENT_ID)).thenReturn(0);
         when(queueStateService.expireActiveUsers(EVENT_ID)).thenReturn(0);
-        when(queueStateService.admitNextWaitingUser(eq(EVENT_ID), anyLong(), eq(100)))
-                .thenReturn(true, true, false);
+        when(queueStateService.admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(100))).thenReturn(3);
 
         sut.admitFromQueue();
 
-        verify(queueStateService, times(3)).admitNextWaitingUser(eq(EVENT_ID), anyLong(), eq(100));
+        verify(queueStateService).admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(100));
+        verify(ticketingMetrics, times(3)).incrementAdmission(EVENT_ID);
+    }
+
+    @Test
+    void 배치_상한_설정값을_따른다() {
+        FestivalEvent event = openEvent();
+        ReflectionTestUtils.setField(sut, "batchCeiling", 7);
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
+                .thenReturn(List.of(event));
+        when(queueStateService.expireReadyUsers(EVENT_ID)).thenReturn(0);
+        when(queueStateService.expireActiveUsers(EVENT_ID)).thenReturn(0);
+        when(queueStateService.admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(7))).thenReturn(7);
+
+        sut.admitFromQueue();
+
+        verify(queueStateService).admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(7));
     }
 
     @Test
@@ -108,7 +126,7 @@ class TicketAdmissionSchedulerTest {
                 .thenReturn(List.of(event));
         when(queueStateService.expireReadyUsers(EVENT_ID)).thenReturn(3);
         when(queueStateService.expireActiveUsers(EVENT_ID)).thenReturn(2);
-        when(queueStateService.admitNextWaitingUser(eq(EVENT_ID), anyLong(), eq(100))).thenReturn(false);
+        when(queueStateService.admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(100))).thenReturn(0);
 
         sut.admitFromQueue();
 

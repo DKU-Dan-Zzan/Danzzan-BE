@@ -6,7 +6,6 @@ import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.exception.ReserveProcessingException;
-import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.ticket.model.entity.TicketIssueRequestStatus;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.metrics.TicketingMetrics;
@@ -78,28 +77,21 @@ class TicketControllerTest {
 
     @Test
     void enterQueue_대기중이면_queuePosition을_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.WAITING);
-        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
-        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
-        when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
-        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(5L);
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.WAITING, 5L, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("WAITING"))
-                .andExpect(jsonPath("$.queuePosition").value(5))
-                .andExpect(jsonPath("$.remaining").doesNotExist());
+                .andExpect(jsonPath("$.queuePosition").doesNotExist())
+                .andExpect(jsonPath("$.requestId").doesNotExist())
+                .andExpect(jsonPath("$.acceptedAt").doesNotExist());
     }
 
     @Test
     void enterQueue_WAITING이고_queuePosition_없으면_필드를_생략한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.WAITING);
-        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
-        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
-        when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
-        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(null);
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.WAITING, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -109,60 +101,64 @@ class TicketControllerTest {
 
     @Test
     void enterQueue_READY이면_ADMITTED를_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.ADMITTED);
-        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
-        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
-        when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.ADMITTED, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ADMITTED"))
                 .andExpect(jsonPath("$.queuePosition").doesNotExist());
-
-        verify(ticketStatusService, never()).getQueuePosition(any(), any());
     }
 
     @Test
-    void enterQueue_이미_SUCCESS이면_큐_진입_없이_즉시_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.SUCCESS);
+    void enterQueue_SUCCESS를_반환할_수_있다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.SUCCESS, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUCCESS"));
-
-        verify(queueService, never()).enterQueue(any(), any());
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
     }
 
     @Test
-    void enterQueue_이미_ALREADY이면_큐_진입_없이_즉시_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.ALREADY);
+    void enterQueue_ALREADY를_반환할_수_있다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.ALREADY, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("ALREADY"));
-
-        verify(queueService, never()).enterQueue(any(), any());
+                .andExpect(jsonPath("$.status").value("ALREADY"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
     }
 
     @Test
-    void enterQueue_기존상태가_FAILED이면_processing상태를_정리하고_재진입한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.FAILED, TicketRequestStatus.WAITING);
-        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
-        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
-        when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
-        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(7L);
+    void enterQueue_SOLD_OUT을_반환할_수_있다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.SOLD_OUT, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("WAITING"))
-                .andExpect(jsonPath("$.queuePosition").value(7));
+                .andExpect(jsonPath("$.status").value("SOLD_OUT"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
+    }
 
-        verify(ticketStatusService).clearProcessing(eq("10"), eq("1"));
-        verify(queueService).enterQueue(eq("10"), eq("1"));
+    @Test
+    void enterQueue_PROCESSING이면_requestId와_acceptedAt을_포함한다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(
+                        TicketRequestStatus.PROCESSING,
+                        null,
+                        "req-123",
+                        1775917200000L
+                ));
+
+        mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-123"))
+                .andExpect(jsonPath("$.acceptedAt").value(1775917200000L))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
     }
 
     // ── POST /activate ────────────────────────────────────────────────────────
@@ -430,10 +426,15 @@ class TicketControllerTest {
 
     @Test
     void getQueueStatus_WAITING이면_queuePosition을_포함한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.WAITING);
-        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(3L);
-        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(12L);
-        when(ticketStatusService.getAheadCount(eq("10"), eq("1"))).thenReturn(2L);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.WAITING,
+                        3L,
+                        12L,
+                        2L,
+                        null,
+                        null
+                ));
         when(ticketStatusService.getEstimatedWaitSeconds(eq(2L))).thenReturn(180L);
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
@@ -447,7 +448,15 @@ class TicketControllerTest {
 
     @Test
     void getQueueStatus_ALREADY이면_queuePosition을_생략하고_getQueuePosition을_호출하지_않는다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.ALREADY);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.ALREADY,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ));
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -459,9 +468,15 @@ class TicketControllerTest {
 
     @Test
     void getQueueStatus_READY이면_readyUntil과_admissionState를_포함한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.ADMITTED);
-        when(ticketStatusService.getReadyUntil(eq("10"), eq("1"))).thenReturn(1773486180000L);
-        when(ticketStatusService.getAdmissionState(eq("10"), eq("1"))).thenReturn(QueueUserState.READY);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.ADMITTED,
+                        null,
+                        null,
+                        0L,
+                        1773486180000L,
+                        QueueUserState.READY
+                ));
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -472,7 +487,15 @@ class TicketControllerTest {
 
     @Test
     void getQueueStatus_PROCESSING이면_readyUntil과_admissionState를_숨긴다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.PROCESSING);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.PROCESSING,
+                        null,
+                        null,
+                        null,
+                        1773486180000L,
+                        QueueUserState.READY
+                ));
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -484,7 +507,15 @@ class TicketControllerTest {
 
     @Test
     void getQueueStatus_FAILED이면_readyUntil과_admissionState를_숨긴다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.FAILED);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.FAILED,
+                        null,
+                        null,
+                        null,
+                        1773486180000L,
+                        QueueUserState.READY
+                ));
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -557,4 +588,5 @@ class TicketControllerTest {
                 .build();
         return new ResponseReserveTicketDto(queueNumber, mockTicket);
     }
+
 }

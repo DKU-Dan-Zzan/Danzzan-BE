@@ -96,6 +96,26 @@ public class TicketService {
         return Boolean.TRUE.equals(redisTemplate.hasKey(userKey));
     }
 
+    /**
+     * queue_enter 경로 최적화를 위해 user 티켓 보유 여부와 event 상태를 Redis multiGet 1회로 조회한다.
+     */
+    public QueueEnterEligibility getQueueEnterEligibility(Long userId, Long eventId) {
+        String eventIdStr = String.valueOf(eventId);
+        String userIdStr = String.valueOf(userId);
+        List<String> values = redisTemplate.opsForValue().multiGet(List.of(
+                TicketRedisKeys.userKey(eventIdStr, userIdStr),
+                TicketRedisKeys.eventStatusKey(eventIdStr)
+        ));
+        String userTicketValue = values != null && values.size() > 0 ? values.get(0) : null;
+        String eventStatusValue = values != null && values.size() > 1 ? values.get(1) : null;
+        return new QueueEnterEligibility(userTicketValue != null, parseStatus(eventStatusValue));
+    }
+
+    public TicketingStatus getTicketingStatusFromCache(Long eventId) {
+        String eventIdStr = String.valueOf(eventId);
+        return parseStatus(redisTemplate.opsForValue().get(TicketRedisKeys.eventStatusKey(eventIdStr)));
+    }
+
     public TicketingStatus getTicketingStatus(Long eventId) {
         String eventIdStr = String.valueOf(eventId);
         TicketingStatus cached = parseStatus(redisTemplate.opsForValue().get(TicketRedisKeys.eventStatusKey(eventIdStr)));
@@ -119,6 +139,9 @@ public class TicketService {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    public record QueueEnterEligibility(boolean hasTicket, TicketingStatus ticketingStatus) {
     }
 
     // 내 티켓 목록 조회 (로그인 필요)

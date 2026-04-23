@@ -15,7 +15,6 @@ import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
-import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.ticket.service.TicketIssueEnqueueService;
 import com.danzzan.domain.ticket.service.TicketService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
@@ -81,49 +80,16 @@ public class TicketController {
         String eventIdStr = String.valueOf(eventId);
         String userIdStr = String.valueOf(userId);
 
-        // 이미 터미널 상태면 바로 반환 (Redis 기반)
-        TicketRequestStatus currentStatus = ticketStatusService.getStatus(eventIdStr, userIdStr);
-        if (currentStatus == TicketRequestStatus.FAILED) {
-            ticketStatusService.clearProcessing(eventIdStr, userIdStr);
-            currentStatus = TicketRequestStatus.NONE;
+        // 대기열 진입 + 사전 상태조회 + 초기 스냅샷 반환을 Lua 단일 호출로 처리
+        QueueService.QueueEnterSnapshot snapshot = queueService.enterQueue(eventIdStr, userIdStr);
+        ticketingMetrics.recordQueueEnter(snapshot.status());
+        TicketRequestResponseDTO.TicketRequestResponseDTOBuilder builder = TicketRequestResponseDTO.builder()
+                .status(snapshot.status());
+        if (snapshot.status() == TicketRequestStatus.PROCESSING) {
+            builder.requestId(snapshot.requestId())
+                    .acceptedAt(snapshot.acceptedAt());
         }
-        if (isTerminal(currentStatus)) {
-            TicketRequestResponseDTO.TicketRequestResponseDTOBuilder builder = TicketRequestResponseDTO.builder()
-                    .status(currentStatus);
-            if (currentStatus == TicketRequestStatus.PROCESSING) {
-                builder.requestId(ticketStatusService.getProcessingRequestId(eventIdStr, userIdStr))
-                        .acceptedAt(ticketStatusService.getProcessingAcceptedAt(eventIdStr, userIdStr));
-            }
-            return ResponseEntity.ok(builder.build());
-        }
-
-        // DB 이중 예매 방지 (Redis 초기화 이후에도 보장)
-        if (ticketService.hasTicket(userId, eventId)) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(TicketRequestStatus.ALREADY)
-                    .build());
-        }
-        // 이벤트 상태를 Redis 우선 조회해 CLOSED/READY 모두 처리
-        TicketingStatus ticketingStatus = ticketService.getTicketingStatus(eventId);
-        if (ticketingStatus == TicketingStatus.CLOSED) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(TicketRequestStatus.SOLD_OUT)
-                    .build());
-        }
-        // READY(오픈 전) 이벤트: 스케줄러가 OPEN 이벤트만 승격하므로 진입 자체를 차단
-        if (ticketingStatus != TicketingStatus.OPEN) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(TicketRequestStatus.NONE)
-                    .build());
-        }
-
-        // 대기열 진입 — Lua로 dedup + INCR seq + ZADD + HSET state=WAITING 원자 처리
-        queueService.enterQueue(eventIdStr, userIdStr);
-
-        // 현재 상태 조회 (스케줄러가 이미 READY 승격했을 수도 있음)
-        TicketRequestStatus status = ticketStatusService.getStatus(eventIdStr, userIdStr);
-        ticketingMetrics.recordQueueEnter(status);
-        return ResponseEntity.ok(buildQueueEnterResponse(eventIdStr, userIdStr, status));
+        return ResponseEntity.ok(builder.build());
     }
 
     @DeleteMapping("/{eventId}/queue/leave")
@@ -323,34 +289,18 @@ public class TicketController {
     }
 
     private TicketStatusResponseDTO buildStatusResponse(String eventId, String userId) {
-        TicketRequestStatus status = ticketStatusService.getStatus(eventId, userId);
+        TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot(eventId, userId);
+        TicketRequestStatus status = snapshot.status();
         boolean hideAdmissionDetails = status == TicketRequestStatus.PROCESSING || status == TicketRequestStatus.FAILED;
-        Long aheadCount = ticketStatusService.getAheadCount(eventId, userId);
+        Long aheadCount = snapshot.aheadCount();
         return TicketStatusResponseDTO.builder()
                 .status(status)
-                .queuePosition(status == TicketRequestStatus.WAITING
-                        ? ticketStatusService.getQueuePosition(eventId, userId)
-                        : null)
-                .mySequence(ticketStatusService.getMySequence(eventId, userId))
+                .queuePosition(status == TicketRequestStatus.WAITING ? snapshot.queuePosition() : null)
+                .mySequence(snapshot.mySequence())
                 .aheadCount(aheadCount)
                 .estimatedWaitSeconds(ticketStatusService.getEstimatedWaitSeconds(aheadCount))
-                .readyUntil(hideAdmissionDetails ? null : ticketStatusService.getReadyUntil(eventId, userId))
-                .admissionState(hideAdmissionDetails ? null : ticketStatusService.getAdmissionState(eventId, userId))
-                .build();
-    }
-
-    private TicketRequestResponseDTO buildQueueEnterResponse(String eventId, String userId, TicketRequestStatus status) {
-        Long aheadCount = ticketStatusService.getAheadCount(eventId, userId);
-        return TicketRequestResponseDTO.builder()
-                .status(status)
-                .queuePosition(status == TicketRequestStatus.WAITING
-                        ? ticketStatusService.getQueuePosition(eventId, userId)
-                        : null)
-                .mySequence(ticketStatusService.getMySequence(eventId, userId))
-                .aheadCount(aheadCount)
-                .estimatedWaitSeconds(ticketStatusService.getEstimatedWaitSeconds(aheadCount))
-                .readyUntil(ticketStatusService.getReadyUntil(eventId, userId))
-                .admissionState(ticketStatusService.getAdmissionState(eventId, userId))
+                .readyUntil(hideAdmissionDetails ? null : snapshot.readyUntil())
+                .admissionState(hideAdmissionDetails ? null : snapshot.admissionState())
                 .build();
     }
 
@@ -455,10 +405,4 @@ public class TicketController {
         return Math.min(rolloutPercent, 100);
     }
 
-    private boolean isTerminal(TicketRequestStatus status) {
-        return status == TicketRequestStatus.SUCCESS
-                || status == TicketRequestStatus.SOLD_OUT
-                || status == TicketRequestStatus.ALREADY
-                || status == TicketRequestStatus.PROCESSING;
-    }
 }

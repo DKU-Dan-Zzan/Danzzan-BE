@@ -33,6 +33,11 @@ public final class TicketRedisKeys {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":processing:" + keyPart(userId, "userId");
     }
 
+    /** 비동기 예매 요청 상태 키 (PROCESSING/SUCCESS/FAILED) */
+    public static String requestStatusKey(String eventId, String requestId) {
+        return PREFIX + ":" + keyPart(eventId, "eventId") + ":request-status:" + keyPart(requestId, "requestId");
+    }
+
     /** 대기열 ZSet (score = INCR sequence, WAITING 유저만 존재) */
     public static String queueKey(String eventId) {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":queue";
@@ -41,6 +46,11 @@ public final class TicketRedisKeys {
     /** 순번 발급 카운터 (INCR) */
     public static String seqKey(String eventId) {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":seq";
+    }
+
+    /** 마지막으로 READY 승격 처리된 seq (queuePosition 계산용) */
+    public static String admittedSeqKey(String eventId) {
+        return PREFIX + ":" + keyPart(eventId, "eventId") + ":admitted-seq";
     }
 
     /** 유저 상태 Hash (state, seq, enteredAt, readyAt, readyUntil, activeAt) */

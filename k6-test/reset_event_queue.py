@@ -141,6 +141,7 @@ def main():
         f"ticket:{EVENT_ID}:ready",
         f"ticket:{EVENT_ID}:active",
         f"ticket:{EVENT_ID}:seq",
+        f"ticket:{EVENT_ID}:admitted-seq",
         f"ticket:{EVENT_ID}:closed-cleanup",
     ]
     for user_id in user_ids:

@@ -12,10 +12,15 @@ const FLOW_MODE = __ENV.FLOW_MODE || 'full-flow';
 const RAMP_UP = __ENV.RAMP_UP || '10s';
 const HOLD = __ENV.HOLD || '30s';
 const RAMP_DOWN = __ENV.RAMP_DOWN || '10s';
-const POLL_INTERVAL_MS = Number(__ENV.POLL_INTERVAL_MS || 1000);
+const FIXED_QUEUE_POLL_MS = __ENV.POLL_INTERVAL_MS ? Number(__ENV.POLL_INTERVAL_MS) : null;
 const POLL_TIMEOUT_MS = Number(__ENV.POLL_TIMEOUT_MS || 180000);
-const REQUEST_POLL_INTERVAL_MS = Number(__ENV.REQUEST_POLL_INTERVAL_MS || 1000);
+const FIXED_REQUEST_POLL_MS = __ENV.REQUEST_POLL_INTERVAL_MS ? Number(__ENV.REQUEST_POLL_INTERVAL_MS) : null;
 const REQUEST_POLL_TIMEOUT_MS = Number(__ENV.REQUEST_POLL_TIMEOUT_MS || 180000);
+const QUEUE_POLL_BASE_MS = Number(__ENV.QUEUE_POLL_BASE_MS || (FIXED_QUEUE_POLL_MS || 2000));
+const QUEUE_POLL_MAX_MS = Number(__ENV.QUEUE_POLL_MAX_MS || 5000);
+const REQUEST_POLL_BASE_MS = Number(__ENV.REQUEST_POLL_BASE_MS || (FIXED_REQUEST_POLL_MS || 2000));
+const REQUEST_POLL_MAX_MS = Number(__ENV.REQUEST_POLL_MAX_MS || 5000);
+const POLL_JITTER_RATIO = Number(__ENV.POLL_JITTER_RATIO || 0.2);
 const TOKENS_FILE = __ENV.TOKENS_FILE || './tokens.json';
 const ADMIN_TOKEN = __ENV.ADMIN_TOKEN || '';
 const INIT_STOCK = __ENV.INIT_STOCK ? Number(__ENV.INIT_STOCK) : null;
@@ -150,6 +155,7 @@ export default function () {
 
   let statusBody = enterBody;
   const waitStart = Date.now();
+  let queuePollAttempt = 0;
 
   while (statusBody.status === 'WAITING') {
     if (Date.now() - waitStart >= POLL_TIMEOUT_MS) {
@@ -158,7 +164,13 @@ export default function () {
       return;
     }
 
-    sleep(POLL_INTERVAL_MS / 1000);
+    const queuePollDelayMs = calcPollDelayMs(
+      queuePollAttempt++,
+      FIXED_QUEUE_POLL_MS,
+      QUEUE_POLL_BASE_MS,
+      QUEUE_POLL_MAX_MS
+    );
+    sleep(queuePollDelayMs / 1000);
     const statusRes = http.get(
       `${BASE_URL}/tickets/${EVENT_ID}/queue/status`,
       {
@@ -241,9 +253,16 @@ export default function () {
     reserveAsyncAccepted.add(1);
     const requestId = reserveBody.requestId;
     const requestWaitStart = Date.now();
+    let requestPollAttempt = 0;
 
     while (Date.now() - requestWaitStart < REQUEST_POLL_TIMEOUT_MS) {
-      sleep(REQUEST_POLL_INTERVAL_MS / 1000);
+      const requestPollDelayMs = calcPollDelayMs(
+        requestPollAttempt++,
+        FIXED_REQUEST_POLL_MS,
+        REQUEST_POLL_BASE_MS,
+        REQUEST_POLL_MAX_MS
+      );
+      sleep(requestPollDelayMs / 1000);
       const requestStatusRes = http.get(
         `${BASE_URL}/tickets/${EVENT_ID}/requests/${requestId}`,
         {
@@ -329,4 +348,16 @@ function withJsonAuth(token) {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
   };
+}
+
+function calcPollDelayMs(attempt, fixedMs, baseMs, maxMs) {
+  const raw = fixedMs != null
+    ? fixedMs
+    : Math.min(maxMs, Math.round(baseMs * Math.pow(1.5, attempt)));
+  const jitterWindow = Math.max(0, Math.round(raw * POLL_JITTER_RATIO));
+  if (jitterWindow === 0) {
+    return raw;
+  }
+  const delta = Math.floor(Math.random() * (2 * jitterWindow + 1)) - jitterWindow;
+  return Math.max(1, raw + delta);
 }

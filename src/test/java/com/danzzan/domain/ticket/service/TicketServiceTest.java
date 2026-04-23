@@ -17,7 +17,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -73,25 +74,49 @@ class TicketServiceTest {
     }
 
     @Test
-    void getTicketingStatus_redis에_상태가_있으면_DB를_조회하지_않는다() {
+    void getTicketingStatusFromCache_redis에_상태가_있으면_DB를_조회하지_않는다() {
         when(valueOperations.get(TicketRedisKeys.eventStatusKey("10"))).thenReturn("OPEN");
 
-        TicketingStatus status = ticketService.getTicketingStatus(10L);
+        TicketingStatus status = ticketService.getTicketingStatusFromCache(10L);
 
         assertThat(status).isEqualTo(TicketingStatus.OPEN);
         verify(eventRepository, never()).findById(anyLong());
     }
 
     @Test
-    void getTicketingStatus_redis에_상태가_없으면_DB조회후_redis에_캐시한다() {
-        FestivalEvent event = event(10L, TicketingStatus.CLOSED);
+    void getTicketingStatusFromCache_redis에_상태가_없으면_null을_반환하고_DB를_조회하지_않는다() {
         when(valueOperations.get(TicketRedisKeys.eventStatusKey("10"))).thenReturn(null);
-        when(eventRepository.findById(10L)).thenReturn(Optional.of(event));
 
-        TicketingStatus status = ticketService.getTicketingStatus(10L);
+        TicketingStatus status = ticketService.getTicketingStatusFromCache(10L);
 
-        assertThat(status).isEqualTo(TicketingStatus.CLOSED);
-        verify(valueOperations).set(TicketRedisKeys.eventStatusKey("10"), "CLOSED");
+        assertThat(status).isNull();
+        verify(eventRepository, never()).findById(anyLong());
+    }
+
+    @Test
+    void getQueueEnterEligibility_multiGet으로_티켓보유와_이벤트상태를_동시조회한다() {
+        when(valueOperations.multiGet(List.of(
+                TicketRedisKeys.userKey("10", "1"),
+                TicketRedisKeys.eventStatusKey("10")
+        ))).thenReturn(List.of("1", "OPEN"));
+
+        TicketService.QueueEnterEligibility eligibility = ticketService.getQueueEnterEligibility(1L, 10L);
+
+        assertThat(eligibility.hasTicket()).isTrue();
+        assertThat(eligibility.ticketingStatus()).isEqualTo(TicketingStatus.OPEN);
+    }
+
+    @Test
+    void getQueueEnterEligibility_multiGet결과가_비어있으면_false_null을_반환한다() {
+        when(valueOperations.multiGet(List.of(
+                TicketRedisKeys.userKey("10", "1"),
+                TicketRedisKeys.eventStatusKey("10")
+        ))).thenReturn(Arrays.asList(null, null));
+
+        TicketService.QueueEnterEligibility eligibility = ticketService.getQueueEnterEligibility(1L, 10L);
+
+        assertThat(eligibility.hasTicket()).isFalse();
+        assertThat(eligibility.ticketingStatus()).isNull();
     }
 
     private FestivalEvent event(Long id, TicketingStatus status) {

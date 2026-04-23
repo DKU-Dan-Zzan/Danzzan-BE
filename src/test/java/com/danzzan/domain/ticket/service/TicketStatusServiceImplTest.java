@@ -7,11 +7,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,12 +36,42 @@ class TicketStatusServiceImplTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private HashOperations<String, Object, Object> hashOperations;
+
     private TicketStatusServiceImpl ticketStatusService;
 
     @BeforeEach
     void setUp() {
-        ticketStatusService = new TicketStatusServiceImpl(redisTemplate, queueService, queueStateService);
+        ticketStatusService = new TicketStatusServiceImpl(
+                redisTemplate,
+                queueService,
+                queueStateService
+        );
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForHash()).thenReturn(hashOperations);
+    }
+
+    @Test
+    void getQueueStatusSnapshot_WAITING상태면_순번과_앞대기인원을_계산한다() {
+        when(valueOperations.multiGet(List.of(
+                TicketRedisKeys.statusKey("2", "11"),
+                TicketRedisKeys.admittedSeqKey("2"),
+                TicketRedisKeys.stockKey("2")
+        ))).thenReturn(List.of("", "100", "500"));
+        when(hashOperations.multiGet(
+                TicketRedisKeys.queueUserHashKey("2", "11"),
+                List.of("state", "seq", "readyUntil")
+        )).thenReturn(List.of("WAITING", "105", ""));
+
+        TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot("2", "11");
+
+        assertEquals(TicketRequestStatus.WAITING, snapshot.status());
+        assertEquals(105L, snapshot.mySequence());
+        assertEquals(5L, snapshot.queuePosition());
+        assertEquals(4L, snapshot.aheadCount());
+        assertNull(snapshot.readyUntil());
+        assertNull(snapshot.admissionState());
     }
 
     @Test

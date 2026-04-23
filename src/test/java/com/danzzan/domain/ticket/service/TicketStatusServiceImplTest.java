@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -48,21 +49,14 @@ class TicketStatusServiceImplTest {
                 queueService,
                 queueStateService
         );
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(redisTemplate.opsForHash()).thenReturn(hashOperations);
     }
 
     @Test
     void getQueueStatusSnapshot_WAITING상태면_순번과_앞대기인원을_계산한다() {
-        when(valueOperations.multiGet(List.of(
-                TicketRedisKeys.statusKey("2", "11"),
-                TicketRedisKeys.admittedSeqKey("2"),
-                TicketRedisKeys.stockKey("2")
-        ))).thenReturn(List.of("", "100", "500"));
-        when(hashOperations.multiGet(
-                TicketRedisKeys.queueUserHashKey("2", "11"),
-                List.of("state", "seq", "readyUntil")
-        )).thenReturn(List.of("WAITING", "105", ""));
+        when(redisTemplate.executePipelined(org.mockito.ArgumentMatchers.<RedisCallback<Object>>any()))
+                .thenReturn(List.of("", "100", "500", List.of("WAITING", "105", "")));
 
         TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot("2", "11");
 
@@ -72,6 +66,20 @@ class TicketStatusServiceImplTest {
         assertEquals(4L, snapshot.aheadCount());
         assertNull(snapshot.readyUntil());
         assertNull(snapshot.admissionState());
+    }
+
+    @Test
+    void getQueueStatusSnapshot_ACTIVE상태면_activeUntil을_반환한다() {
+        when(redisTemplate.executePipelined(org.mockito.ArgumentMatchers.<RedisCallback<Object>>any()))
+                .thenReturn(List.of("", "100", "500", List.of("ACTIVE", "105", "", "1770000000000")));
+
+        TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot("2", "11");
+
+        assertEquals(TicketRequestStatus.ADMITTED, snapshot.status());
+        assertEquals(105L, snapshot.mySequence());
+        assertEquals(0L, snapshot.aheadCount());
+        assertEquals(1770000000000L, snapshot.readyUntil());
+        assertEquals(com.danzzan.domain.ticket.redis.QueueUserState.ACTIVE, snapshot.admissionState());
     }
 
     @Test

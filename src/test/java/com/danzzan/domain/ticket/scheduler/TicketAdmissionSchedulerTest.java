@@ -46,8 +46,9 @@ class TicketAdmissionSchedulerTest {
     void setUp() {
         sut = new TicketAdmissionScheduler(queueStateService, eventRepo, redisTemplate, ticketingMetrics);
         ReflectionTestUtils.setField(sut, "maxConcurrent", 100);
-        ReflectionTestUtils.setField(sut, "readyTtlSeconds", 180L);
+        ReflectionTestUtils.setField(sut, "directAdmissionActiveTtlSeconds", 90L);
         ReflectionTestUtils.setField(sut, "batchCeiling", 100);
+        ReflectionTestUtils.setField(sut, "maxBatchPerTick", 200);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(redisTemplate.opsForZSet()).thenReturn(zSetOperations);
         lenient().when(zSetOperations.zCard(anyString())).thenReturn(0L);
@@ -117,6 +118,22 @@ class TicketAdmissionSchedulerTest {
         sut.admitFromQueue();
 
         verify(queueStateService).admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(7));
+    }
+
+    @Test
+    void 배치_상한이_너무_크면_틱당_최대_상한으로_제한한다() {
+        FestivalEvent event = openEvent();
+        ReflectionTestUtils.setField(sut, "batchCeiling", 1000);
+        ReflectionTestUtils.setField(sut, "maxBatchPerTick", 200);
+        when(eventRepo.findAllByTicketingStatus(TicketingStatus.OPEN))
+                .thenReturn(List.of(event));
+        when(queueStateService.expireReadyUsers(EVENT_ID)).thenReturn(0);
+        when(queueStateService.expireActiveUsers(EVENT_ID)).thenReturn(0);
+        when(queueStateService.admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(200))).thenReturn(200);
+
+        sut.admitFromQueue();
+
+        verify(queueStateService).admitWaitingUsers(eq(EVENT_ID), anyLong(), eq(100), eq(200));
     }
 
     @Test

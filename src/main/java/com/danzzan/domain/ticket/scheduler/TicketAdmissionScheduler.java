@@ -16,14 +16,14 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 대기열 선두 유저를 READY로 승격하는 스케줄러.
+ * 대기열 선두 유저를 ACTIVE로 직행 승격하는 스케줄러.
  *
- * capacity = READY 수 + ACTIVE 수 기준으로 여유 슬롯 계산.
+ * capacity = READY 수(레거시) + ACTIVE 수 기준으로 여유 슬롯 계산.
  * 매 1초마다 OPEN 이벤트에 대해:
- * 1. 만료된 READY 유저 정리
+ * 1. 만료된 READY 유저 정리(레거시 데이터 청소)
  * 2. 여유 슬롯(capacity - READY - ACTIVE) 계산
  * 3. 재고 확인
- * 4. min(여유슬롯, 재고, 배치상한)만큼 queue 앞에서 꺼내 READY 승격
+ * 4. min(여유슬롯, 재고, 배치상한)만큼 queue 앞에서 꺼내 ACTIVE 승격
  */
 @Component
 @Slf4j
@@ -38,11 +38,14 @@ public class TicketAdmissionScheduler {
     @Value("${app.ticketing.max-concurrent-slots:100}")
     private int maxConcurrent;
 
-    @Value("${app.ticketing.gate-ttl-seconds:180}")
-    private long readyTtlSeconds;
+    @Value("${app.ticketing.direct-admission.active-ttl-seconds:${app.ticketing.active-ttl-seconds:600}}")
+    private long directAdmissionActiveTtlSeconds;
 
     @Value("${app.ticketing.admission.batch-ceiling:100}")
     private int batchCeiling;
+
+    @Value("${app.ticketing.admission.max-batch-per-tick:200}")
+    private int maxBatchPerTick;
 
     @Scheduled(fixedDelayString = "${app.ticketing.admission.fixed-delay-ms:1000}")
     public void admitFromQueue() {
@@ -98,11 +101,22 @@ public class TicketAdmissionScheduler {
             } catch (NumberFormatException ignored) {}
         }
 
-        // 3. WAITING → READY 승격
-        long readyUntilMs = System.currentTimeMillis() + readyTtlSeconds * 1000L;
-        int admittedCount = queueStateService.admitWaitingUsers(eventId, readyUntilMs, maxConcurrent, batchCeiling);
+        // 3. WAITING → ACTIVE 직행 승격
+        long activeUntilMs = System.currentTimeMillis() + directAdmissionActiveTtlSeconds * 1000L;
+        int admittedCount = queueStateService.admitWaitingUsers(
+                eventId,
+                activeUntilMs,
+                maxConcurrent,
+                resolveAdmissionBatchLimit()
+        );
         for (int i = 0; i < admittedCount; i++) {
             ticketingMetrics.incrementAdmission(eventId);
         }
+    }
+
+    private int resolveAdmissionBatchLimit() {
+        int configured = Math.max(1, batchCeiling);
+        int hardCap = Math.max(1, maxBatchPerTick);
+        return Math.min(configured, hardCap);
     }
 }

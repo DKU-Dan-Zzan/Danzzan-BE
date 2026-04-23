@@ -5,6 +5,8 @@ import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.StringRedisConnection;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,7 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
     private static final String FIELD_SEQ = "seq";
     private static final String FIELD_READY_UNTIL = "readyUntil";
+    private static final String FIELD_ACTIVE_UNTIL = "activeUntil";
     private static final String FIELD_REQUEST_ID = "requestId";
     private static final String FIELD_ACCEPTED_AT = "acceptedAt";
 
@@ -27,29 +30,34 @@ public class TicketStatusServiceImpl implements TicketStatusService {
     @Value("${app.ticketing.max-concurrent-slots:100}")
     private int maxConcurrent;
 
-    @Value("${app.ticketing.gate-ttl-seconds:180}")
-    private long readyTtlSeconds;
+    @Value("${app.ticketing.direct-admission.active-ttl-seconds:${app.ticketing.active-ttl-seconds:600}}")
+    private long admissionSlotTtlSeconds;
 
     @Override
     public QueueStatusSnapshot getQueueStatusSnapshot(String eventId, String userId) {
-        List<String> keyValues = redisTemplate.opsForValue().multiGet(
-                List.of(
-                        TicketRedisKeys.statusKey(eventId, userId),
-                        TicketRedisKeys.admittedSeqKey(eventId),
-                        TicketRedisKeys.stockKey(eventId)
-                )
-        );
-        List<Object> hashValues = redisTemplate.opsForHash().multiGet(
-                TicketRedisKeys.queueUserHashKey(eventId, userId),
-                List.of("state", "seq", "readyUntil")
-        );
+        String statusKey = TicketRedisKeys.statusKey(eventId, userId);
+        String admittedSeqKey = TicketRedisKeys.admittedSeqKey(eventId);
+        String stockKey = TicketRedisKeys.stockKey(eventId);
+        String queueUserKey = TicketRedisKeys.queueUserHashKey(eventId, userId);
 
-        String claimRaw = getListString(keyValues, 0);
-        long admittedSeq = parseLongOrZero(getListString(keyValues, 1));
-        String stockRaw = getListString(keyValues, 2);
+        @SuppressWarnings("unchecked")
+        List<Object> pipelineResults = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            StringRedisConnection redisConnection = (StringRedisConnection) connection;
+            redisConnection.get(statusKey);
+            redisConnection.get(admittedSeqKey);
+            redisConnection.get(stockKey);
+            redisConnection.hMGet(queueUserKey, "state", "seq", FIELD_READY_UNTIL, FIELD_ACTIVE_UNTIL);
+            return null;
+        });
+
+        String claimRaw = getListString(pipelineResults, 0);
+        long admittedSeq = parseLongOrZero(getListString(pipelineResults, 1));
+        String stockRaw = getListString(pipelineResults, 2);
+        List<?> hashValues = getNestedList(pipelineResults, 3);
         String stateRaw = getListString(hashValues, 0);
         Long mySequence = parseLong(getListString(hashValues, 1));
         Long readyUntilRaw = parseLong(getListString(hashValues, 2));
+        Long activeUntilRaw = parseLong(getListString(hashValues, 3));
 
         QueueUserState state = parseQueueState(stateRaw);
         TicketRequestStatus status = resolveStatus(claimRaw, state, stockRaw);
@@ -68,7 +76,11 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
         QueueUserState admissionState =
                 (state == QueueUserState.READY || state == QueueUserState.ACTIVE) ? state : null;
-        Long readyUntil = state == QueueUserState.READY ? readyUntilRaw : null;
+        Long readyUntil = switch (state) {
+            case READY -> readyUntilRaw;
+            case ACTIVE -> activeUntilRaw;
+            default -> null;
+        };
 
         return new QueueStatusSnapshot(
                 status,
@@ -147,7 +159,7 @@ public class TicketStatusServiceImpl implements TicketStatusService {
             return 0L;
         }
         long batches = (aheadCount + maxConcurrent - 1L) / maxConcurrent;
-        return batches * readyTtlSeconds;
+        return batches * admissionSlotTtlSeconds;
     }
 
     @Override
@@ -274,6 +286,21 @@ public class TicketStatusServiceImpl implements TicketStatusService {
         }
         Object value = list.get(index);
         return value == null ? null : value.toString();
+    }
+
+    private List<?> getNestedList(List<?> list, int index) {
+        Object value = getListObject(list, index);
+        if (value instanceof List<?> nested) {
+            return nested;
+        }
+        return List.of();
+    }
+
+    private Object getListObject(List<?> list, int index) {
+        if (list == null || index < 0 || index >= list.size()) {
+            return null;
+        }
+        return list.get(index);
     }
 
     private long parseLongOrZero(String raw) {

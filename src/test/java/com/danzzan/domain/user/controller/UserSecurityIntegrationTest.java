@@ -34,7 +34,7 @@ class UserSecurityIntegrationTest {
     @Test
     void getMyInfo_비인증_요청은_403과_빈본문을_반환한다() throws Exception {
         MvcResult result = mockMvc.perform(get("/user/me"))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isUnauthorized())
                 .andReturn();
 
         assertThat(result.getResponse().getContentAsString()).isEmpty();

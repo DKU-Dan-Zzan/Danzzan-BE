@@ -12,6 +12,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -44,6 +45,7 @@ class OutboxPublisherServiceTest {
                 kafkaTemplate,
                 outboxPublisherMetrics
         );
+        ReflectionTestUtils.setField(outboxPublisherService, "batchSize", 100);
     }
 
     @Test
@@ -106,6 +108,21 @@ class OutboxPublisherServiceTest {
         assertThat(event.getRetryCount()).isEqualTo(10);
         assertThat(event.getNextRetryAt()).isNull();
         verify(outboxPublisherMetrics).incrementFailed();
+    }
+
+    @Test
+    void publishPendingBatch_배치크기_설정값을_반영한다() {
+        OutboxEvent event = pendingEvent(0);
+        ReflectionTestUtils.setField(outboxPublisherService, "batchSize", 250);
+        when(outboxEventRepository.findPendingBatchForPublish(eq(250), any())).thenReturn(List.of(event));
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(CompletableFuture.completedFuture(null));
+        when(outboxEventRepository.countByStatus(OutboxEventStatus.PENDING)).thenReturn(0L);
+        when(outboxEventRepository.findOldestCreatedAtByStatus(OutboxEventStatus.PENDING)).thenReturn(null);
+        when(outboxEventRepository.countByStatus(OutboxEventStatus.FAILED)).thenReturn(0L);
+
+        outboxPublisherService.publishPendingBatch();
+
+        verify(outboxEventRepository).findPendingBatchForPublish(eq(250), any());
     }
 
     private OutboxEvent pendingEvent(int retryCount) {

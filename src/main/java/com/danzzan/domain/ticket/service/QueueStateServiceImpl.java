@@ -49,7 +49,7 @@ public class QueueStateServiceImpl implements QueueStateService {
     @Qualifier("expireActiveUsersScript")
     private final RedisScript<List> expireActiveUsersScript;
 
-    @Value("${app.ticketing.active-ttl-seconds:600}")
+    @Value("${app.ticketing.direct-admission.active-ttl-seconds:${app.ticketing.active-ttl-seconds:600}}")
     private long activeTtlSeconds;
 
     @Value("${app.ticketing.max-concurrent-slots:100}")
@@ -62,7 +62,7 @@ public class QueueStateServiceImpl implements QueueStateService {
     private int expireBatchSize;
 
     @Override
-    public int admitWaitingUsers(String eventId, long readyUntilMs, int maxConcurrent, int batchLimit) {
+    public int admitWaitingUsers(String eventId, long activeUntilMs, int maxConcurrent, int batchLimit) {
         Long promotedCount = redisTemplate.execute(
                 admitOneWaitingUserScript,
                 List.of(
@@ -74,7 +74,7 @@ public class QueueStateServiceImpl implements QueueStateService {
                 ),
                 TicketRedisKeys.queueUserPrefix(eventId),
                 String.valueOf(System.currentTimeMillis()),
-                String.valueOf(readyUntilMs),
+                String.valueOf(activeUntilMs),
                 String.valueOf(maxConcurrent),
                 String.valueOf(Math.max(1, batchLimit))
         );

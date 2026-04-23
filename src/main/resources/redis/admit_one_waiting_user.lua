@@ -1,13 +1,13 @@
--- WAITING 선두 유저를 READY로 배치 승격
+-- WAITING 선두 유저를 ACTIVE로 배치 승격
 --
 -- KEYS[1] = queueKey           (ticket:{eventId}:queue)
--- KEYS[2] = readyKey           (ticket:{eventId}:ready)
+-- KEYS[2] = readyKey           (ticket:{eventId}:ready) -- 레거시 READY 정리용 카운트
 -- KEYS[3] = activeKey          (ticket:{eventId}:active)
 -- KEYS[4] = stockKey           (ticket:{eventId}:stock)
 -- KEYS[5] = admittedSeqKey     (ticket:{eventId}:admitted-seq)
 -- ARGV[1] = queueUserPrefix    (ticket:{eventId}:quser:)
 -- ARGV[2] = nowMs
--- ARGV[3] = readyUntilMs
+-- ARGV[3] = activeUntilMs
 -- ARGV[4] = maxConcurrent
 -- ARGV[5] = batchLimit
 --
@@ -52,11 +52,12 @@ while admitted < batch_limit do
         redis.call("ZREM", KEYS[1], user_id)
         local seq = redis.call("HGET", user_key, "seq")
         redis.call("HSET", user_key,
-            "state", "READY",
-            "readyAt", ARGV[2],
-            "readyUntil", ARGV[3]
+            "state", "ACTIVE",
+            "activeAt", ARGV[2],
+            "activeUntil", ARGV[3]
         )
-        redis.call("ZADD", KEYS[2], ARGV[3], user_id)
+        redis.call("HDEL", user_key, "readyAt", "readyUntil")
+        redis.call("ZADD", KEYS[3], ARGV[3], user_id)
         if seq then
             redis.call("SET", KEYS[5], seq)
         end

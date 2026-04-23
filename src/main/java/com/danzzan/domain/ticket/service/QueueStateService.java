@@ -5,10 +5,10 @@ import com.danzzan.domain.ticket.redis.QueueUserState;
 public interface QueueStateService {
 
     /**
-     * WAITING 선두 유저를 READY로 배치 승격합니다.
+     * WAITING 선두 유저를 ACTIVE로 배치 승격합니다.
      * @return 실제 승격된 유저 수
      */
-    int admitWaitingUsers(String eventId, long readyUntilMs, int maxConcurrent, int batchLimit);
+    int admitWaitingUsers(String eventId, long activeUntilMs, int maxConcurrent, int batchLimit);
 
     /**
      * Lua로 READY → ACTIVE 원자 전환.

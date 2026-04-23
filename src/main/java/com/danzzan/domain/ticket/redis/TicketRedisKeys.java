@@ -53,7 +53,7 @@ public final class TicketRedisKeys {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":admitted-seq";
     }
 
-    /** 유저 상태 Hash (state, seq, enteredAt, readyAt, readyUntil, activeAt) */
+    /** 유저 상태 Hash (state, seq, enteredAt, readyAt, readyUntil, activeAt, activeUntil) */
     public static String queueUserHashKey(String eventId, String userId) {
         return PREFIX + ":" + keyPart(eventId, "eventId") + ":quser:" + keyPart(userId, "userId");
     }

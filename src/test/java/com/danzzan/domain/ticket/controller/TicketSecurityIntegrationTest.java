@@ -52,7 +52,7 @@ class TicketSecurityIntegrationTest {
     @Test
     void getMyTickets_비인증_요청은_403과_빈본문을_반환한다() throws Exception {
         MvcResult result = mockMvc.perform(get("/tickets/me"))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isUnauthorized())
                 .andReturn();
 
         assertThat(result.getResponse().getContentAsString()).isEmpty();
@@ -62,7 +62,7 @@ class TicketSecurityIntegrationTest {
     @MethodSource("protectedTicketEndpoints")
     void ticket_인증필요_엔드포인트는_비인증_요청을_차단한다(MockHttpServletRequestBuilder request) throws Exception {
         mockMvc.perform(request)
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     static Stream<MockHttpServletRequestBuilder> protectedTicketEndpoints() {

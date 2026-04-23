@@ -7,41 +7,56 @@ import com.danzzan.domain.ticket.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.kafka.support.SendResult;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class OutboxPublisherService {
 
-    private static final int BATCH_SIZE = 100;
     private static final int MAX_RETRY_COUNT = 10;
 
     private final OutboxEventRepository outboxEventRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final OutboxPublisherMetrics outboxPublisherMetrics;
 
+    @Value("${app.ticketing.outbox.publisher.batch-size:100}")
+    private int batchSize;
+
     @Transactional
     public void publishPendingBatch() {
         LocalDateTime now = LocalDateTime.now();
-        List<OutboxEvent> batch = outboxEventRepository.findPendingBatchForPublish(BATCH_SIZE, now);
+        List<OutboxEvent> batch = outboxEventRepository.findPendingBatchForPublish(batchSize, now);
+        List<PublishAttempt> attempts = new ArrayList<>(batch.size());
 
         for (OutboxEvent outboxEvent : batch) {
             try {
-                publish(outboxEvent);
+                attempts.add(new PublishAttempt(outboxEvent, publishAsync(outboxEvent)));
+            } catch (Exception e) {
+                handlePublishFailure(outboxEvent, now, e);
+            }
+        }
+
+        for (PublishAttempt attempt : attempts) {
+            try {
+                attempt.future().get();
+                OutboxEvent outboxEvent = attempt.outboxEvent();
                 outboxEvent.markSent(now);
                 outboxPublisherMetrics.incrementSuccess();
             } catch (Exception e) {
-                handlePublishFailure(outboxEvent, now, e);
+                handlePublishFailure(attempt.outboxEvent(), now, e);
             }
         }
 
@@ -49,7 +64,7 @@ public class OutboxPublisherService {
         warnIfFailedRowsExist();
     }
 
-    private void publish(OutboxEvent outboxEvent) throws ExecutionException, InterruptedException {
+    private CompletableFuture<SendResult<String, String>> publishAsync(OutboxEvent outboxEvent) {
         long producedAt = System.currentTimeMillis();
         Map<String, String> headers = TicketIssueKafkaSpec.buildIssueRequestedHeaders(
                 outboxEvent.getAggregateId(),
@@ -63,7 +78,7 @@ public class OutboxPublisherService {
         headers.forEach((headerName, headerValue) ->
                 record.headers().add(headerName, headerValue.getBytes(StandardCharsets.UTF_8)));
 
-        kafkaTemplate.send(record).get();
+        return kafkaTemplate.send(record);
     }
 
     private void handlePublishFailure(OutboxEvent outboxEvent, LocalDateTime now, Exception e) {
@@ -132,5 +147,11 @@ public class OutboxPublisherService {
         }
         String message = cursor.getMessage();
         return message == null || message.isBlank() ? cursor.getClass().getSimpleName() : message;
+    }
+
+    private record PublishAttempt(
+            OutboxEvent outboxEvent,
+            CompletableFuture<SendResult<String, String>> future
+    ) {
     }
 }

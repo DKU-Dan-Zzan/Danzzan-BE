@@ -41,11 +41,13 @@ public class TicketIssueKafkaConsumerConfig {
     @Bean(name = "ticketIssueKafkaListenerContainerFactory")
     public ConcurrentKafkaListenerContainerFactory<String, String> ticketIssueKafkaListenerContainerFactory(
             ConsumerFactory<String, String> consumerFactory,
-            DefaultErrorHandler ticketIssueKafkaErrorHandler
+            DefaultErrorHandler ticketIssueKafkaErrorHandler,
+            @Value("${app.ticketing.kafka.consumer.concurrency:1}") int consumerConcurrency
     ) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
         factory.setCommonErrorHandler(ticketIssueKafkaErrorHandler);
+        factory.setConcurrency(Math.max(1, consumerConcurrency));
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         return factory;
     }

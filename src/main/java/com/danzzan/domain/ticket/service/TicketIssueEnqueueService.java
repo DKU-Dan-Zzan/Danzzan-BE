@@ -29,6 +29,7 @@ public class TicketIssueEnqueueService {
     private final TicketIssueRequestRepository ticketIssueRequestRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final TicketIssueRequestStatusCacheService ticketIssueRequestStatusCacheService;
 
     public record InFlightProcessingRequest(String requestId, Long acceptedAt) {
     }
@@ -56,17 +57,35 @@ public class TicketIssueEnqueueService {
 
     @Transactional(readOnly = true)
     public Optional<IssueRequestStatusSnapshot> findRequestStatus(Long eventId, Long userId, String requestId) {
+        Optional<IssueRequestStatusSnapshot> cached = ticketIssueRequestStatusCacheService.get(eventId, userId, requestId)
+                .map(snapshot -> new IssueRequestStatusSnapshot(
+                        requestId,
+                        eventId,
+                        snapshot.status(),
+                        snapshot.errorCode(),
+                        snapshot.updatedAt()
+                ));
+        if (cached.isPresent()) {
+            return cached;
+        }
+
         return ticketIssueRequestRepository
                 .findByRequestIdAndEventIdAndUserId(requestId, eventId, userId)
-                .map(request -> new IssueRequestStatusSnapshot(
-                        request.getRequestId(),
-                        request.getEventId(),
-                        request.getStatus(),
-                        request.getErrorCode(),
-                        request.getUpdatedAt() == null
-                                ? null
-                                : request.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                ));
+                .map(request -> {
+                    Long updatedAt = request.getUpdatedAt() == null
+                            ? null
+                            : request.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                    if (updatedAt != null) {
+                        syncCache(request, updatedAt);
+                    }
+                    return new IssueRequestStatusSnapshot(
+                            request.getRequestId(),
+                            request.getEventId(),
+                            request.getStatus(),
+                            request.getErrorCode(),
+                            updatedAt
+                    );
+                });
     }
 
     @Transactional
@@ -98,13 +117,44 @@ public class TicketIssueEnqueueService {
                     .nextRetryAt(LocalDateTime.now())
                     .build();
             outboxEventRepository.save(outboxEvent);
+            ticketIssueRequestStatusCacheService.setProcessing(eventId, userId, requestId, acceptedAtEpochMs);
             return requestId;
         } catch (DataIntegrityViolationException e) {
-            return ticketIssueRequestRepository
+            String existingRequestId = ticketIssueRequestRepository
                     .findByEventIdAndUserIdAndStatus(eventId, userId, TicketIssueRequestStatus.PROCESSING)
                     .map(TicketIssueRequest::getRequestId)
                     .orElseThrow(() -> e);
+            ticketIssueRequestStatusCacheService.setProcessing(eventId, userId, existingRequestId, acceptedAtEpochMs);
+            return existingRequestId;
         }
+    }
+
+    private void syncCache(TicketIssueRequest request, long updatedAt) {
+        if (request.getStatus() == TicketIssueRequestStatus.SUCCESS) {
+            ticketIssueRequestStatusCacheService.setSuccess(
+                    request.getEventId(),
+                    request.getUserId(),
+                    request.getRequestId(),
+                    updatedAt
+            );
+            return;
+        }
+        if (request.getStatus() == TicketIssueRequestStatus.FAILED) {
+            ticketIssueRequestStatusCacheService.setFailed(
+                    request.getEventId(),
+                    request.getUserId(),
+                    request.getRequestId(),
+                    request.getErrorCode(),
+                    updatedAt
+            );
+            return;
+        }
+        ticketIssueRequestStatusCacheService.setProcessing(
+                request.getEventId(),
+                request.getUserId(),
+                request.getRequestId(),
+                updatedAt
+        );
     }
 
     private String toPayload(

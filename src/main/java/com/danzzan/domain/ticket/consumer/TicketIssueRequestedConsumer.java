@@ -8,6 +8,7 @@ import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import com.danzzan.domain.ticket.service.TicketIssueCompensationService;
 import com.danzzan.domain.ticket.service.TicketIssueConsumerService;
+import com.danzzan.domain.ticket.service.TicketIssueRequestStatusCacheService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class TicketIssueRequestedConsumer {
     private final TicketIssueConsumerService ticketIssueConsumerService;
     private final QueueStateService queueStateService;
     private final TicketIssueCompensationService ticketIssueCompensationService;
+    private final TicketIssueRequestStatusCacheService ticketIssueRequestStatusCacheService;
     private final StringRedisTemplate redisTemplate;
 
     @KafkaListener(
@@ -79,6 +81,12 @@ public class TicketIssueRequestedConsumer {
         String eventId = String.valueOf(event.eventId());
         String userId = String.valueOf(event.userId());
         redisTemplate.opsForValue().set(TicketRedisKeys.statusKey(eventId, userId), TicketRequestStatus.SUCCESS.name());
+        ticketIssueRequestStatusCacheService.setSuccess(
+                event.eventId(),
+                event.userId(),
+                event.requestId(),
+                System.currentTimeMillis()
+        );
         try {
             queueStateService.markDone(eventId, userId);
         } catch (Exception e) {

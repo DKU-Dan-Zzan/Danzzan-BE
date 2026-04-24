@@ -83,6 +83,8 @@ class SignupFlowE2ETest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "password", VALID_PASSWORD,
                                 "confirmPassword", VALID_PASSWORD,
+                                "naverId", "danzzan_festa",
+                                "confirmNaverId", "danzzan_festa",
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isOk());
@@ -97,6 +99,7 @@ class SignupFlowE2ETest {
         assertThat(user.getAcademicStatus()).isEqualTo(AcademicStatus.ENROLLED);
         assertThat(user.getRole()).isEqualTo(UserRole.ROLE_USER);
         assertThat(user.getPhoneNumber()).isEqualTo("01012345678");
+        assertThat(user.getNaverId()).isEqualTo("danzzan_festa");
         assertThat(user.isPhoneVerified()).isTrue();
         assertThat(user.getPhoneVerifiedAt()).isNotNull();
         assertThat(user.getPassword()).isNotEqualTo(VALID_PASSWORD);

@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS naver_id VARCHAR(100) NULL AFTER password;

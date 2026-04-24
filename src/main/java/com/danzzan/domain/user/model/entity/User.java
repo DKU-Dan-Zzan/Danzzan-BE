@@ -24,6 +24,9 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    @Column(name = "naver_id", length = 100)
+    private String naverId;
+
     @Column(nullable = false)
     private String name;
 
@@ -60,6 +63,7 @@ public class User {
     public User(
             String studentId,
             String password,
+            String naverId,
             String name,
             String college,
             String major,
@@ -71,6 +75,7 @@ public class User {
     ) {
         this.studentId = studentId;
         this.password = password;
+        this.naverId = naverId;
         this.name = name;
         this.college = college;
         this.major = major;

@@ -34,7 +34,7 @@ public class PhoneVerificationController {
     }
 
     @PostMapping("/sessions/{sessionId}/verify")
-    @Operation(summary = "전화번호 인증 검증", description = "사용자 전화번호와 인증코드 조합이 OCTOMO 대표번호 1666-3538로 최근 5분 내 전송되었는지 검증합니다.")
+    @Operation(summary = "전화번호 인증 검증", description = "사용자 전화번호와 인증코드 조합이 OCTOMO 대표번호 1666-3538로 최근 7분 내 전송되었는지 검증합니다.")
     public ResponseEntity<ResponsePhoneVerificationStatusDto> verifySession(
             @PathVariable String sessionId,
             @Valid @RequestBody RequestPhoneVerificationVerifyDto dto

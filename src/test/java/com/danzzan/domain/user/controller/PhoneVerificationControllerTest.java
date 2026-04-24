@@ -50,7 +50,7 @@ class PhoneVerificationControllerTest {
                         .status(PhoneVerificationStatus.PENDING)
                         .octomoReceiveNumber("16663538")
                         .messageBody("123456")
-                        .expiresInSec(300)
+                        .expiresInSec(420)
                         .statusPollHintSec(5)
                         .expiresAt(LocalDateTime.of(2026, 4, 9, 12, 0))
                         .build());

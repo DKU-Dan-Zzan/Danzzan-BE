@@ -162,7 +162,7 @@ public class PhoneVerificationService {
     @Transactional
     public int expireSessions() {
         return phoneVerificationSessionRepository.expireSessions(
-                List.of(PhoneVerificationStatus.PENDING, PhoneVerificationStatus.VERIFIED),
+                List.of(PhoneVerificationStatus.PENDING),
                 PhoneVerificationStatus.EXPIRED,
                 LocalDateTime.now()
         );
@@ -211,8 +211,7 @@ public class PhoneVerificationService {
     }
 
     private void syncExpiredStatus(PhoneVerificationSession session, LocalDateTime now) {
-        if ((session.getStatus() == PhoneVerificationStatus.PENDING || session.getStatus() == PhoneVerificationStatus.VERIFIED)
-                && session.isExpired(now)) {
+        if (session.getStatus() == PhoneVerificationStatus.PENDING && session.isExpired(now)) {
             session.markExpired(now);
         }
     }

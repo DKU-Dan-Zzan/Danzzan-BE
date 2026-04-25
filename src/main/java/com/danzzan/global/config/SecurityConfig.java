@@ -80,7 +80,7 @@ public class SecurityConfig {
                                 "/api/ads/list"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
-                        .requestMatchers("/api/admin/**", "/admin/map/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**", "/admin/map/**", "/admin/timetable/**").hasRole("ADMIN")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )

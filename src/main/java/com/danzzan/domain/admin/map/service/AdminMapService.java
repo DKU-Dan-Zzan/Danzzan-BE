@@ -5,9 +5,7 @@ import com.danzzan.domain.admin.map.dto.response.AdminMapBoothResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminMapCollegeResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminMapResponse;
 import com.danzzan.domain.boothmap.model.entity.Booth;
-import com.danzzan.domain.boothmap.model.entity.BoothOperation;
 import com.danzzan.domain.boothmap.model.entity.College;
-import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.repository.CollegeRepository;
 import com.danzzan.domain.timetable.service.TimetableDisplaySettingService;
@@ -22,9 +20,10 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdminMapService {
+    private static final LocalDate DEFAULT_OPERATION_DATE = LocalDate.of(2026, 5, 12);
+
     private final CollegeRepository collegeRepository;
     private final BoothRepository boothRepository;
-    private final BoothOperationRepository boothOperationRepository;
     private final TimetableDisplaySettingService timetableDisplaySettingService;
 
     public AdminMapResponse getAdminMap(LocalDate operationDate) {
@@ -39,9 +38,7 @@ public class AdminMapService {
                 ))
                 .toList();
 
-        List<AdminMapBoothResponse> booths = (resolvedOperationDate == null
-                ? List.<Booth>of()
-                : boothRepository.findAllByOperationDate(resolvedOperationDate)).stream()
+        List<AdminMapBoothResponse> booths = boothRepository.findAllByOperationDate(resolvedOperationDate).stream()
                 .map(booth -> new AdminMapBoothResponse(
                         booth.getId(),
                         booth.getName(),
@@ -104,10 +101,6 @@ public class AdminMapService {
             return operationDate;
         }
 
-        return boothOperationRepository.findAll().stream()
-                .map(BoothOperation::getOperationDate)
-                .sorted()
-                .findFirst()
-                .orElse(null);
+        return DEFAULT_OPERATION_DATE;
     }
 }

@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,7 +118,9 @@ class PhoneVerificationServiceTest {
         var response = phoneVerificationService.verifySession(session.getSessionId(), "010-1234-5678");
 
         assertThat(response.getStatus()).isEqualTo(PhoneVerificationStatus.VERIFIED);
+        assertThat(session.getStatus()).isEqualTo(PhoneVerificationStatus.CONSUMED);
         assertThat(session.getVerifiedPhoneNumber()).isEqualTo("01012345678");
+        verify(signupTokenStore).cacheVerifiedPhone("signup-token-123", "01012345678", response.getVerifiedAt());
     }
 
     @Test
@@ -149,5 +152,28 @@ class PhoneVerificationServiceTest {
                 .isInstanceOf(PhoneVerificationException.class)
                 .extracting(ex -> ((PhoneVerificationException) ex).getErrorType())
                 .isEqualTo(PhoneVerificationErrorType.NOT_VERIFIED);
+    }
+
+    @Test
+    void createSessionClearsPreviouslyVerifiedPhoneCache() {
+        when(signupTokenStore.getCachedStudentInfo("signup-token-123"))
+                .thenReturn(new SignupTokenStore.StudentInfoCache(
+                        "32100000",
+                        "홍길동",
+                        "공과대학",
+                        "컴퓨터공학과",
+                        AcademicStatus.ENROLLED
+                ));
+        when(phoneVerificationSessionRepository.countBySignupTokenAndCreatedAtAfter(anyString(), any()))
+                .thenReturn(0L);
+        when(phoneVerificationSessionRepository.countByRequestIpHashAndCreatedAtAfter(anyString(), any()))
+                .thenReturn(0L);
+        when(phoneVerificationSessionRepository.findTopBySignupTokenOrderByCreatedAtDesc("signup-token-123"))
+                .thenReturn(java.util.Optional.empty());
+
+        phoneVerificationService.createSession("signup-token-123", "127.0.0.1");
+
+        verify(signupTokenStore).clearVerifiedPhone("signup-token-123");
+        verify(signupTokenStore, never()).cacheVerifiedPhone(anyString(), anyString(), any());
     }
 }

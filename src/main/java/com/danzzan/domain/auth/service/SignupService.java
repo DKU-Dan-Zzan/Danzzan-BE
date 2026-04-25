@@ -57,6 +57,7 @@ public class SignupService {
         User user = User.builder()
                 .studentId(cache.studentId())
                 .password(encodedPassword)
+                .naverId(dto.getNaverId().trim())
                 .name(cache.name())
                 .college(cache.college())
                 .major(cache.major())

@@ -62,7 +62,7 @@ public class AdminMapService {
     @Transactional
     public void updateCollegeLocation(Long collegeId, UpdateMapLocationRequest request) {
         College college = collegeRepository.findById(collegeId)
-                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 ?④낵??숈엯?덈떎."));
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 단과대입니다."));
 
         validateLocation(request.getLocationX(), request.getLocationY());
         college.updateLocation(request.getLocationX(), request.getLocationY());
@@ -71,7 +71,7 @@ public class AdminMapService {
     @Transactional
     public void updateBoothLocation(Long boothId, UpdateMapLocationRequest request) {
         Booth booth = boothRepository.findById(boothId)
-                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 遺?ㅼ엯?덈떎."));
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 부스입니다."));
 
         validateLocation(request.getLocationX(), request.getLocationY());
         booth.updateLocation(request.getLocationX(), request.getLocationY());
@@ -80,22 +80,22 @@ public class AdminMapService {
     @Transactional
     public void clearBoothLocation(Long boothId) {
         Booth booth = boothRepository.findById(boothId)
-                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 遺?ㅼ엯?덈떎."));
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 부스입니다."));
 
         booth.clearLocation();
     }
 
     private void validateLocation(Double locationX, Double locationY) {
         if (locationX == null || locationY == null) {
-            throw new IllegalArgumentException("醫뚰몴 媛믪? 鍮꾩뼱 ?덉쓣 ???놁뒿?덈떎.");
+            throw new IllegalArgumentException("좌표 값이 비어 있을 수 없습니다.");
         }
 
         if (locationX < -180 || locationX > 180) {
-            throw new IllegalArgumentException("寃쎈룄(locationX) 踰붿쐞媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
+            throw new IllegalArgumentException("경도(locationX) 범위가 올바르지 않습니다.");
         }
 
         if (locationY < -90 || locationY > 90) {
-            throw new IllegalArgumentException("?꾨룄(locationY) 踰붿쐞媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
+            throw new IllegalArgumentException("위도(locationY) 범위가 올바르지 않습니다.");
         }
     }
 

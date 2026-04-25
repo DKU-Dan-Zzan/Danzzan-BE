@@ -7,7 +7,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetUrlRequest;
 import software.amazon.awssdk.services.s3.model.ObjectCannedACL;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -25,10 +24,12 @@ public class S3Uploader {
     @Value("${aws.s3.bucket}")
     private String bucket;
 
-    /**
-     * true면 업로드 시 객체 ACL을 PUBLIC_READ로 설정합니다.
-     * (버킷 정책으로 공개를 관리한다면 false로 두세요)
-     */
+    @Value("${aws.s3.endpoint}")
+    private String endpoint;
+
+    @Value("${aws.s3.cdn-url:}")
+    private String cdnUrl;
+
     @Value("${aws.s3.public-read:false}")
     private boolean publicRead;
 
@@ -54,11 +55,14 @@ public class S3Uploader {
             throw new IllegalStateException("S3 업로드에 실패했습니다.", e);
         }
 
-        String url = s3Client.utilities()
-                .getUrl(GetUrlRequest.builder().bucket(bucket).key(key).build())
-                .toExternalForm();
+        return new S3UploadResult(key, buildPublicUrl(key));
+    }
 
-        return new S3UploadResult(key, url);
+    private String buildPublicUrl(String key) {
+        if (cdnUrl != null && !cdnUrl.isBlank()) {
+            return cdnUrl.replaceAll("/$", "") + "/" + key;
+        }
+        return endpoint.replaceAll("/$", "") + "/" + bucket + "/" + key;
     }
 
     private String buildKey(String prefix, String originalFilename) {
@@ -69,4 +73,3 @@ public class S3Uploader {
         return prefix + "/" + date + "/" + UUID.randomUUID() + "_" + safeName;
     }
 }
-

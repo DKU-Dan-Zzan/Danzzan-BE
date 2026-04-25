@@ -6,8 +6,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.GetUrlRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
@@ -33,27 +31,23 @@ public class S3PresignService {
     );
 
     private final S3Presigner s3Presigner;
-    private final S3Client s3Client;
     private final S3PathGenerator s3PathGenerator;
 
     @Value("${aws.s3.bucket}")
     private String bucket;
 
-    /**
-     * true면 업로드 시 객체 ACL을 PUBLIC_READ로 설정합니다.
-     * (버킷 정책으로 공개를 관리한다면 false로 두세요)
-     */
+    @Value("${aws.s3.endpoint}")
+    private String endpoint;
+
+    @Value("${aws.s3.cdn-url:}")
+    private String cdnUrl;
+
     @Value("${aws.s3.public-read:false}")
     private boolean publicRead;
 
     @Value("${aws.s3.presign.put-expiration-sec:600}")
     private long putExpirationSec;
 
-    /**
-     * 공지 이미지 Presigned PUT URL 발급.
-     * - contentType이 있으면 이미지 타입 검증 (image/jpeg, image/jpg, image/png, image/webp)
-     * - fileSize가 있으면 5MB 제한 검증
-     */
     public S3PresignedPutResult presignPutNoticeImage(String fileName, String contentType, Long fileSize) {
         if (contentType != null && !contentType.isBlank()) {
             validateImageContentType(contentType.trim());
@@ -72,11 +66,6 @@ public class S3PresignService {
         }
     }
 
-    /**
-     * 광고 이미지 Presigned PUT URL 발급.
-     * - 이미지 타입 검증
-     * - 5MB 제한 (fileSize가 넘어오면 서버에서도 1차 필터링)
-     */
     public S3PresignedPutResult presignPutAdImage(String fileName, String contentType, Long fileSize) {
         if (contentType != null && !contentType.isBlank()) {
             validateImageContentType(contentType.trim());
@@ -114,16 +103,19 @@ public class S3PresignService {
 
         PresignedPutObjectRequest presigned = s3Presigner.presignPutObject(presignRequest);
 
-        String publicUrl = s3Client.utilities()
-                .getUrl(GetUrlRequest.builder().bucket(bucket).key(key).build())
-                .toExternalForm();
-
         return new S3PresignedPutResult(
                 key,
-                publicUrl,
+                buildPublicUrl(key),
                 presigned.url().toExternalForm(),
                 Instant.now().plusSeconds(putExpirationSec)
         );
+    }
+
+    private String buildPublicUrl(String key) {
+        if (cdnUrl != null && !cdnUrl.isBlank()) {
+            return cdnUrl.replaceAll("/$", "") + "/" + key;
+        }
+        return endpoint.replaceAll("/$", "") + "/" + bucket + "/" + key;
     }
 
     private void validateImageContentType(String contentType) {
@@ -161,5 +153,3 @@ public class S3PresignService {
         }
     }
 }
-
-

@@ -74,7 +74,6 @@ public class SecurityConfig {
                                 "/timetable/**",
                                 "/map/**",
                                 "/booths/**",
-                                "/lost-items/**",
                                 "/tickets/events",
                                 "/api/ads",
                                 "/api/ads/list"

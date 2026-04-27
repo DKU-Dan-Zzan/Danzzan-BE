@@ -10,6 +10,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     ports:
       - "${APP_PORT:-8080}:8080"
     environment:
@@ -19,6 +23,25 @@ services:
       DB_PASSWORD: ${MYSQL_PASSWORD:-change-me}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      TICKETING_ASYNC_RESERVE_ENABLED: ${TICKETING_ASYNC_RESERVE_ENABLED:-true}
+      TICKETING_ASYNC_RESERVE_SHADOW_PUBLISH_ENABLED: ${TICKETING_ASYNC_RESERVE_SHADOW_PUBLISH_ENABLED:-false}
+      TICKETING_ASYNC_RESERVE_ROLLOUT_PERCENT: ${TICKETING_ASYNC_RESERVE_ROLLOUT_PERCENT:-100}
+      TICKETING_ASYNC_RESERVE_ALLOWED_EVENT_IDS: ${TICKETING_ASYNC_RESERVE_ALLOWED_EVENT_IDS:-}
+      APP_TICKETING_MAX_CONCURRENT_SLOTS: ${APP_TICKETING_MAX_CONCURRENT_SLOTS:-5000}
+      APP_TICKETING_GATE_TTL_SECONDS: ${APP_TICKETING_GATE_TTL_SECONDS:-120}
+      APP_TICKETING_ACTIVE_TTL_SECONDS: ${APP_TICKETING_ACTIVE_TTL_SECONDS:-600}
+      TICKETING_DIRECT_ADMISSION_ACTIVE_TTL_SECONDS: ${TICKETING_DIRECT_ADMISSION_ACTIVE_TTL_SECONDS:-90}
+      TICKETING_EXPIRE_BATCH_SIZE: ${TICKETING_EXPIRE_BATCH_SIZE:-100}
+      TICKETING_ADMISSION_FIXED_DELAY_MS: ${TICKETING_ADMISSION_FIXED_DELAY_MS:-300}
+      TICKETING_ADMISSION_BATCH_CEILING: ${TICKETING_ADMISSION_BATCH_CEILING:-200}
+      TICKETING_ADMISSION_MAX_BATCH_PER_TICK: ${TICKETING_ADMISSION_MAX_BATCH_PER_TICK:-200}
+      TICKETING_OUTBOX_PUBLISHER_FIXED_DELAY_MS: ${TICKETING_OUTBOX_PUBLISHER_FIXED_DELAY_MS:-100}
+      TICKETING_OUTBOX_PUBLISHER_BATCH_SIZE: ${TICKETING_OUTBOX_PUBLISHER_BATCH_SIZE:-500}
+      TICKETING_KAFKA_CONSUMER_CONCURRENCY: ${TICKETING_KAFKA_CONSUMER_CONCURRENCY:-3}
+      SERVER_TOMCAT_MAX_THREADS: ${SERVER_TOMCAT_MAX_THREADS:-1000}
+      SERVER_TOMCAT_MIN_SPARE_THREADS: ${SERVER_TOMCAT_MIN_SPARE_THREADS:-100}
+      SERVER_TOMCAT_ACCEPT_COUNT: ${SERVER_TOMCAT_ACCEPT_COUNT:-2000}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
@@ -63,6 +86,54 @@ services:
       retries: 10
     restart: unless-stopped
 
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: danzzan-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MDEyMzQ1Njc4OUFCQ0RFRg
+    ports:
+      - "9094:9094"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  kafka-init:
+    image: apache/kafka:3.9.0
+    container_name: danzzan-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1 --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1.dlq --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic ticket.issue.requested.v1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic ticket.issue.requested.v1.dlq
+    restart: "no"
+
 volumes:
   mysql_data:
   redis_data:
+  kafka_data:

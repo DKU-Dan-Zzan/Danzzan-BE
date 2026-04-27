@@ -1,0 +1,140 @@
+package com.danzzan.domain.ticket.model.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(
+        name = "ticket_issue_requests",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_ticket_issue_request_id", columnNames = "request_id"),
+                @UniqueConstraint(name = "uk_ticket_issue_event_user", columnNames = {"event_id", "user_id"})
+        }
+)
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class TicketIssueRequest {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "request_id", nullable = false, length = 36)
+    private String requestId;
+
+    @Column(name = "event_id", nullable = false)
+    private Long eventId;
+
+    @Column(name = "user_id", nullable = false)
+    private Long userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private TicketIssueRequestStatus status;
+
+    @Column(name = "error_code", length = 100)
+    private String errorCode;
+
+    @Column(name = "error_reason", length = 500)
+    private String errorReason;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    @Column(nullable = false)
+    private boolean compensated;
+
+    @Column(name = "compensated_at")
+    private LocalDateTime compensatedAt;
+
+    @Column(name = "compensation_pending", nullable = false)
+    private boolean compensationPending;
+
+    @Column(name = "compensation_attempts", nullable = false)
+    private int compensationAttempts;
+
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Builder
+    public TicketIssueRequest(
+            String requestId,
+            Long eventId,
+            Long userId,
+            TicketIssueRequestStatus status
+    ) {
+        this.requestId = requestId;
+        this.eventId = eventId;
+        this.userId = userId;
+        this.status = status;
+        this.compensated = false;
+        this.compensationPending = false;
+        this.compensationAttempts = 0;
+    }
+
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void markSuccess(LocalDateTime completedAt) {
+        this.status = TicketIssueRequestStatus.SUCCESS;
+        this.errorCode = null;
+        this.errorReason = null;
+        this.completedAt = completedAt;
+        this.compensationPending = false;
+    }
+
+    public void markFailed(String errorCode, String errorReason, LocalDateTime completedAt) {
+        this.status = TicketIssueRequestStatus.FAILED;
+        this.errorCode = errorCode;
+        this.errorReason = errorReason;
+        this.completedAt = completedAt;
+        this.compensationPending = false;
+    }
+
+    public void markCompensatedFailure(String errorCode, String errorReason, LocalDateTime completedAt) {
+        this.status = TicketIssueRequestStatus.FAILED;
+        this.errorCode = errorCode;
+        this.errorReason = errorReason;
+        this.completedAt = completedAt;
+        this.compensated = true;
+        this.compensatedAt = completedAt;
+        this.compensationPending = false;
+    }
+
+    public int markCompensationPending() {
+        this.compensationPending = true;
+        this.compensationAttempts += 1;
+        return this.compensationAttempts;
+    }
+
+    public void clearCompensationPending() {
+        this.compensationPending = false;
+    }
+}

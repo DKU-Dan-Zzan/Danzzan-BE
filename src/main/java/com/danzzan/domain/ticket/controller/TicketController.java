@@ -3,16 +3,19 @@ package com.danzzan.domain.ticket.controller;
 import com.danzzan.domain.ticket.dto.ResponseMyTicketListDto;
 import com.danzzan.domain.ticket.dto.ResponseReserveTicketDto;
 import com.danzzan.domain.ticket.dto.ResponseTicketEventListDto;
+import com.danzzan.domain.ticket.dto.TicketIssueRequestStatusResponseDTO;
 import com.danzzan.domain.ticket.dto.TicketRequestResponseDTO;
 import com.danzzan.domain.ticket.dto.TicketStatusResponseDTO;
+import com.danzzan.domain.ticket.model.entity.TicketIssueRequestStatus;
 import com.danzzan.domain.ticket.exception.AlreadyReservedException;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
+import com.danzzan.domain.ticket.exception.ReserveProcessingException;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
-import com.danzzan.domain.event.model.entity.TicketingStatus;
+import com.danzzan.domain.ticket.service.TicketIssueEnqueueService;
 import com.danzzan.domain.ticket.service.TicketService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import com.danzzan.domain.ticket.metrics.TicketingMetrics;
@@ -21,9 +24,15 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/tickets")
@@ -38,6 +47,23 @@ public class TicketController {
     private final QueueService queueService;
     private final QueueStateService queueStateService;
     private final TicketingMetrics ticketingMetrics;
+    private final TicketIssueEnqueueService ticketIssueEnqueueService;
+
+    @Value("${app.ticketing.async.reserve.enabled:false}")
+    private boolean asyncReserveEnabled;
+
+    @Value("${app.ticketing.async.reserve.shadow-publish.enabled:false}")
+    private boolean asyncReserveShadowPublishEnabled;
+
+    @Value("${app.ticketing.async.reserve.rollout-percent:0}")
+    private int asyncReserveRolloutPercent;
+
+    @Value("${app.ticketing.async.reserve.allowed-event-ids:}")
+    private String asyncReserveAllowedEventIds;
+
+    @Value("${app.ticketing.async.reserve.processing-ttl-seconds:600}")
+    private long processingTtlSeconds;
+
     @GetMapping("/events")
     @Operation(summary = "이벤트 목록 조회", description = "티켓팅 가능한 공연 목록을 조회합니다. 로그인 불필요.")
     public ResponseEntity<ResponseTicketEventListDto> getTicketingEvents() {
@@ -54,41 +80,16 @@ public class TicketController {
         String eventIdStr = String.valueOf(eventId);
         String userIdStr = String.valueOf(userId);
 
-        // 이미 터미널 상태면 바로 반환 (Redis 기반)
-        TicketRequestStatus currentStatus = ticketStatusService.getStatus(eventIdStr, userIdStr);
-        if (isTerminal(currentStatus)) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(currentStatus)
-                    .build());
+        // 대기열 진입 + 사전 상태조회 + 초기 스냅샷 반환을 Lua 단일 호출로 처리
+        QueueService.QueueEnterSnapshot snapshot = queueService.enterQueue(eventIdStr, userIdStr);
+        ticketingMetrics.recordQueueEnter(snapshot.status());
+        TicketRequestResponseDTO.TicketRequestResponseDTOBuilder builder = TicketRequestResponseDTO.builder()
+                .status(snapshot.status());
+        if (snapshot.status() == TicketRequestStatus.PROCESSING) {
+            builder.requestId(snapshot.requestId())
+                    .acceptedAt(snapshot.acceptedAt());
         }
-
-        // DB 이중 예매 방지 (Redis 초기화 이후에도 보장)
-        if (ticketService.hasTicket(userId, eventId)) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(TicketRequestStatus.ALREADY)
-                    .build());
-        }
-        // 이벤트 상태를 한 번만 조회해서 CLOSED/READY 모두 처리 (DB 1회)
-        TicketingStatus ticketingStatus = ticketService.getTicketingStatus(eventId);
-        if (ticketingStatus == TicketingStatus.CLOSED) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(TicketRequestStatus.SOLD_OUT)
-                    .build());
-        }
-        // READY(오픈 전) 이벤트: 스케줄러가 OPEN 이벤트만 승격하므로 진입 자체를 차단
-        if (ticketingStatus != TicketingStatus.OPEN) {
-            return ResponseEntity.ok(TicketRequestResponseDTO.builder()
-                    .status(TicketRequestStatus.NONE)
-                    .build());
-        }
-
-        // 대기열 진입 — Lua로 dedup + INCR seq + ZADD + HSET state=WAITING 원자 처리
-        queueService.enterQueue(eventIdStr, userIdStr);
-
-        // 현재 상태 조회 (스케줄러가 이미 READY 승격했을 수도 있음)
-        TicketRequestStatus status = ticketStatusService.getStatus(eventIdStr, userIdStr);
-        ticketingMetrics.recordQueueEnter(status);
-        return ResponseEntity.ok(buildQueueEnterResponse(eventIdStr, userIdStr, status));
+        return ResponseEntity.ok(builder.build());
     }
 
     @DeleteMapping("/{eventId}/queue/leave")
@@ -110,6 +111,25 @@ public class TicketController {
     ) {
         Long userId = (Long) authentication.getPrincipal();
         return ResponseEntity.ok(buildStatusResponse(String.valueOf(eventId), String.valueOf(userId)));
+    }
+
+    @GetMapping("/{eventId}/requests/{requestId}")
+    @Operation(summary = "비동기 발급 요청 상태 조회", description = "requestId 기준으로 비동기 발급 요청의 현재 상태를 조회합니다.")
+    public ResponseEntity<TicketIssueRequestStatusResponseDTO> getRequestStatus(
+            @PathVariable Long eventId,
+            @PathVariable String requestId,
+            Authentication authentication
+    ) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ticketIssueEnqueueService.findRequestStatus(eventId, userId, requestId)
+                .map(snapshot -> ResponseEntity.ok(TicketIssueRequestStatusResponseDTO.builder()
+                        .requestId(snapshot.requestId())
+                        .eventId(snapshot.eventId())
+                        .status(snapshot.status())
+                        .errorCode(snapshot.status() == TicketIssueRequestStatus.FAILED ? snapshot.errorCode() : null)
+                        .updatedAt(snapshot.updatedAt())
+                        .build()))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{eventId}/activate")
@@ -138,11 +158,18 @@ public class TicketController {
 
     @PostMapping("/{eventId}/reserve")
     @Operation(summary = "티켓 예매", description = "ACTIVE 상태(유의사항 화면)에서 예매완료 버튼 클릭. 재고 차감 후 DB 저장.")
-    public ResponseEntity<ResponseReserveTicketDto> reserveTicket(
+    public ResponseEntity<?> reserveTicket(
             @PathVariable Long eventId,
             Authentication authentication
     ) {
         Long userId = (Long) authentication.getPrincipal();
+        boolean useAsync = shouldUseAsyncReserve(eventId, userId);
+        return useAsync
+                ? reserveTicketAsync(eventId, userId)
+                : reserveTicketSync(eventId, userId, shouldShadowPublish(eventId, useAsync));
+    }
+
+    private ResponseEntity<ResponseReserveTicketDto> reserveTicketSync(Long eventId, Long userId, boolean shadowPublish) {
         String eventIdStr = String.valueOf(eventId);
         String userIdStr = String.valueOf(userId);
 
@@ -165,12 +192,93 @@ public class TicketController {
             }
 
             markDoneAfterPersistence(eventIdStr, userIdStr);
+            if (shadowPublish) {
+                publishShadowIssueRequest(eventId, userId, eventIdStr, userIdStr, claimResult.remaining());
+            }
             return ResponseEntity.ok(response);
 
         } finally {
             // 성공/실패 무관하게 active ZSet 제거 → 슬롯 반환
             queueStateService.releaseActive(eventIdStr, userIdStr);
         }
+    }
+
+    private ResponseEntity<TicketRequestResponseDTO> reserveTicketAsync(Long eventId, Long userId) {
+        String eventIdStr = String.valueOf(eventId);
+        String userIdStr = String.valueOf(userId);
+
+        try {
+            TicketRequestStatus currentStatus = ticketStatusService.getStatus(eventIdStr, userIdStr);
+            if (currentStatus == TicketRequestStatus.PROCESSING) {
+                return processingAcceptedResponse(eventId, userId, eventIdStr, userIdStr);
+            }
+
+            ClaimResult claimResult = claimService.claim(eventIdStr, userIdStr);
+            if (claimResult.status() == TicketRequestStatus.SOLD_OUT) {
+                throw new EventSoldOutException();
+            }
+            if (claimResult.status() == TicketRequestStatus.ALREADY) {
+                throw new AlreadyReservedException();
+            }
+
+            String requestId = UUID.randomUUID().toString();
+            long acceptedAt = System.currentTimeMillis();
+            ticketStatusService.setProcessing(eventIdStr, userIdStr, requestId, acceptedAt, processingTtlSeconds);
+
+            try {
+                Long seq = ticketStatusService.getMySequence(eventIdStr, userIdStr);
+                requestId = ticketIssueEnqueueService.enqueueIssueRequest(
+                        eventId,
+                        userId,
+                        requestId,
+                        claimResult.remaining(),
+                        seq,
+                        acceptedAt
+                );
+            } catch (Exception e) {
+                ticketStatusService.clearProcessing(eventIdStr, userIdStr);
+                claimService.rollback(eventIdStr, userIdStr);
+                throw new ReserveProcessingException();
+            }
+
+            return ResponseEntity.accepted().body(TicketRequestResponseDTO.builder()
+                    .status(TicketRequestStatus.PROCESSING)
+                    .requestId(requestId)
+                    .acceptedAt(acceptedAt)
+                    .build());
+
+        } finally {
+            queueStateService.releaseActive(eventIdStr, userIdStr);
+        }
+    }
+
+    private ResponseEntity<TicketRequestResponseDTO> processingAcceptedResponse(
+            Long eventId,
+            Long userId,
+            String eventIdStr,
+            String userIdStr
+    ) {
+        String requestId = ticketStatusService.getProcessingRequestId(eventIdStr, userIdStr);
+        Long acceptedAt = ticketStatusService.getProcessingAcceptedAt(eventIdStr, userIdStr);
+
+        if (requestId == null || acceptedAt == null) {
+            TicketIssueEnqueueService.InFlightProcessingRequest inFlight =
+                    ticketIssueEnqueueService.findProcessingRequest(eventId, userId).orElse(null);
+            if (inFlight != null) {
+                if (requestId == null) {
+                    requestId = inFlight.requestId();
+                }
+                if (acceptedAt == null) {
+                    acceptedAt = inFlight.acceptedAt();
+                }
+            }
+        }
+
+        return ResponseEntity.accepted().body(TicketRequestResponseDTO.builder()
+                .status(TicketRequestStatus.PROCESSING)
+                .requestId(requestId)
+                .acceptedAt(acceptedAt)
+                .build());
     }
 
     @GetMapping("/me")
@@ -181,33 +289,18 @@ public class TicketController {
     }
 
     private TicketStatusResponseDTO buildStatusResponse(String eventId, String userId) {
-        TicketRequestStatus status = ticketStatusService.getStatus(eventId, userId);
-        Long aheadCount = ticketStatusService.getAheadCount(eventId, userId);
+        TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot(eventId, userId);
+        TicketRequestStatus status = snapshot.status();
+        boolean hideAdmissionDetails = status == TicketRequestStatus.PROCESSING || status == TicketRequestStatus.FAILED;
+        Long aheadCount = snapshot.aheadCount();
         return TicketStatusResponseDTO.builder()
                 .status(status)
-                .queuePosition(status == TicketRequestStatus.WAITING
-                        ? ticketStatusService.getQueuePosition(eventId, userId)
-                        : null)
-                .mySequence(ticketStatusService.getMySequence(eventId, userId))
+                .queuePosition(status == TicketRequestStatus.WAITING ? snapshot.queuePosition() : null)
+                .mySequence(snapshot.mySequence())
                 .aheadCount(aheadCount)
                 .estimatedWaitSeconds(ticketStatusService.getEstimatedWaitSeconds(aheadCount))
-                .readyUntil(ticketStatusService.getReadyUntil(eventId, userId))
-                .admissionState(ticketStatusService.getAdmissionState(eventId, userId))
-                .build();
-    }
-
-    private TicketRequestResponseDTO buildQueueEnterResponse(String eventId, String userId, TicketRequestStatus status) {
-        Long aheadCount = ticketStatusService.getAheadCount(eventId, userId);
-        return TicketRequestResponseDTO.builder()
-                .status(status)
-                .queuePosition(status == TicketRequestStatus.WAITING
-                        ? ticketStatusService.getQueuePosition(eventId, userId)
-                        : null)
-                .mySequence(ticketStatusService.getMySequence(eventId, userId))
-                .aheadCount(aheadCount)
-                .estimatedWaitSeconds(ticketStatusService.getEstimatedWaitSeconds(aheadCount))
-                .readyUntil(ticketStatusService.getReadyUntil(eventId, userId))
-                .admissionState(ticketStatusService.getAdmissionState(eventId, userId))
+                .readyUntil(hideAdmissionDetails ? null : snapshot.readyUntil())
+                .admissionState(hideAdmissionDetails ? null : snapshot.admissionState())
                 .build();
     }
 
@@ -219,9 +312,97 @@ public class TicketController {
         }
     }
 
-    private boolean isTerminal(TicketRequestStatus status) {
-        return status == TicketRequestStatus.SUCCESS
-                || status == TicketRequestStatus.SOLD_OUT
-                || status == TicketRequestStatus.ALREADY;
+    private void publishShadowIssueRequest(
+            Long eventId,
+            Long userId,
+            String eventIdStr,
+            String userIdStr,
+            long remaining
+    ) {
+        try {
+            Long seq = ticketStatusService.getMySequence(eventIdStr, userIdStr);
+            ticketIssueEnqueueService.enqueueIssueRequest(
+                    eventId,
+                    userId,
+                    UUID.randomUUID().toString(),
+                    remaining,
+                    seq,
+                    System.currentTimeMillis()
+            );
+        } catch (Exception e) {
+            log.warn(
+                    "shadow publish enqueue 실패 eventId={} userId={} remaining={}",
+                    eventId,
+                    userId,
+                    remaining,
+                    e
+            );
+        }
     }
+
+    private boolean shouldUseAsyncReserve(Long eventId, Long userId) {
+        if (!asyncReserveEnabled) {
+            return false;
+        }
+        if (!isAllowedEvent(eventId)) {
+            return false;
+        }
+        int rolloutPercent = normalizeRolloutPercent(asyncReserveRolloutPercent);
+        if (rolloutPercent <= 0) {
+            return false;
+        }
+        if (rolloutPercent >= 100) {
+            return true;
+        }
+        int bucket = Math.floorMod((eventId + ":" + userId).hashCode(), 100);
+        return bucket < rolloutPercent;
+    }
+
+    private boolean shouldShadowPublish(Long eventId, boolean asyncSelected) {
+        return asyncReserveShadowPublishEnabled && !asyncSelected && isAllowedEvent(eventId);
+    }
+
+    private boolean isAllowedEvent(Long eventId) {
+        Set<Long> allowedEventIds = parseAllowedEventIds();
+        return allowedEventIds.isEmpty() || allowedEventIds.contains(eventId);
+    }
+
+    private Set<Long> parseAllowedEventIds() {
+        if (asyncReserveAllowedEventIds == null || asyncReserveAllowedEventIds.isBlank()) {
+            return Collections.emptySet();
+        }
+        Set<Long> allowed = new HashSet<>();
+        String[] tokens = asyncReserveAllowedEventIds.split(",");
+        for (String token : tokens) {
+            Long parsedId = safeParseLong(token);
+            if (parsedId != null) {
+                allowed.add(parsedId);
+            }
+        }
+        return allowed;
+    }
+
+    private Long safeParseLong(String rawValue) {
+        if (rawValue == null) {
+            return null;
+        }
+        String value = rawValue.trim();
+        if (value.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            log.warn("allowed-event-id 파싱 실패 value={}", value);
+            return null;
+        }
+    }
+
+    private int normalizeRolloutPercent(int rolloutPercent) {
+        if (rolloutPercent < 0) {
+            return 0;
+        }
+        return Math.min(rolloutPercent, 100);
+    }
+
 }

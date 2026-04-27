@@ -59,15 +59,35 @@ public class EventAutoOpenScheduler {
 
         for (FestivalEvent event : openEvents) {
             try {
+                ticketInitService.setEventStatus(String.valueOf(event.getId()), TicketingStatus.OPEN);
                 long issued = userTicketRepository.countByEventId(event.getId());
                 long remaining = Math.max(0, event.getTotalCapacity() - issued);
                 boolean restored = ticketInitService.restoreStockIfMissing(
                         String.valueOf(event.getId()), remaining);
                 if (restored) {
-                    log.warn("stock 복구 완료 eventId={} remaining={}", event.getId(), remaining);
+                    List<Long> issuedUserIds = userTicketRepository.findUserIdsByEventId(event.getId());
+                    long synced = ticketInitService.syncIssuedUsers(String.valueOf(event.getId()), issuedUserIds);
+                    log.warn(
+                            "stock 복구 완료 eventId={} remaining={} syncedUsers={}",
+                            event.getId(),
+                            remaining,
+                            synced
+                    );
                 }
             } catch (Exception e) {
                 log.error("stock 복구 실패 eventId={}", event.getId(), e);
+            }
+        }
+    }
+
+    @Scheduled(fixedDelay = 10000, initialDelay = 5000)
+    public void syncClosedEventStatuses() {
+        List<FestivalEvent> closedEvents = eventRepository.findAllByTicketingStatus(TicketingStatus.CLOSED);
+        for (FestivalEvent event : closedEvents) {
+            try {
+                ticketInitService.setEventStatus(String.valueOf(event.getId()), TicketingStatus.CLOSED);
+            } catch (Exception e) {
+                log.error("closed status 캐시 동기화 실패 eventId={}", event.getId(), e);
             }
         }
     }

@@ -77,10 +77,61 @@ def fetch_user_ids():
                     f"delete from user_tickets where event_id = %s and user_id in ({placeholders})",
                     [EVENT_ID, *user_ids],
                 )
-                conn.commit()
+            safe_execute(
+                cursor,
+                "delete from ticket_queue_entries where event_id = %s",
+                (EVENT_ID,),
+            )
+            try:
+                cleanup_async_issue_artifacts(cursor)
+            except pymysql.err.ProgrammingError:
+                # 테이블이 아직 생성되지 않은 초기 부트 상태에서는 스킵
+                pass
+            conn.commit()
             return user_ids
     finally:
         conn.close()
+
+
+def cleanup_async_issue_artifacts(cursor):
+    cursor.execute(
+        """
+        select request_id
+        from ticket_issue_requests
+        where event_id = %s
+        """,
+        (EVENT_ID,),
+    )
+    request_ids = [row[0] for row in cursor.fetchall()]
+    if request_ids:
+        req_placeholders = ",".join(["%s"] * len(request_ids))
+        cursor.execute(
+            f"""
+            delete from outbox_events
+            where aggregate_type = 'TICKET_ISSUE'
+              and aggregate_id in ({req_placeholders})
+            """,
+            request_ids,
+        )
+        cursor.execute(
+            f"delete from ticket_issue_compensation_logs where request_id in ({req_placeholders})",
+            request_ids,
+        )
+    cursor.execute(
+        """
+        delete from ticket_issue_requests
+        where event_id = %s
+        """,
+        (EVENT_ID,),
+    )
+
+
+def safe_execute(cursor, query, args):
+    try:
+        cursor.execute(query, args)
+    except pymysql.err.ProgrammingError:
+        # 테이블이 없는 경우(초기 스키마/구버전)에는 무시
+        pass
 
 
 def main():
@@ -90,6 +141,7 @@ def main():
         f"ticket:{EVENT_ID}:ready",
         f"ticket:{EVENT_ID}:active",
         f"ticket:{EVENT_ID}:seq",
+        f"ticket:{EVENT_ID}:admitted-seq",
         f"ticket:{EVENT_ID}:closed-cleanup",
     ]
     for user_id in user_ids:

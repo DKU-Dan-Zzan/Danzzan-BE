@@ -5,12 +5,14 @@ import com.danzzan.domain.ticket.dto.ResponseReserveTicketDto;
 import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
-import com.danzzan.domain.event.model.entity.TicketingStatus;
+import com.danzzan.domain.ticket.exception.ReserveProcessingException;
+import com.danzzan.domain.ticket.model.entity.TicketIssueRequestStatus;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.metrics.TicketingMetrics;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
 import com.danzzan.domain.ticket.service.QueueStateService;
+import com.danzzan.domain.ticket.service.TicketIssueEnqueueService;
 import com.danzzan.domain.ticket.service.TicketService;
 import com.danzzan.domain.ticket.service.TicketStatusService;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -28,6 +31,7 @@ import java.security.Principal;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,10 +41,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Optional;
+
 @ExtendWith(MockitoExtension.class)
 class TicketControllerTest {
 
     private MockMvc mockMvc;
+    private TicketController controller;
 
     @Mock private TicketService ticketService;
     @Mock private ClaimService claimService;
@@ -48,43 +55,43 @@ class TicketControllerTest {
     @Mock private QueueService queueService;
     @Mock private QueueStateService queueStateService;
     @Mock private TicketingMetrics ticketingMetrics;
+    @Mock private TicketIssueEnqueueService ticketIssueEnqueueService;
     private static final Principal USER_AUTH = new TestingAuthenticationToken(1L, null);
 
     @BeforeEach
     void setUp() {
-        TicketController controller = new TicketController(
-                ticketService, claimService, ticketStatusService, queueService, queueStateService, ticketingMetrics);
+        controller = new TicketController(
+                ticketService, claimService, ticketStatusService, queueService, queueStateService, ticketingMetrics,
+                ticketIssueEnqueueService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", false);
+        ReflectionTestUtils.setField(controller, "asyncReserveShadowPublishEnabled", false);
+        ReflectionTestUtils.setField(controller, "asyncReserveRolloutPercent", 0);
+        ReflectionTestUtils.setField(controller, "asyncReserveAllowedEventIds", "");
+        ReflectionTestUtils.setField(controller, "processingTtlSeconds", 600L);
     }
 
     // ── POST /queue/enter ─────────────────────────────────────────────────────
 
     @Test
     void enterQueue_대기중이면_queuePosition을_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.WAITING);
-        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
-        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
-        when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
-        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(5L);
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.WAITING, 5L, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("WAITING"))
-                .andExpect(jsonPath("$.queuePosition").value(5))
-                .andExpect(jsonPath("$.remaining").doesNotExist());
+                .andExpect(jsonPath("$.queuePosition").doesNotExist())
+                .andExpect(jsonPath("$.requestId").doesNotExist())
+                .andExpect(jsonPath("$.acceptedAt").doesNotExist());
     }
 
     @Test
     void enterQueue_WAITING이고_queuePosition_없으면_필드를_생략한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.WAITING);
-        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
-        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
-        when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
-        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(null);
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.WAITING, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -94,42 +101,64 @@ class TicketControllerTest {
 
     @Test
     void enterQueue_READY이면_ADMITTED를_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.NONE, TicketRequestStatus.ADMITTED);
-        when(ticketService.hasTicket(eq(1L), eq(10L))).thenReturn(false);
-        when(ticketService.getTicketingStatus(eq(10L))).thenReturn(TicketingStatus.OPEN);
-        when(queueService.enterQueue(eq("10"), eq("1"))).thenReturn(1L);
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.ADMITTED, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ADMITTED"))
                 .andExpect(jsonPath("$.queuePosition").doesNotExist());
-
-        verify(ticketStatusService, never()).getQueuePosition(any(), any());
     }
 
     @Test
-    void enterQueue_이미_SUCCESS이면_큐_진입_없이_즉시_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.SUCCESS);
+    void enterQueue_SUCCESS를_반환할_수_있다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.SUCCESS, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("SUCCESS"));
-
-        verify(queueService, never()).enterQueue(any(), any());
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
     }
 
     @Test
-    void enterQueue_이미_ALREADY이면_큐_진입_없이_즉시_반환한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1")))
-                .thenReturn(TicketRequestStatus.ALREADY);
+    void enterQueue_ALREADY를_반환할_수_있다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.ALREADY, null, null, null));
 
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("ALREADY"));
+                .andExpect(jsonPath("$.status").value("ALREADY"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
+    }
 
-        verify(queueService, never()).enterQueue(any(), any());
+    @Test
+    void enterQueue_SOLD_OUT을_반환할_수_있다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(TicketRequestStatus.SOLD_OUT, null, null, null));
+
+        mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SOLD_OUT"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
+    }
+
+    @Test
+    void enterQueue_PROCESSING이면_requestId와_acceptedAt을_포함한다() throws Exception {
+        when(queueService.enterQueue(eq("10"), eq("1")))
+                .thenReturn(new QueueService.QueueEnterSnapshot(
+                        TicketRequestStatus.PROCESSING,
+                        null,
+                        "req-123",
+                        1775917200000L
+                ));
+
+        mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-123"))
+                .andExpect(jsonPath("$.acceptedAt").value(1775917200000L))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist());
     }
 
     // ── POST /activate ────────────────────────────────────────────────────────
@@ -227,14 +256,185 @@ class TicketControllerTest {
         verify(queueStateService).releaseActive(eq("10"), eq("1"));
     }
 
+    @Test
+    void reserve_처리중오류이면_409를_반환한다() throws Exception {
+        when(claimService.claim(eq("10"), eq("1")))
+                .thenThrow(new ReserveProcessingException());
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESERVE_PROCESSING_FAILED"));
+    }
+
+    @Test
+    void reserve_async_enabled여도_rolloutPercent가_0이면_sync경로로_처리한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        ReflectionTestUtils.setField(controller, "asyncReserveRolloutPercent", 0);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketService.persistAndBuildResponse(eq(1L), eq(10L), eq(42L)))
+                .thenReturn(buildSuccessReserveResponse(42));
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.queueNumber").value(42));
+
+        verify(ticketIssueEnqueueService, never())
+                .enqueueIssueRequest(anyLong(), anyLong(), any(), anyLong(), any(), anyLong());
+    }
+
+    @Test
+    void reserve_async_enabled이고_rollout100_허용이벤트면_async경로로_처리한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        ReflectionTestUtils.setField(controller, "asyncReserveRolloutPercent", 100);
+        ReflectionTestUtils.setField(controller, "asyncReserveAllowedEventIds", "10,11");
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.NONE);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(7L);
+        when(ticketIssueEnqueueService.enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong()))
+                .thenReturn("req-rollout-1");
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-rollout-1"));
+
+        verify(ticketService, never()).persistAndBuildResponse(anyLong(), anyLong(), anyLong());
+    }
+
+    @Test
+    void reserve_async_enabled이어도_허용이벤트목록에_없으면_sync경로로_처리한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        ReflectionTestUtils.setField(controller, "asyncReserveRolloutPercent", 100);
+        ReflectionTestUtils.setField(controller, "asyncReserveAllowedEventIds", "11,12");
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketService.persistAndBuildResponse(eq(1L), eq(10L), eq(42L)))
+                .thenReturn(buildSuccessReserveResponse(42));
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.queueNumber").value(42));
+
+        verify(ticketStatusService, never()).setProcessing(any(), any(), any(), anyLong(), anyLong());
+        verify(ticketIssueEnqueueService, never())
+                .enqueueIssueRequest(anyLong(), anyLong(), any(), anyLong(), any(), anyLong());
+    }
+
+    @Test
+    void reserve_sync이고_shadowPublish가_켜져있으면_outbox요청을_추가저장한다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveShadowPublishEnabled", true);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketService.persistAndBuildResponse(eq(1L), eq(10L), eq(42L)))
+                .thenReturn(buildSuccessReserveResponse(42));
+        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(7L);
+        when(ticketIssueEnqueueService.enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong()))
+                .thenReturn("shadow-req-1");
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.queueNumber").value(42));
+
+        verify(ticketIssueEnqueueService)
+                .enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong());
+    }
+
+    @Test
+    void reserve_sync_shadowPublish실패는_응답성공을_깨지않는다() throws Exception {
+        ReflectionTestUtils.setField(controller, "asyncReserveShadowPublishEnabled", true);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketService.persistAndBuildResponse(eq(1L), eq(10L), eq(42L)))
+                .thenReturn(buildSuccessReserveResponse(42));
+        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(7L);
+        when(ticketIssueEnqueueService.enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong()))
+                .thenThrow(new RuntimeException("shadow enqueue failed"));
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.queueNumber").value(42));
+    }
+
+    @Test
+    void reserve_async_PROCESSING이면_claim없이_기존요청정보로_202를_반환한다() throws Exception {
+        enableAsyncModeForAllTraffic();
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.PROCESSING);
+        when(ticketStatusService.getProcessingRequestId(eq("10"), eq("1"))).thenReturn("req-redis-1");
+        when(ticketStatusService.getProcessingAcceptedAt(eq("10"), eq("1"))).thenReturn(1773486180000L);
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-redis-1"))
+                .andExpect(jsonPath("$.acceptedAt").value(1773486180000L));
+
+        verify(claimService, never()).claim(any(), any());
+    }
+
+    @Test
+    void reserve_async_PROCESSING이고_redis메타가_없으면_DB_inflight로_202를_반환한다() throws Exception {
+        enableAsyncModeForAllTraffic();
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.PROCESSING);
+        when(ticketStatusService.getProcessingRequestId(eq("10"), eq("1"))).thenReturn(null);
+        when(ticketStatusService.getProcessingAcceptedAt(eq("10"), eq("1"))).thenReturn(null);
+        when(ticketIssueEnqueueService.findProcessingRequest(eq(10L), eq(1L)))
+                .thenReturn(java.util.Optional.of(new TicketIssueEnqueueService.InFlightProcessingRequest("req-db-1", 1773486190000L)));
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-db-1"))
+                .andExpect(jsonPath("$.acceptedAt").value(1773486190000L));
+
+        verify(claimService, never()).claim(any(), any());
+    }
+
+    @Test
+    void reserve_async_접수성공이면_202와_PROCESSING을_반환한다() throws Exception {
+        enableAsyncModeForAllTraffic();
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.NONE);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(7L);
+        when(ticketIssueEnqueueService.enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong()))
+                .thenReturn("req-new-1");
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.requestId").value("req-new-1"));
+
+        verify(ticketStatusService).setProcessing(eq("10"), eq("1"), any(), anyLong(), eq(600L));
+        verify(queueStateService).releaseActive(eq("10"), eq("1"));
+    }
+
+    @Test
+    void reserve_async_DB저장실패면_clearProcessing과_claimRollback후_409를_반환한다() throws Exception {
+        enableAsyncModeForAllTraffic();
+        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.NONE);
+        when(claimService.claim(eq("10"), eq("1"))).thenReturn(ClaimResult.success(42L));
+        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(7L);
+        when(ticketIssueEnqueueService.enqueueIssueRequest(eq(10L), eq(1L), any(), eq(42L), eq(7L), anyLong()))
+                .thenThrow(new RuntimeException("db fail"));
+
+        mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RESERVE_PROCESSING_FAILED"));
+
+        verify(ticketStatusService).clearProcessing(eq("10"), eq("1"));
+        verify(claimService).rollback(eq("10"), eq("1"));
+        verify(queueStateService).releaseActive(eq("10"), eq("1"));
+    }
+
     // ── GET /queue/status ─────────────────────────────────────────────────────
 
     @Test
     void getQueueStatus_WAITING이면_queuePosition을_포함한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.WAITING);
-        when(ticketStatusService.getQueuePosition(eq("10"), eq("1"))).thenReturn(3L);
-        when(ticketStatusService.getMySequence(eq("10"), eq("1"))).thenReturn(12L);
-        when(ticketStatusService.getAheadCount(eq("10"), eq("1"))).thenReturn(2L);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.WAITING,
+                        3L,
+                        12L,
+                        2L,
+                        null,
+                        null
+                ));
         when(ticketStatusService.getEstimatedWaitSeconds(eq(2L))).thenReturn(180L);
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
@@ -248,7 +448,15 @@ class TicketControllerTest {
 
     @Test
     void getQueueStatus_ALREADY이면_queuePosition을_생략하고_getQueuePosition을_호출하지_않는다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.ALREADY);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.ALREADY,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                ));
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -260,9 +468,15 @@ class TicketControllerTest {
 
     @Test
     void getQueueStatus_READY이면_readyUntil과_admissionState를_포함한다() throws Exception {
-        when(ticketStatusService.getStatus(eq("10"), eq("1"))).thenReturn(TicketRequestStatus.ADMITTED);
-        when(ticketStatusService.getReadyUntil(eq("10"), eq("1"))).thenReturn(1773486180000L);
-        when(ticketStatusService.getAdmissionState(eq("10"), eq("1"))).thenReturn(QueueUserState.READY);
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.ADMITTED,
+                        null,
+                        null,
+                        0L,
+                        1773486180000L,
+                        QueueUserState.READY
+                ));
 
         mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
                 .andExpect(status().isOk())
@@ -270,4 +484,109 @@ class TicketControllerTest {
                 .andExpect(jsonPath("$.readyUntil").value(1773486180000L))
                 .andExpect(jsonPath("$.admissionState").value("READY"));
     }
+
+    @Test
+    void getQueueStatus_PROCESSING이면_readyUntil과_admissionState를_숨긴다() throws Exception {
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.PROCESSING,
+                        null,
+                        null,
+                        null,
+                        1773486180000L,
+                        QueueUserState.READY
+                ));
+
+        mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist())
+                .andExpect(jsonPath("$.readyUntil").doesNotExist())
+                .andExpect(jsonPath("$.admissionState").doesNotExist());
+    }
+
+    @Test
+    void getQueueStatus_FAILED이면_readyUntil과_admissionState를_숨긴다() throws Exception {
+        when(ticketStatusService.getQueueStatusSnapshot(eq("10"), eq("1")))
+                .thenReturn(new TicketStatusService.QueueStatusSnapshot(
+                        TicketRequestStatus.FAILED,
+                        null,
+                        null,
+                        null,
+                        1773486180000L,
+                        QueueUserState.READY
+                ));
+
+        mockMvc.perform(get("/tickets/10/queue/status").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.queuePosition").doesNotExist())
+                .andExpect(jsonPath("$.readyUntil").doesNotExist())
+                .andExpect(jsonPath("$.admissionState").doesNotExist());
+    }
+
+    @Test
+    void getRequestStatus_요청이존재하면_상태를_반환한다() throws Exception {
+        when(ticketIssueEnqueueService.findRequestStatus(eq(10L), eq(1L), eq("req-1")))
+                .thenReturn(Optional.of(new TicketIssueEnqueueService.IssueRequestStatusSnapshot(
+                        "req-1",
+                        10L,
+                        TicketIssueRequestStatus.PROCESSING,
+                        null,
+                        1773487000000L
+                )));
+
+        mockMvc.perform(get("/tickets/10/requests/req-1").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestId").value("req-1"))
+                .andExpect(jsonPath("$.eventId").value(10))
+                .andExpect(jsonPath("$.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.errorCode").doesNotExist())
+                .andExpect(jsonPath("$.updatedAt").value(1773487000000L));
+    }
+
+    @Test
+    void getRequestStatus_FAILED이면_errorCode를_포함한다() throws Exception {
+        when(ticketIssueEnqueueService.findRequestStatus(eq(10L), eq(1L), eq("req-f-1")))
+                .thenReturn(Optional.of(new TicketIssueEnqueueService.IssueRequestStatusSnapshot(
+                        "req-f-1",
+                        10L,
+                        TicketIssueRequestStatus.FAILED,
+                        "RESERVE_PROCESSING_FAILED",
+                        1773487000100L
+                )));
+
+        mockMvc.perform(get("/tickets/10/requests/req-f-1").principal(USER_AUTH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requestId").value("req-f-1"))
+                .andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.errorCode").value("RESERVE_PROCESSING_FAILED"))
+                .andExpect(jsonPath("$.updatedAt").value(1773487000100L));
+    }
+
+    @Test
+    void getRequestStatus_요청이없으면_404를_반환한다() throws Exception {
+        when(ticketIssueEnqueueService.findRequestStatus(eq(10L), eq(1L), eq("req-none")))
+                .thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/tickets/10/requests/req-none").principal(USER_AUTH))
+                .andExpect(status().isNotFound());
+    }
+
+    private void enableAsyncModeForAllTraffic() {
+        ReflectionTestUtils.setField(controller, "asyncReserveEnabled", true);
+        ReflectionTestUtils.setField(controller, "asyncReserveRolloutPercent", 100);
+        ReflectionTestUtils.setField(controller, "asyncReserveAllowedEventIds", "");
+    }
+
+    private ResponseReserveTicketDto buildSuccessReserveResponse(int queueNumber) {
+        ResponseMyTicketDto mockTicket = ResponseMyTicketDto.builder()
+                .id("999").status("issued").eventName("테스트공연")
+                .eventDate("05월 13일 (화) 19:00").issuedAt("2026-05-11 13:00")
+                .seat("단국존 순번 #42").queueNumber(queueNumber).wristbandIssued(false)
+                .venue("단국존").contact("운영본부").eventDescription("테스트")
+                .build();
+        return new ResponseReserveTicketDto(queueNumber, mockTicket);
+    }
+
 }

@@ -20,6 +20,12 @@ public class TicketRequestResponseDTO {
     @Schema(description = "요청 결과 상태", example = "SUCCESS")
     private TicketRequestStatus status;
 
+    @Schema(description = "비동기 예매 요청 ID(상태=PROCESSING일 때)", example = "2d1a4c9f-1fd1-4ef9-b442-c344a1d3950a")
+    private String requestId;
+
+    @Schema(description = "비동기 예매 접수 시각(epoch ms, 상태=PROCESSING일 때)", example = "1773486180000")
+    private Long acceptedAt;
+
     @Schema(description = "남은 재고(선택)", example = "42", nullable = true)
     private Long remaining;
 

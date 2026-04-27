@@ -17,9 +17,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import com.danzzan.global.filter.JwtAuthenticationFilter;
-import com.danzzan.global.jwt.JwtProvider;
-
 import java.util.Arrays;
 import java.util.List;
 
@@ -38,7 +35,6 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
     private String allowedOriginPatterns;
 
-    private final JwtProvider jwtProvider;
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
 
     @Bean
@@ -84,7 +80,6 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(new JwtAuthenticationFilter(jwtProvider), UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->
                                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))

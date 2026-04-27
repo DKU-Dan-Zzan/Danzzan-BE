@@ -91,7 +91,7 @@ public class ClaimServiceImpl implements ClaimService {
     }
 
     @Override
-    public void rollback(String eventId, String userId) {
+    public boolean rollback(String eventId, String userId) {
         String stockKey = TicketRedisKeys.stockKey(eventId);
         String userKey = TicketRedisKeys.userKey(eventId, userId);
         String statusKey = TicketRedisKeys.statusKey(eventId, userId);
@@ -102,7 +102,7 @@ public class ClaimServiceImpl implements ClaimService {
             try {
                 stringRedisTemplate.execute(claimRollbackScript, keys);
                 log.info("claim_rollback 성공 eventId={} userId={} attempt={}", eventId, userId, attempt);
-                return;
+                return true;
             } catch (Exception e) {
                 if (attempt < maxAttempts) {
                     log.warn("claim_rollback 재시도 {}/{} eventId={} userId={}", attempt, maxAttempts, eventId, userId, e);
@@ -111,6 +111,7 @@ public class ClaimServiceImpl implements ClaimService {
                 }
             }
         }
+        return false;
     }
 
     private ClaimResult recordOutcome(String eventId, String userId, ClaimResult result) {

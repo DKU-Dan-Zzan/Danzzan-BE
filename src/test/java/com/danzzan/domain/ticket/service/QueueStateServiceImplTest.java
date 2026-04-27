@@ -1,6 +1,5 @@
 package com.danzzan.domain.ticket.service;
 
-import com.danzzan.domain.event.repository.FestivalEventRepository;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,8 +22,6 @@ class QueueStateServiceImplTest {
     @Mock
     StringRedisTemplate redisTemplate;
     @Mock
-    FestivalEventRepository eventRepository;
-    @Mock
     RedisScript<Long> readyToActiveScript;
     @Mock
     RedisScript<Long> admitWaitingUsersBatchScript;
@@ -39,7 +36,6 @@ class QueueStateServiceImplTest {
     void setUp() {
         sut = new QueueStateServiceImpl(
                 redisTemplate,
-                eventRepository,
                 readyToActiveScript,
                 admitWaitingUsersBatchScript,
                 expireReadyUsersScript,

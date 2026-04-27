@@ -25,12 +25,13 @@ if claimStatus == "SUCCESS"
     return { claimStatus, "", "", "", "", "", "" }
 end
 
-local state = redis.call("HGET", KEYS[2], "state") or ""
+local hashValues = redis.call("HMGET", KEYS[2], "state", "seq", "readyUntil", "activeUntil")
+local state = hashValues[1] or ""
 if state == "" then
     return { claimStatus, "", "", "", "", "", "" }
 end
 
-local seq = redis.call("HGET", KEYS[2], "seq") or ""
+local seq = hashValues[2] or ""
 if state == "WAITING" then
     local admittedSeq = redis.call("GET", KEYS[3]) or ""
     local stock = redis.call("GET", KEYS[4]) or ""
@@ -38,12 +39,12 @@ if state == "WAITING" then
 end
 
 if state == "READY" then
-    local readyUntil = redis.call("HGET", KEYS[2], "readyUntil") or ""
+    local readyUntil = hashValues[3] or ""
     return { claimStatus, state, seq, readyUntil, "", "", "" }
 end
 
 if state == "ACTIVE" then
-    local activeUntil = redis.call("HGET", KEYS[2], "activeUntil") or ""
+    local activeUntil = hashValues[4] or ""
     return { claimStatus, state, seq, "", activeUntil, "", "" }
 end
 

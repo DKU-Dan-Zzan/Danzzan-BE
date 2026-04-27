@@ -63,28 +63,44 @@ public class JwtTokenProvider {
 
     // 토큰에서 userId 추출
     public Long getUserId(String token) {
-        return Long.parseLong(getClaims(token).getSubject());
+        return getUserId(getValidClaims(token));
+    }
+
+    public Long getUserId(Claims claims) {
+        return Long.parseLong(claims.getSubject());
     }
 
     // 토큰에서 role 추출
     public String getRole(String token) {
-        return getClaims(token).get("role", String.class);
+        return getRole(getValidClaims(token));
+    }
+
+    public String getRole(Claims claims) {
+        return claims.get("role", String.class);
     }
 
     // 토큰에서 studentId 추출
     public String getStudentId(String token) {
-        return getClaims(token).get("studentId", String.class);
+        return getStudentId(getValidClaims(token));
+    }
+
+    public String getStudentId(Claims claims) {
+        return claims.get("studentId", String.class);
     }
 
     public int getTokenVersion(String token) {
-        Integer tokenVersion = getClaims(token).get("tokenVersion", Integer.class);
+        return getTokenVersion(getValidClaims(token));
+    }
+
+    public int getTokenVersion(Claims claims) {
+        Integer tokenVersion = claims.get("tokenVersion", Integer.class);
         return tokenVersion == null ? 0 : tokenVersion;
     }
 
     // 토큰 유효성 검증
     public boolean validateToken(String token) {
         try {
-            getClaims(token);
+            getValidClaims(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;
@@ -94,13 +110,13 @@ public class JwtTokenProvider {
     // 만료된 토큰에서도 클레임 추출 (토큰 재발급 시 사용)
     public Claims getClaimsFromExpiredToken(String token) {
         try {
-            return getClaims(token);
+            return getValidClaims(token);
         } catch (ExpiredJwtException e) {
             return e.getClaims();
         }
     }
 
-    private Claims getClaims(String token) {
+    public Claims getValidClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()

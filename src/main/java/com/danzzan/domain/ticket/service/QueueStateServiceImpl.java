@@ -1,7 +1,5 @@
 package com.danzzan.domain.ticket.service;
 
-import com.danzzan.domain.event.model.entity.TicketingStatus;
-import com.danzzan.domain.event.repository.FestivalEventRepository;
 import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import lombok.RequiredArgsConstructor;
@@ -32,10 +30,10 @@ public class QueueStateServiceImpl implements QueueStateService {
     private static final String FIELD_ACTIVE_UNTIL = "activeUntil";
     private static final String FIELD_EXPIRED_AT = "expiredAt";
     private static final String FIELD_CANCELLED_AT = "cancelledAt";
+    private static final String EVENT_STATUS_OPEN = "OPEN";
     private static final int EVENT_TRIGGER_BATCH_LIMIT = 16;
 
     private final StringRedisTemplate redisTemplate;
-    private final FestivalEventRepository eventRepository;
 
     @Qualifier("readyToActiveScript")
     private final RedisScript<Long> readyToActiveScript;
@@ -303,14 +301,7 @@ public class QueueStateServiceImpl implements QueueStateService {
     }
 
     private boolean isEventOpen(String eventId) {
-        try {
-            Long eventIdLong = Long.valueOf(eventId);
-            return eventRepository.findById(eventIdLong)
-                    .map(event -> event.getTicketingStatus() == TicketingStatus.OPEN)
-                    .orElse(false);
-        } catch (NumberFormatException e) {
-            log.warn("eventId 파싱 실패로 event-driven 승격 생략 eventId={}", eventId);
-            return false;
-        }
+        String eventStatus = redisTemplate.opsForValue().get(TicketRedisKeys.eventStatusKey(eventId));
+        return EVENT_STATUS_OPEN.equals(eventStatus);
     }
 }

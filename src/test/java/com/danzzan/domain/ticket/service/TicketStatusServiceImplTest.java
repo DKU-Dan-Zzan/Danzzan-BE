@@ -31,12 +31,6 @@ class TicketStatusServiceImplTest {
     private StringRedisTemplate redisTemplate;
 
     @Mock
-    private QueueService queueService;
-
-    @Mock
-    private QueueStateService queueStateService;
-
-    @Mock
     private ValueOperations<String, String> valueOperations;
 
     @Mock
@@ -51,8 +45,6 @@ class TicketStatusServiceImplTest {
     void setUp() {
         ticketStatusService = new TicketStatusServiceImpl(
                 redisTemplate,
-                queueService,
-                queueStateService,
                 queueStatusSnapshotScript
         );
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);

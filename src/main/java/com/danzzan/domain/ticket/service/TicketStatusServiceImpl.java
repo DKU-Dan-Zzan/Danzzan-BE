@@ -17,15 +17,10 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class TicketStatusServiceImpl implements TicketStatusService {
 
-    private static final String FIELD_SEQ = "seq";
-    private static final String FIELD_READY_UNTIL = "readyUntil";
-    private static final String FIELD_ACTIVE_UNTIL = "activeUntil";
     private static final String FIELD_REQUEST_ID = "requestId";
     private static final String FIELD_ACCEPTED_AT = "acceptedAt";
 
     private final StringRedisTemplate redisTemplate;
-    private final QueueService queueService;
-    private final QueueStateService queueStateService;
     @Qualifier("queueStatusSnapshotScript")
     private final RedisScript<List> queueStatusSnapshotScript;
 
@@ -90,60 +85,22 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
     @Override
     public TicketRequestStatus getStatus(String eventId, String userId) {
-        // 1. Lua claim 결과 확인 (SUCCESS / SOLD_OUT / ALREADY)
-        String claimStatus = redisTemplate.opsForValue().get(TicketRedisKeys.statusKey(eventId, userId));
-        if (claimStatus != null && !claimStatus.isBlank()) {
-            try {
-                TicketRequestStatus s = TicketRequestStatus.valueOf(claimStatus);
-                if (s == TicketRequestStatus.SUCCESS
-                        || s == TicketRequestStatus.SOLD_OUT
-                        || s == TicketRequestStatus.ALREADY
-                        || s == TicketRequestStatus.PROCESSING
-                        || s == TicketRequestStatus.FAILED) {
-                    return s;
-                }
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-
-        // 2. 상태 머신 Hash 확인
-        QueueUserState state = queueStateService.getState(eventId, userId);
-        if (state == null) {
-            return TicketRequestStatus.NONE;
-        }
-        return switch (state) {
-            case WAITING -> isStockExhausted(eventId)
-                    ? TicketRequestStatus.SOLD_OUT
-                    : TicketRequestStatus.WAITING;
-            case READY, ACTIVE -> TicketRequestStatus.ADMITTED;
-            case DONE -> TicketRequestStatus.SUCCESS;
-            case EXPIRED -> TicketRequestStatus.NONE;
-            // 자발적 이탈은 매진이 아니라 "대기열 미참여"로 보는 편이 UI/재진입 흐름에 자연스럽다.
-            case CANCELLED -> TicketRequestStatus.NONE;
-        };
+        return getQueueStatusSnapshot(eventId, userId).status();
     }
 
     @Override
     public Long getQueuePosition(String eventId, String userId) {
-        return queueService.getQueuePosition(eventId, userId);
+        return getQueueStatusSnapshot(eventId, userId).queuePosition();
     }
 
     @Override
     public Long getMySequence(String eventId, String userId) {
-        return getHashLong(eventId, userId, FIELD_SEQ);
+        return getQueueStatusSnapshot(eventId, userId).mySequence();
     }
 
     @Override
     public Long getAheadCount(String eventId, String userId) {
-        QueueUserState state = queueStateService.getState(eventId, userId);
-        if (state == QueueUserState.WAITING) {
-            Long queuePosition = getQueuePosition(eventId, userId);
-            return queuePosition == null ? null : Math.max(queuePosition - 1L, 0L);
-        }
-        if (state == QueueUserState.READY || state == QueueUserState.ACTIVE) {
-            return 0L;
-        }
-        return null;
+        return getQueueStatusSnapshot(eventId, userId).aheadCount();
     }
 
     @Override
@@ -160,20 +117,17 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
     @Override
     public Long getReadyUntil(String eventId, String userId) {
-        QueueUserState admissionState = getAdmissionState(eventId, userId);
+        QueueStatusSnapshot snapshot = getQueueStatusSnapshot(eventId, userId);
+        QueueUserState admissionState = snapshot.admissionState();
         if (admissionState != QueueUserState.READY) {
             return null;
         }
-        return getHashLong(eventId, userId, FIELD_READY_UNTIL);
+        return snapshot.readyUntil();
     }
 
     @Override
     public QueueUserState getAdmissionState(String eventId, String userId) {
-        QueueUserState state = queueStateService.getState(eventId, userId);
-        if (state == QueueUserState.READY || state == QueueUserState.ACTIVE) {
-            return state;
-        }
-        return null;
+        return getQueueStatusSnapshot(eventId, userId).admissionState();
     }
 
     @Override
@@ -212,11 +166,6 @@ public class TicketStatusServiceImpl implements TicketStatusService {
                 TimeUnit.SECONDS
         );
         redisTemplate.delete(TicketRedisKeys.processingMetaKey(eventId, userId));
-    }
-
-    private boolean isStockExhausted(String eventId) {
-        String stock = redisTemplate.opsForValue().get(TicketRedisKeys.stockKey(eventId));
-        return isStockExhaustedValue(stock);
     }
 
     private boolean isStockExhaustedValue(String stock) {
@@ -298,10 +247,6 @@ public class TicketStatusServiceImpl implements TicketStatusService {
         } catch (NumberFormatException e) {
             return null;
         }
-    }
-
-    private Long getHashLong(String eventId, String userId, String field) {
-        return getHashLong(TicketRedisKeys.queueUserHashKey(eventId, userId), field);
     }
 
     private Long getHashLong(String key, String field) {

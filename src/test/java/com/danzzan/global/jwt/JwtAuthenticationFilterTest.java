@@ -4,6 +4,7 @@ import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
 import com.danzzan.domain.user.repository.UserRepository;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import java.util.Optional;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
@@ -51,14 +53,15 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/tickets/1/queue/enter");
         request.addHeader("Authorization", "Bearer token");
         MockHttpServletResponse response = new MockHttpServletResponse();
-        when(jwtTokenProvider.validateToken("token")).thenReturn(true);
-        when(jwtTokenProvider.getUserId("token")).thenReturn(1L);
-        when(jwtTokenProvider.getRole("token")).thenReturn("ROLE_USER");
+        Claims claims = mock(Claims.class);
+        when(jwtTokenProvider.getValidClaims("token")).thenReturn(claims);
+        when(jwtTokenProvider.getUserId(claims)).thenReturn(1L);
+        when(jwtTokenProvider.getRole(claims)).thenReturn("ROLE_USER");
 
         filter.doFilter(request, response, filterChain);
 
         verify(userRepository, never()).findById(1L);
-        verify(jwtTokenProvider, never()).getTokenVersion("token");
+        verify(jwtTokenProvider, never()).getTokenVersion(claims);
         verify(filterChain).doFilter(request, response);
     }
 
@@ -68,16 +71,17 @@ class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer token");
         MockHttpServletResponse response = new MockHttpServletResponse();
         User user = userWithTokenVersion(3);
+        Claims claims = mock(Claims.class);
 
-        when(jwtTokenProvider.validateToken("token")).thenReturn(true);
-        when(jwtTokenProvider.getUserId("token")).thenReturn(1L);
-        when(jwtTokenProvider.getRole("token")).thenReturn("ROLE_ADMIN");
-        when(jwtTokenProvider.getTokenVersion("token")).thenReturn(3);
+        when(jwtTokenProvider.getValidClaims("token")).thenReturn(claims);
+        when(jwtTokenProvider.getUserId(claims)).thenReturn(1L);
+        when(jwtTokenProvider.getRole(claims)).thenReturn("ROLE_ADMIN");
+        when(jwtTokenProvider.getTokenVersion(claims)).thenReturn(3);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         filter.doFilter(request, response, filterChain);
 
-        verify(jwtTokenProvider).getTokenVersion("token");
+        verify(jwtTokenProvider).getTokenVersion(claims);
         verify(userRepository).findById(1L);
         verify(filterChain).doFilter(request, response);
     }

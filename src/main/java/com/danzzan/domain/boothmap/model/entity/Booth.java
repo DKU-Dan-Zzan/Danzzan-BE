@@ -49,4 +49,8 @@ public class Booth {
         this.locationX = null;
         this.locationY = null;
     }
+
+    public void updateDescription(String description) {
+        this.description = description;
+    }
 }

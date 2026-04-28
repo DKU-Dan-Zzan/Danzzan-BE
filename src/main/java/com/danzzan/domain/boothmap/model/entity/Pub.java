@@ -45,4 +45,10 @@ public class Pub {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
+
+    public void updateAdminInfo(String intro, String description, String instagram) {
+        this.intro = intro;
+        this.description = description;
+        this.instagram = instagram;
+    }
 }

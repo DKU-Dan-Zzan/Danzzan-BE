@@ -38,4 +38,18 @@ public class BoothOperation {
 
     @Column(name = "end_time")
     private LocalTime endTime;
+
+    public BoothOperation(Booth booth, LocalDate operationDate, BoothOperationStatus operationStatus, LocalTime startTime, LocalTime endTime) {
+        this.booth = booth;
+        this.operationDate = operationDate;
+        this.operationStatus = operationStatus;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
+
+    public void updateOperation(BoothOperationStatus operationStatus, LocalTime startTime, LocalTime endTime) {
+        this.operationStatus = operationStatus;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
 }

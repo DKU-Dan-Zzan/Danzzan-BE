@@ -16,4 +16,13 @@ public interface PerformanceRepository extends JpaRepository<Performance, Intege
         order by p.startTime asc
     """)
     List<Performance> findByDateWithArtist(@Param("date") LocalDate date);
+
+    @Query("""
+        select p from Performance p
+        join fetch p.artist
+        where p.id = :id
+    """)
+    java.util.Optional<Performance> findByIdWithArtist(@Param("id") Integer id);
+
+    boolean existsByArtistId(Integer artistId);
 }

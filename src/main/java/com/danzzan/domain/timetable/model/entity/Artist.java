@@ -29,4 +29,25 @@ public class Artist {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
+
+    public static Artist create(String name, String description, String imageUrl) {
+        Artist artist = new Artist();
+        artist.name = name;
+        artist.description = description;
+        artist.imageUrl = imageUrl;
+        return artist;
+    }
+
+    public void updateProfile(String name, String description) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (description != null) {
+            this.description = description;
+        }
+    }
+
+    public void changeImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
 }

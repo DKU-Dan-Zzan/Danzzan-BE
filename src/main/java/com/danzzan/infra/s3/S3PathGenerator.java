@@ -12,6 +12,7 @@ import java.util.UUID;
  * - notices/{yyyyMMdd}/{uuid}-{fileName}
  * - booths/{yyyyMMdd}/{uuid}-{fileName}
  * - profiles/{uuid}-{fileName}
+ * - artists/{artistId}/{uuid}-{fileName}
  */
 @Component
 public class S3PathGenerator {
@@ -45,6 +46,12 @@ public class S3PathGenerator {
         String safeDepartment = sanitizePathSegment(department);
         String safeName = sanitizeFileName(originalFilename);
         return "pub-images/" + safeCollegeName + "/" + safeDepartment + "/" + UUID.randomUUID() + "-" + safeName;
+    }
+
+    public String generateArtistImageKey(Integer artistId, String originalFilename) {
+        String safeName = sanitizeFileName(originalFilename);
+        String segment = artistId == null ? "unknown" : artistId.toString();
+        return "artists/" + segment + "/" + UUID.randomUUID() + "-" + safeName;
     }
 
     private String sanitizeFileName(String fileName) {

@@ -95,6 +95,35 @@ public class S3PresignService {
         }
     }
 
+    /**
+     * 아티스트 이미지 Presigned PUT URL 발급.
+     * - 이미지 타입 검증 (image/jpeg, image/jpg, image/png, image/webp)
+     * - 5MB 제한
+     * - 키 경로: artists/{artistId}/{uuid}-{fileName}
+     */
+    public S3PresignedPutResult presignPutArtistImage(
+            Integer artistId,
+            String fileName,
+            String contentType,
+            Long fileSize
+    ) {
+        if (contentType != null && !contentType.isBlank()) {
+            validateImageContentType(contentType.trim());
+        }
+        validateMaxSize(fileSize);
+        ensureBucketConfigured();
+        String key = s3PathGenerator.generateArtistImageKey(artistId, fileName);
+        try {
+            return presignPutObject(key, contentType);
+        } catch (Exception e) {
+            log.warn("아티스트 이미지 presign 실패 artistId={} fileName={} contentType={}", artistId, fileName, contentType, e);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+            );
+        }
+    }
+
     public S3PresignedPutResult presignPutPubImage(
             String collegeName,
             String department,

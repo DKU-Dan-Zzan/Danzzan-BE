@@ -53,4 +53,9 @@ public class Booth {
     public void updateDescription(String description) {
         this.description = description;
     }
+
+    public void updateAdminInfo(String name, String description) {
+        this.name = name;
+        this.description = description;
+    }
 }

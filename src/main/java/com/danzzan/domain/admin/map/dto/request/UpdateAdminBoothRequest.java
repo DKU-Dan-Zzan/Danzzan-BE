@@ -17,6 +17,8 @@ public class UpdateAdminBoothRequest {
     @NotNull
     private BoothOperationStatus operationStatus;
 
+    private String name;
+
     private String description;
 
     private LocalTime startTime;

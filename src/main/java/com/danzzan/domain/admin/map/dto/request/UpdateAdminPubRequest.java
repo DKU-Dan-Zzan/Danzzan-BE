@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor
 public class UpdateAdminPubRequest {
+    private String name;
     private String intro;
     private String description;
     private String instagram;

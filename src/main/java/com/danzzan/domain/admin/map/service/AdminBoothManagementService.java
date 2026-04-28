@@ -127,9 +127,11 @@ public class AdminBoothManagementService {
 
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
-        if (booth.getType() == BoothType.FOOD_TRUCK) {
-            booth.updateDescription(normalizeNullableText(request.getDescription()));
-        }
+        String nextName = normalizeRequiredText(request.getName(), booth.getName());
+        String nextDescription = booth.getType() == BoothType.FOOD_TRUCK
+                ? normalizeNullableText(request.getDescription())
+                : booth.getDescription();
+        booth.updateAdminInfo(nextName, nextDescription);
 
         BoothOperation boothOperation = boothOperationRepository.findByBoothIdAndOperationDate(boothId, request.getOperationDate())
                 .orElseGet(() -> new BoothOperation(
@@ -154,6 +156,7 @@ public class AdminBoothManagementService {
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
 
         pub.updateAdminInfo(
+                normalizeRequiredText(request.getName(), pub.getName()),
                 normalizeNullableText(request.getIntro()),
                 normalizeNullableText(request.getDescription()),
                 normalizeNullableText(request.getInstagram())
@@ -307,6 +310,11 @@ public class AdminBoothManagementService {
 
     private String formatTime(LocalTime time) {
         return time == null ? null : time.toString();
+    }
+
+    private String normalizeRequiredText(String value, String fallback) {
+        String normalized = normalizeNullableText(value);
+        return normalized == null ? fallback : normalized;
     }
 
     private void ensurePubExists(Long pubId) {

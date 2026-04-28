@@ -46,7 +46,8 @@ public class Pub {
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
-    public void updateAdminInfo(String intro, String description, String instagram) {
+    public void updateAdminInfo(String name, String intro, String description, String instagram) {
+        this.name = name;
         this.intro = intro;
         this.description = description;
         this.instagram = instagram;

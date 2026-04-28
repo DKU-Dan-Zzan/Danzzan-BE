@@ -34,7 +34,11 @@ public class AdminMapService {
                 ))
                 .toList();
 
-        List<AdminMapBoothResponse> booths = boothRepository.findAll().stream()
+        List<Booth> boothsForDate = operationDate == null
+                ? boothRepository.findAll()
+                : boothRepository.findAllByOperationDate(operationDate);
+
+        List<AdminMapBoothResponse> booths = boothsForDate.stream()
                 .map(booth -> new AdminMapBoothResponse(
                         booth.getId(),
                         booth.getName(),

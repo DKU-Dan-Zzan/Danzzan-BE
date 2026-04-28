@@ -40,11 +40,29 @@ public class S3PathGenerator {
         return "profiles/" + UUID.randomUUID() + "-" + safeName;
     }
 
+    public String generatePubImageKey(String collegeName, String department, String originalFilename) {
+        String safeCollegeName = sanitizePathSegment(collegeName);
+        String safeDepartment = sanitizePathSegment(department);
+        String safeName = sanitizeFileName(originalFilename);
+        return "pub-images/" + safeCollegeName + "/" + safeDepartment + "/" + UUID.randomUUID() + "-" + safeName;
+    }
+
     private String sanitizeFileName(String fileName) {
         if (fileName == null || fileName.isBlank()) {
             return "image";
         }
         return fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    private String sanitizePathSegment(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+
+        return value
+                .trim()
+                .replaceAll("[\\\\/:*?\"<>|]", "_")
+                .replaceAll("\\s+", " ");
     }
 }
 

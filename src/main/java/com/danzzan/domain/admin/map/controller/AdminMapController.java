@@ -1,13 +1,18 @@
 package com.danzzan.domain.admin.map.controller;
 
+import com.danzzan.domain.admin.map.dto.request.PresignAdminPubImageRequest;
+import com.danzzan.domain.admin.map.dto.request.RegisterAdminPubImagesRequest;
 import com.danzzan.domain.admin.map.dto.request.UpdateAdminBoothRequest;
 import com.danzzan.domain.admin.map.dto.request.UpdateAdminPubRequest;
 import com.danzzan.domain.admin.map.dto.request.UpdateMapLocationRequest;
 import com.danzzan.domain.admin.map.dto.request.UpsertAdminPubOperationRequest;
 import com.danzzan.domain.admin.map.dto.response.AdminBoothManagementResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminMapResponse;
+import com.danzzan.domain.admin.map.dto.response.AdminPubImagePresignResponse;
+import com.danzzan.domain.admin.map.dto.response.AdminPubImageResponse;
 import com.danzzan.domain.admin.map.service.AdminBoothManagementService;
 import com.danzzan.domain.admin.map.service.AdminMapService;
+import com.danzzan.infra.s3.S3PresignedPutResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -27,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -97,6 +103,49 @@ public class AdminMapController {
             @Valid @RequestBody UpdateAdminPubRequest request
     ) {
         adminBoothManagementService.updatePubManagement(pubId, request);
+    }
+
+    @GetMapping("/pubs/{pubId}/images")
+    @Operation(summary = "주점 이미지 목록 조회", description = "특정 주점의 등록 이미지와 대표 이미지를 조회합니다.")
+    public List<AdminPubImageResponse> getPubImages(@PathVariable Long pubId) {
+        return adminBoothManagementService.getPubImages(pubId);
+    }
+
+    @PostMapping("/pubs/{pubId}/images/presign")
+    @Operation(summary = "주점 이미지 업로드용 Presigned URL 발급", description = "주점 이미지를 Object Storage에 업로드하기 위한 presigned URL을 발급합니다.")
+    public AdminPubImagePresignResponse presignPubImage(
+            @PathVariable Long pubId,
+            @Valid @RequestBody PresignAdminPubImageRequest request
+    ) {
+        S3PresignedPutResult result = adminBoothManagementService.presignPubImage(pubId, request);
+        return AdminPubImagePresignResponse.from(result);
+    }
+
+    @PostMapping("/pubs/{pubId}/images")
+    @Operation(summary = "주점 이미지 등록", description = "업로드 완료된 이미지 URL들을 pub_image 테이블에 등록합니다.")
+    public void registerPubImages(
+            @PathVariable Long pubId,
+            @Valid @RequestBody RegisterAdminPubImagesRequest request
+    ) {
+        adminBoothManagementService.registerPubImages(pubId, request);
+    }
+
+    @PatchMapping("/pubs/{pubId}/images/{imageId}/main")
+    @Operation(summary = "주점 메인 이미지 지정", description = "특정 주점의 대표 이미지를 하나로 지정합니다.")
+    public void updateMainPubImage(
+            @PathVariable Long pubId,
+            @PathVariable Long imageId
+    ) {
+        adminBoothManagementService.updateMainPubImage(pubId, imageId);
+    }
+
+    @DeleteMapping("/pubs/{pubId}/images/{imageId}")
+    @Operation(summary = "주점 이미지 삭제", description = "pub_image 테이블의 이미지 row를 삭제합니다.")
+    public void deletePubImage(
+            @PathVariable Long pubId,
+            @PathVariable Long imageId
+    ) {
+        adminBoothManagementService.deletePubImage(pubId, imageId);
     }
 
     @PostMapping("/pub-operations")

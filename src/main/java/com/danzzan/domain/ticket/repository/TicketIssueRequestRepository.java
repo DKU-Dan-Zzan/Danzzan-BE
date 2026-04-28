@@ -19,6 +19,13 @@ public interface TicketIssueRequestRepository extends JpaRepository<TicketIssueR
     @Query("select t from TicketIssueRequest t where t.requestId = :requestId")
     Optional<TicketIssueRequest> findByRequestIdForUpdate(@Param("requestId") String requestId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from TicketIssueRequest t where t.userId = :userId and t.status = :status")
+    List<TicketIssueRequest> findAllByUserIdAndStatusForUpdate(
+            @Param("userId") Long userId,
+            @Param("status") TicketIssueRequestStatus status
+    );
+
     Optional<TicketIssueRequest> findByEventIdAndUserId(Long eventId, Long userId);
 
     Optional<TicketIssueRequest> findByEventIdAndUserIdAndStatus(Long eventId, Long userId, TicketIssueRequestStatus status);

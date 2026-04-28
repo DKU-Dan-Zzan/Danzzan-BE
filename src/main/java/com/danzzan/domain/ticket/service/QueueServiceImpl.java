@@ -55,9 +55,14 @@ public class QueueServiceImpl implements QueueService {
         if (result == null || result.size() < 4) {
             return new QueueEnterSnapshot(TicketRequestStatus.NONE, null, null, null);
         }
+        TicketRequestStatus status = parseStatus(result.get(0));
+        Long queuePosition = parseQueuePosition(result.get(1));
+        if (status == TicketRequestStatus.WAITING && queuePosition == null) {
+            queuePosition = getQueuePosition(eventId, userId);
+        }
         return new QueueEnterSnapshot(
-                parseStatus(result.get(0)),
-                parseQueuePosition(result.get(1)),
+                status,
+                queuePosition,
                 parseRequestId(result.get(2)),
                 parseAcceptedAt(result.get(3))
         );
@@ -106,7 +111,12 @@ public class QueueServiceImpl implements QueueService {
 
         QueueUserState queueState = parseQueueState(precheck.queueState());
         if (queueState == QueueUserState.WAITING) {
-            return new QueueEnterSnapshot(TicketRequestStatus.WAITING, null, null, null);
+            return new QueueEnterSnapshot(
+                    TicketRequestStatus.WAITING,
+                    getQueuePosition(eventId, userId),
+                    null,
+                    null
+            );
         }
         if (queueState == QueueUserState.READY || queueState == QueueUserState.ACTIVE) {
             return new QueueEnterSnapshot(TicketRequestStatus.ADMITTED, null, null, null);

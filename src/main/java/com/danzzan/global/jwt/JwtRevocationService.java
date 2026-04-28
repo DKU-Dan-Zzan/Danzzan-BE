@@ -71,6 +71,13 @@ public class JwtRevocationService {
         return Boolean.TRUE.equals(redisTemplate.hasKey(withdrawnUserKey(userId)));
     }
 
+    public void clearWithdrawnUser(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        redisTemplate.delete(withdrawnUserKey(userId));
+    }
+
     public void cacheUserVersion(Long userId, int tokenVersion) {
         if (userId == null) {
             return;

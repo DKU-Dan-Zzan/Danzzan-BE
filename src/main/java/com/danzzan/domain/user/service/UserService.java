@@ -71,6 +71,8 @@ public class UserService {
         String accessToken = jwtTokenProvider.createAccessToken(
                 user.getId(), user.getStudentId(), user.getRole().name(), user.getTokenVersion());
         String refreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getTokenVersion());
+        jwtRevocationService.clearWithdrawnUser(user.getId());
+        jwtRevocationService.cacheUserVersion(user.getId(), user.getTokenVersion());
 
         ResponseLoginDto.UserInfo userInfo = toUserInfo(user);
         return new ResponseLoginDto(accessToken, refreshToken, userInfo);
@@ -138,6 +140,8 @@ public class UserService {
         String newAccessToken = jwtTokenProvider.createAccessToken(
                 user.getId(), user.getStudentId(), user.getRole().name(), user.getTokenVersion());
         String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getId(), user.getTokenVersion());
+        jwtRevocationService.clearWithdrawnUser(user.getId());
+        jwtRevocationService.cacheUserVersion(user.getId(), user.getTokenVersion());
 
         return new ResponseRefreshTokenDto(newAccessToken, newRefreshToken);
     }

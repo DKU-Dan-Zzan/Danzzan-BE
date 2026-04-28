@@ -10,12 +10,16 @@ import com.danzzan.domain.ticket.repository.TicketIssueRequestRepository;
 import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import com.danzzan.domain.ticket.service.QueueStateService;
 import com.danzzan.domain.ticket.service.TicketIssueRequestStatusCacheService;
+import com.danzzan.domain.user.model.dto.request.RequestLoginDto;
+import com.danzzan.domain.user.model.dto.response.ResponseLoginDto;
+import com.danzzan.domain.user.model.dto.response.ResponseRefreshTokenDto;
 import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.global.jwt.JwtRevocationService;
 import com.danzzan.global.jwt.JwtTokenProvider;
+import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +36,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -84,6 +89,46 @@ class UserServiceTest {
                 jwtRevocationService,
                 ticketIssueRequestStatusCacheService
         );
+    }
+
+    @Test
+    void login_성공시_현재_토큰버전을_캐시한다() {
+        User user = user(1L, "32100000", "01012345678");
+        ReflectionTestUtils.setField(user, "tokenVersion", 2);
+
+        when(userRepository.findByStudentIdAndDeletedFalse("32100000")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password", "pw")).thenReturn(true);
+        when(jwtTokenProvider.createAccessToken(1L, "32100000", "ROLE_USER", 2)).thenReturn("access-token");
+        when(jwtTokenProvider.createRefreshToken(1L, 2)).thenReturn("refresh-token");
+
+        ResponseLoginDto response = userService.login(new RequestLoginDto("32100000", "password"));
+
+        assertThat(response.getAccessToken()).isEqualTo("access-token");
+        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+        verify(jwtRevocationService).clearWithdrawnUser(1L);
+        verify(jwtRevocationService).cacheUserVersion(1L, 2);
+    }
+
+    @Test
+    void refreshToken_성공시_현재_토큰버전을_캐시한다() {
+        User user = user(1L, "32100000", "01012345678");
+        ReflectionTestUtils.setField(user, "tokenVersion", 3);
+        Claims claims = mock(Claims.class);
+
+        when(jwtTokenProvider.validateToken("refresh-token")).thenReturn(true);
+        when(jwtTokenProvider.getClaimsFromExpiredToken("expired-access-token")).thenReturn(claims);
+        when(claims.getSubject()).thenReturn("1");
+        when(userRepository.findActiveById(1L)).thenReturn(Optional.of(user));
+        when(jwtTokenProvider.getTokenVersion("refresh-token")).thenReturn(3);
+        when(jwtTokenProvider.createAccessToken(1L, "32100000", "ROLE_USER", 3)).thenReturn("new-access-token");
+        when(jwtTokenProvider.createRefreshToken(1L, 3)).thenReturn("new-refresh-token");
+
+        ResponseRefreshTokenDto response = userService.refreshToken("expired-access-token", "refresh-token");
+
+        assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+        assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
+        verify(jwtRevocationService).clearWithdrawnUser(1L);
+        verify(jwtRevocationService).cacheUserVersion(1L, 3);
     }
 
     @Test

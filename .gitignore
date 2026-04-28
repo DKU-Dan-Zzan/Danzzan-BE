@@ -50,6 +50,7 @@ out/
 ### VS Code ###
 .vscode/
 .DS_Store
+.ai/
 
 ### Database ###
 *.db

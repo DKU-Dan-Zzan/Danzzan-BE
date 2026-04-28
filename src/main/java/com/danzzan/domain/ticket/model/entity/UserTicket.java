@@ -43,6 +43,12 @@ public class UserTicket {
     @Column(name = "issued_at")
     private LocalDateTime issuedAt;
 
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "cancel_reason", length = 50)
+    private String cancelReason;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "issuer_admin_id")
     private User issuerAdmin;
@@ -55,6 +61,20 @@ public class UserTicket {
         this.ticketingOrder = ticketingOrder;
         this.seq = seq;
         this.ticketingAt = LocalDateTime.now();
+    }
+
+    public static UserTicket cancelledByWithdrawal(
+            User user,
+            FestivalEvent event,
+            Integer ticketingOrder,
+            Long seq,
+            LocalDateTime cancelledAt
+    ) {
+        UserTicket ticket = new UserTicket(user, event, ticketingOrder, seq);
+        ticket.status = TicketStatus.CANCELLED_WITHDRAWAL;
+        ticket.cancelledAt = cancelledAt;
+        ticket.cancelReason = "USER_WITHDRAWAL";
+        return ticket;
     }
 
     // 팔찌 수령 처리
@@ -71,5 +91,13 @@ public class UserTicket {
         this.status = TicketStatus.CONFIRMED;
         this.issuedAt = null;
         this.issuerAdmin = null;
+    }
+
+    public void cancelByWithdrawal(LocalDateTime cancelledAt) {
+        this.status = TicketStatus.CANCELLED_WITHDRAWAL;
+        this.issuedAt = null;
+        this.issuerAdmin = null;
+        this.cancelledAt = cancelledAt;
+        this.cancelReason = "USER_WITHDRAWAL";
     }
 }

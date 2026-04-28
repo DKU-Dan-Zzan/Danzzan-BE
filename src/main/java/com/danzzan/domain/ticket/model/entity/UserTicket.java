@@ -28,7 +28,7 @@ public class UserTicket {
     private FestivalEvent event;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 32, columnDefinition = "varchar(32)")
     private TicketStatus status;
 
     @Column(name = "ticketing_order", nullable = false)

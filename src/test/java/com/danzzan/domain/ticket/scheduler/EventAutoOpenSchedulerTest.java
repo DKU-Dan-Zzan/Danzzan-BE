@@ -20,6 +20,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,16 +52,29 @@ class EventAutoOpenSchedulerTest {
         FestivalEvent event = event(10L, 100, TicketingStatus.OPEN);
         List<Long> issuedUsers = List.of(1L, 2L, 3L);
         when(eventRepository.findAllByTicketingStatus(TicketingStatus.OPEN)).thenReturn(List.of(event));
-        when(userTicketRepository.countByEventId(10L)).thenReturn(30L);
+        when(userTicketRepository.countByEventIdAndStatusIn(
+                eq(10L),
+                eq(List.of(com.danzzan.domain.ticket.model.entity.TicketStatus.CONFIRMED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.ISSUED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.CANCELLED_WITHDRAWAL))
+        )).thenReturn(30L);
         when(ticketInitService.restoreStockIfMissing("10", 70L)).thenReturn(true);
-        when(userTicketRepository.findUserIdsByEventId(10L)).thenReturn(issuedUsers);
+        when(userTicketRepository.findUserIdsByEventIdAndStatusIn(
+                eq(10L),
+                eq(List.of(com.danzzan.domain.ticket.model.entity.TicketStatus.CONFIRMED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.ISSUED))
+        )).thenReturn(issuedUsers);
         when(ticketInitService.syncIssuedUsers("10", issuedUsers)).thenReturn(3L);
 
         scheduler.recoverMissingStock();
 
         verify(ticketInitService).setEventStatus("10", TicketingStatus.OPEN);
         verify(ticketInitService).restoreStockIfMissing("10", 70L);
-        verify(userTicketRepository).findUserIdsByEventId(10L);
+        verify(userTicketRepository).findUserIdsByEventIdAndStatusIn(
+                eq(10L),
+                eq(List.of(com.danzzan.domain.ticket.model.entity.TicketStatus.CONFIRMED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.ISSUED))
+        );
         verify(ticketInitService).syncIssuedUsers("10", issuedUsers);
     }
 
@@ -68,14 +82,19 @@ class EventAutoOpenSchedulerTest {
     void recoverMissingStock_stock키가_이미_있으면_동기화를_건너뛴다() {
         FestivalEvent event = event(10L, 100, TicketingStatus.OPEN);
         when(eventRepository.findAllByTicketingStatus(TicketingStatus.OPEN)).thenReturn(List.of(event));
-        when(userTicketRepository.countByEventId(10L)).thenReturn(30L);
+        when(userTicketRepository.countByEventIdAndStatusIn(
+                eq(10L),
+                eq(List.of(com.danzzan.domain.ticket.model.entity.TicketStatus.CONFIRMED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.ISSUED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.CANCELLED_WITHDRAWAL))
+        )).thenReturn(30L);
         when(ticketInitService.restoreStockIfMissing("10", 70L)).thenReturn(false);
 
         scheduler.recoverMissingStock();
 
         verify(ticketInitService).setEventStatus("10", TicketingStatus.OPEN);
         verify(ticketInitService).restoreStockIfMissing("10", 70L);
-        verify(userTicketRepository, never()).findUserIdsByEventId(10L);
+        verify(userTicketRepository, never()).findUserIdsByEventIdAndStatusIn(eq(10L), anyList());
         verify(ticketInitService, never()).syncIssuedUsers(anyString(), anyList());
     }
 
@@ -90,7 +109,7 @@ class EventAutoOpenSchedulerTest {
 
         verify(ticketInitService).setEventStatus("10", TicketingStatus.CLOSED);
         verify(ticketInitService).setEventStatus("11", TicketingStatus.CLOSED);
-        verify(userTicketRepository, never()).countByEventId(anyLong());
+        verify(userTicketRepository, never()).countByEventIdAndStatusIn(eq(10L), anyList());
     }
 
     private FestivalEvent event(Long id, int totalCapacity, TicketingStatus status) {

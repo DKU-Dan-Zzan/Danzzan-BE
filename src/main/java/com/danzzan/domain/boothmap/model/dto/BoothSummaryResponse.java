@@ -1,5 +1,6 @@
 package com.danzzan.domain.boothmap.model.dto;
 
+import com.danzzan.domain.boothmap.model.entity.BoothOperationStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -11,6 +12,7 @@ public class BoothSummaryResponse {
     private String description;
     private String imageUrl;
     private String thumbnailUrl;
+    private BoothOperationStatus operationStatus;
     private String startTime;
     private String endTime;
 }

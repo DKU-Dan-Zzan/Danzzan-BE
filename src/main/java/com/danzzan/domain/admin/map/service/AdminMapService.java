@@ -20,15 +20,11 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdminMapService {
-    private static final LocalDate DEFAULT_OPERATION_DATE = LocalDate.of(2026, 5, 12);
-
     private final CollegeRepository collegeRepository;
     private final BoothRepository boothRepository;
     private final TimetableDisplaySettingService timetableDisplaySettingService;
 
     public AdminMapResponse getAdminMap(LocalDate operationDate) {
-        LocalDate resolvedOperationDate = resolveOperationDate(operationDate);
-
         List<AdminMapCollegeResponse> colleges = collegeRepository.findAll().stream()
                 .map(college -> new AdminMapCollegeResponse(
                         college.getId(),
@@ -38,7 +34,7 @@ public class AdminMapService {
                 ))
                 .toList();
 
-        List<AdminMapBoothResponse> booths = boothRepository.findAllByOperationDate(resolvedOperationDate).stream()
+        List<AdminMapBoothResponse> booths = boothRepository.findAll().stream()
                 .map(booth -> new AdminMapBoothResponse(
                         booth.getId(),
                         booth.getName(),
@@ -96,11 +92,4 @@ public class AdminMapService {
         }
     }
 
-    private LocalDate resolveOperationDate(LocalDate operationDate) {
-        if (operationDate != null) {
-            return operationDate;
-        }
-
-        return DEFAULT_OPERATION_DATE;
-    }
 }

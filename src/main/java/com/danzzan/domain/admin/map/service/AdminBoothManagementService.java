@@ -101,7 +101,7 @@ public class AdminBoothManagementService {
 
     public List<AdminPubImageResponse> getPubImages(Long pubId) {
         ensurePubExists(pubId);
-        return pubImageRepository.findByPubIdOrderByIsMainDescCreatedAtAsc(pubId)
+        return pubImageRepository.findByPubIdOrderByCreatedAtAscIdAsc(pubId)
                 .stream()
                 .map(AdminPubImageResponse::from)
                 .toList();
@@ -184,7 +184,7 @@ public class AdminBoothManagementService {
             throw new IllegalArgumentException("대표 이미지 URL은 등록 대상 이미지 중 하나여야 합니다.");
         }
 
-        List<PubImage> existingImages = pubImageRepository.findByPubIdOrderByIsMainDescCreatedAtAsc(pubId);
+        List<PubImage> existingImages = pubImageRepository.findByPubIdOrderByCreatedAtAscIdAsc(pubId);
         boolean shouldReplaceMain = mainImageUrl != null;
         boolean hasExistingMain = existingImages.stream().anyMatch(PubImage::isMain);
 
@@ -206,7 +206,7 @@ public class AdminBoothManagementService {
 
     @Transactional
     public void updateMainPubImage(Long pubId, Long imageId) {
-        List<PubImage> pubImages = pubImageRepository.findByPubIdOrderByIsMainDescCreatedAtAsc(pubId);
+        List<PubImage> pubImages = pubImageRepository.findByPubIdOrderByCreatedAtAscIdAsc(pubId);
         if (pubImages.isEmpty()) {
             throw new IllegalArgumentException("등록된 주점 이미지가 없습니다.");
         }
@@ -232,7 +232,7 @@ public class AdminBoothManagementService {
             return;
         }
 
-        pubImageRepository.findByPubIdOrderByIsMainDescCreatedAtAsc(pubId)
+        pubImageRepository.findByPubIdOrderByCreatedAtAscIdAsc(pubId)
                 .stream()
                 .findFirst()
                 .ifPresent(image -> image.updateMain(true));

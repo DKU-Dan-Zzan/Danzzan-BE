@@ -23,14 +23,16 @@ public class ResponseLoginDto {
         private final String role;
         private final String department;
         private final String college;
+        private final String naverId;
 
-        public UserInfo(String id, String studentId, String name, String role, String department, String college) {
+        public UserInfo(String id, String studentId, String name, String role, String department, String college, String naverId) {
             this.id = id;
             this.studentId = studentId;
             this.name = name;
             this.role = role;
             this.department = department;
             this.college = college;
+            this.naverId = naverId;
         }
     }
 }

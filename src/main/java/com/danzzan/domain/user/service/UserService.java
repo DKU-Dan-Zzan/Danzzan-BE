@@ -98,7 +98,8 @@ public class UserService {
                 user.getName(),
                 roleStr,
                 user.getMajor(),
-                user.getCollege()
+                user.getCollege(),
+                user.getNaverId()
         );
     }
 }

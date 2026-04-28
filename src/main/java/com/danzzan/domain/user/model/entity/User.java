@@ -56,6 +56,12 @@ public class User {
     @Column(name = "token_version", nullable = false, columnDefinition = "int default 0")
     private int tokenVersion;
 
+    @Column(name = "is_deleted", nullable = false)
+    private boolean deleted;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -85,6 +91,8 @@ public class User {
         this.phoneVerified = phoneVerified;
         this.phoneVerifiedAt = phoneVerifiedAt;
         this.tokenVersion = 0;
+        this.deleted = false;
+        this.deletedAt = null;
         this.createdAt = LocalDateTime.now();
     }
 
@@ -104,5 +112,20 @@ public class User {
         this.phoneNumber = phoneNumber;
         this.phoneVerified = true;
         this.phoneVerifiedAt = verifiedAt;
+    }
+
+    public void withdraw(String maskedStudentId, String encodedRandomPassword) {
+        this.studentId = maskedStudentId;
+        this.password = encodedRandomPassword;
+        this.naverId = null;
+        this.name = "탈퇴회원";
+        this.college = "WITHDRAWN";
+        this.major = "WITHDRAWN";
+        this.phoneNumber = null;
+        this.phoneVerified = false;
+        this.phoneVerifiedAt = null;
+        this.deleted = true;
+        this.deletedAt = LocalDateTime.now();
+        bumpTokenVersion();
     }
 }

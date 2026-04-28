@@ -42,7 +42,9 @@ public class BoothMapService {
                         Function.identity(),
                         (existing, ignored) -> existing
                 ));
-        List<Booth> booths = boothRepository.findAll();
+        List<Booth> booths = (operationDate == null)
+                ? boothRepository.findAll()
+                : boothRepository.findAllByOperationDate(operationDate);
 
         List<CollegeMapItemResponse> collegeDtos = colleges.stream()
                 .map(college -> new CollegeMapItemResponse(

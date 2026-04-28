@@ -1,0 +1,13 @@
+services:
+  app:
+    image: danzzan/danzzan-be:latest
+    container_name: danzzan-app
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: 192.168.0.88:9092
+    restart: unless-stopped

@@ -161,7 +161,7 @@ class TicketIssueConsumerServiceTest {
         User user = User.builder()
                 .studentId("withdrawn:1:test")
                 .password("pw")
-                .name("탈퇴회원")
+                .name("김단짠")
                 .college("WITHDRAWN")
                 .major("WITHDRAWN")
                 .academicStatus(AcademicStatus.ENROLLED)

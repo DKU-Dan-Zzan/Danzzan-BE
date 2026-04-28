@@ -132,7 +132,7 @@ class UserServiceTest {
     }
 
     @Test
-    void withdraw_CONFIRMED티켓은_권리포기처리하고_유저를_비식별화한다() {
+    void withdraw_CONFIRMED티켓은_권리포기처리하고_이름을_제외한_유저정보를_비식별화한다() {
         User user = user(1L, "32100000", "01012345678");
         FestivalEvent ticketEvent = event(10L, TicketingStatus.OPEN);
         UserTicket ticket = UserTicket.builder()
@@ -161,7 +161,7 @@ class UserServiceTest {
         assertThat(user.getStudentId()).startsWith("withdrawn:1:");
         assertThat(user.getPassword()).isEqualTo("encoded-random-password");
         assertThat(user.getNaverId()).isNull();
-        assertThat(user.getName()).isEqualTo("탈퇴회원");
+        assertThat(user.getName()).isEqualTo("김단짠");
         assertThat(user.getCollege()).isEqualTo("WITHDRAWN");
         assertThat(user.getMajor()).isEqualTo("WITHDRAWN");
         assertThat(user.getPhoneNumber()).isNull();

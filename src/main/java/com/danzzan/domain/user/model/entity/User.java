@@ -118,7 +118,6 @@ public class User {
         this.studentId = maskedStudentId;
         this.password = encodedRandomPassword;
         this.naverId = null;
-        this.name = "탈퇴회원";
         this.college = "WITHDRAWN";
         this.major = "WITHDRAWN";
         this.phoneNumber = null;

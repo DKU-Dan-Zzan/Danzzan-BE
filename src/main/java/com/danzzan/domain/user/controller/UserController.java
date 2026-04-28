@@ -63,7 +63,7 @@ public class UserController {
     }
 
     @DeleteMapping("/me")
-    @Operation(summary = "회원 탈퇴", description = "회원 개인정보를 비식별화하고 미사용 티켓을 권리포기 처리합니다.")
+    @Operation(summary = "회원 탈퇴", description = "이름을 제외한 회원 개인정보를 비식별화하고 미사용 티켓을 권리포기 처리합니다.")
     public ResponseEntity<Void> withdraw(Authentication authentication, HttpServletRequest request) {
         if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

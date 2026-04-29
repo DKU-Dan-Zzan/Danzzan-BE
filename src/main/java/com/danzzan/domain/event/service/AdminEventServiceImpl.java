@@ -87,13 +87,21 @@ public class AdminEventServiceImpl implements AdminEventService {
 
     private Map<LocalDate, Integer> buildDayIndex(List<FestivalEvent> events) {
         Map<LocalDate, Integer> indexByDate = new LinkedHashMap<>();
-        int idx = 1;
+        int fallbackIdx = 1;
         for (FestivalEvent event : events) {
             LocalDate date = event.getEventDate();
             if (!indexByDate.containsKey(date)) {
-                indexByDate.put(date, idx++);
+                Integer dayFromTitle = extractDayNumber(event.getTitle());
+                indexByDate.put(date, dayFromTitle != null ? dayFromTitle : fallbackIdx);
+                fallbackIdx++;
             }
         }
         return indexByDate;
+    }
+
+    private Integer extractDayNumber(String title) {
+        if (title == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("DAY\\s*(\\d+)", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(title);
+        return m.find() ? Integer.parseInt(m.group(1)) : null;
     }
 }

@@ -1,7 +1,7 @@
 services:
   app:
     image: danzzan/danzzan-be:latest
-    container_name: danzzan-app
+    container_name: danzzan-nhn-dev
     network_mode: host
     env_file:
       - .env

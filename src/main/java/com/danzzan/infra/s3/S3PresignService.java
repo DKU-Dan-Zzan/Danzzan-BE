@@ -36,17 +36,13 @@ public class S3PresignService {
     private final S3Client s3Client;
     private final S3PathGenerator s3PathGenerator;
 
-    @Value("${aws.s3.bucket}")
+    @Value("${nhn.object-storage.container}")
     private String bucket;
 
-    /**
-     * true면 업로드 시 객체 ACL을 PUBLIC_READ로 설정합니다.
-     * (버킷 정책으로 공개를 관리한다면 false로 두세요)
-     */
-    @Value("${aws.s3.public-read:false}")
+    @Value("${nhn.object-storage.public-read:false}")
     private boolean publicRead;
 
-    @Value("${aws.s3.presign.put-expiration-sec:600}")
+    @Value("${nhn.object-storage.presign.put-expiration-sec:300}")
     private long putExpirationSec;
 
     /**
@@ -67,7 +63,7 @@ public class S3PresignService {
             log.warn("공지 이미지 presign 실패 fileName={} contentType={}", fileName, contentType, e);
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+                    "이미지 업로드 URL 발급에 실패했습니다. NHN Object Storage 설정(nhn.object-storage.container, endpoint) 및 자격 증명을 확인해 주세요."
             );
         }
     }
@@ -90,7 +86,7 @@ public class S3PresignService {
             log.warn("광고 이미지 presign 실패 fileName={} contentType={}", fileName, contentType, e);
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+                    "이미지 업로드 URL 발급에 실패했습니다. NHN Object Storage 설정(nhn.object-storage.container, endpoint) 및 자격 증명을 확인해 주세요."
             );
         }
     }
@@ -153,10 +149,10 @@ public class S3PresignService {
 
     private void ensureBucketConfigured() {
         if (bucket == null || bucket.isBlank()) {
-            log.error("aws.s3.bucket이 설정되지 않았습니다.");
+            log.error("nhn.object-storage.container가 설정되지 않았습니다.");
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
-                    "S3 bucket이 설정되지 않았습니다. application 설정에 aws.s3.bucket을 추가해 주세요."
+                    "Object Storage container가 설정되지 않았습니다. application 설정에 nhn.object-storage.container를 추가해 주세요."
             );
         }
     }

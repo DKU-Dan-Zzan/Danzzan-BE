@@ -102,4 +102,25 @@ class TicketIssueRequestedConsumerTest {
         verify(acknowledgment).acknowledge();
         verify(queueStateService, never()).markDone(any(), any());
     }
+
+    @Test
+    void consume_탈퇴유저권리포기결과면_성공처리나_compensate없이_ack() throws Exception {
+        TicketIssueRequestedEvent event = TicketIssueRequestedEvent.of(
+                "req-1", 10L, 1L, 42L, 1234L, 1773486180000L, null
+        );
+        String payload = objectMapper.writeValueAsString(event);
+        ConsumerRecord<String, String> record = new ConsumerRecord<>("ticket.issue.requested.v1", 0, 0L, "10:1", payload);
+
+        when(ticketIssueConsumerService.processIssueRequested(any()))
+                .thenReturn(TicketIssueConsumerService.ProcessingResult.WITHDRAWN_CANCELLED);
+
+        consumer.consume(record, acknowledgment);
+
+        verify(valueOperations).set(eq("ticket:10:status:1"), eq(TicketRequestStatus.FAILED.name()));
+        verify(ticketIssueRequestStatusCacheService).setFailed(eq(10L), eq(1L), eq("req-1"), eq("USER_WITHDRAWN"), any(Long.class));
+        verify(ticketIssueRequestStatusCacheService, never()).setSuccess(any(), any(), any(), any(Long.class));
+        verify(ticketIssueCompensationService, never()).compensate(any(), any(), any(), any());
+        verify(queueStateService, never()).markDone(any(), any());
+        verify(acknowledgment).acknowledge();
+    }
 }

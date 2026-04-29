@@ -260,9 +260,38 @@ ok "앱 기동 완료 (${APP_URL})"
 step "테스트 사용자 준비"
 PASSWORD_HASH="$(htpasswd -bnBC 10 "" "${OLD_PASSWORD}" | tr -d ':\n')"
 docker exec -i "${MYSQL_CONTAINER}" mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" "${MYSQL_DB}" <<SQL
-INSERT INTO users (student_id, password, name, college, major, academic_status, role, token_version, created_at)
-VALUES ('${STUDENT_ID}', '${PASSWORD_HASH}', 'E2E테스터', '공과대학', '컴퓨터공학과', 'ENROLLED', 'ROLE_USER', 0, NOW())
-ON DUPLICATE KEY UPDATE password=VALUES(password), token_version=0;
+INSERT INTO users (
+  student_id,
+  password,
+  name,
+  college,
+  major,
+  academic_status,
+  role,
+  is_phone_verified,
+  token_version,
+  is_deleted,
+  created_at
+)
+VALUES (
+  '${STUDENT_ID}',
+  '${PASSWORD_HASH}',
+  'E2E테스터',
+  '공과대학',
+  '컴퓨터공학과',
+  'ENROLLED',
+  'ROLE_USER',
+  0,
+  0,
+  0,
+  NOW()
+)
+ON DUPLICATE KEY UPDATE
+  password = VALUES(password),
+  token_version = 0,
+  is_phone_verified = 0,
+  is_deleted = 0,
+  deleted_at = NULL;
 SQL
 ok "테스트 사용자 준비 완료 (${STUDENT_ID})"
 
@@ -296,7 +325,7 @@ VERIFICATION_TOKEN="$(echo "${VERIFY_BODY}" | jq -r '.verificationToken // empty
 ok "verify 성공"
 
 step "4) reset API 호출"
-RESET_RESULT="$(http_post_json "${APP_URL}/user/password/reset" "{\"requestId\":\"${REQUEST_ID}\",\"verificationToken\":\"${VERIFICATION_TOKEN}\",\"newPassword\":\"${NEW_PASSWORD}\"}")"
+RESET_RESULT="$(http_post_json "${APP_URL}/user/password/reset" "{\"requestId\":\"${REQUEST_ID}\",\"verificationToken\":\"${VERIFICATION_TOKEN}\",\"newPassword\":\"${NEW_PASSWORD}\",\"confirmPassword\":\"${NEW_PASSWORD}\"}")"
 RESET_STATUS="$(echo "${RESET_RESULT}" | head -n 1)"
 RESET_BODY="$(echo "${RESET_RESULT}" | tail -n +2)"
 echo "reset status=${RESET_STATUS}, body=${RESET_BODY}"

@@ -4,6 +4,7 @@ import com.danzzan.domain.event.model.entity.FestivalEvent;
 import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.event.repository.FestivalEventRepository;
 import com.danzzan.domain.event.service.EventOpenService;
+import com.danzzan.domain.ticket.model.entity.TicketStatus;
 import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import com.danzzan.domain.ticket.service.TicketInitService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,16 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class EventAutoOpenScheduler {
+
+    private static final List<TicketStatus> CONSUMED_TICKET_STATUSES = List.of(
+            TicketStatus.CONFIRMED,
+            TicketStatus.ISSUED,
+            TicketStatus.CANCELLED_WITHDRAWAL
+    );
+    private static final List<TicketStatus> REDIS_ISSUED_USER_STATUSES = List.of(
+            TicketStatus.CONFIRMED,
+            TicketStatus.ISSUED
+    );
 
     private final FestivalEventRepository eventRepository;
     private final EventOpenService eventOpenService;
@@ -60,12 +71,18 @@ public class EventAutoOpenScheduler {
         for (FestivalEvent event : openEvents) {
             try {
                 ticketInitService.setEventStatus(String.valueOf(event.getId()), TicketingStatus.OPEN);
-                long issued = userTicketRepository.countByEventId(event.getId());
+                long issued = userTicketRepository.countByEventIdAndStatusIn(
+                        event.getId(),
+                        CONSUMED_TICKET_STATUSES
+                );
                 long remaining = Math.max(0, event.getTotalCapacity() - issued);
                 boolean restored = ticketInitService.restoreStockIfMissing(
                         String.valueOf(event.getId()), remaining);
                 if (restored) {
-                    List<Long> issuedUserIds = userTicketRepository.findUserIdsByEventId(event.getId());
+                    List<Long> issuedUserIds = userTicketRepository.findUserIdsByEventIdAndStatusIn(
+                            event.getId(),
+                            REDIS_ISSUED_USER_STATUSES
+                    );
                     long synced = ticketInitService.syncIssuedUsers(String.valueOf(event.getId()), issuedUserIds);
                     log.warn(
                             "stock 복구 완료 eventId={} remaining={} syncedUsers={}",

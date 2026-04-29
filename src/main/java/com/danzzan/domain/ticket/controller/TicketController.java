@@ -85,6 +85,9 @@ public class TicketController {
         ticketingMetrics.recordQueueEnter(snapshot.status());
         TicketRequestResponseDTO.TicketRequestResponseDTOBuilder builder = TicketRequestResponseDTO.builder()
                 .status(snapshot.status());
+        if (snapshot.status() == TicketRequestStatus.WAITING) {
+            builder.queuePosition(snapshot.queuePosition());
+        }
         if (snapshot.status() == TicketRequestStatus.PROCESSING) {
             builder.requestId(snapshot.requestId())
                     .acceptedAt(snapshot.acceptedAt());

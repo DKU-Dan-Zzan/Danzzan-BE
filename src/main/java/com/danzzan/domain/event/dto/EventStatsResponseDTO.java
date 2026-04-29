@@ -26,6 +26,8 @@ public class EventStatsResponseDTO {
     private long ticketsConfirmed;
     @Schema(description = "status=ISSUED 티켓 수", example = "4510")
     private long ticketsIssued;
+    @Schema(description = "회원 탈퇴로 권리포기 처리된 티켓 수", example = "10")
+    private long ticketsCancelledByWithdrawal;
     @Schema(description = "지급 완료 비율(%)", example = "93.57")
     private double issueRate;
     @Schema(description = "남은 수용 가능 인원", example = "180")

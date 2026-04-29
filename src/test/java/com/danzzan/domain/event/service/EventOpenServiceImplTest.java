@@ -20,6 +20,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,7 +50,11 @@ class EventOpenServiceImplTest {
         List<Long> issuedUsers = List.of(7L, 9L);
         when(eventRepository.findById(1L)).thenReturn(Optional.of(event));
         when(eventRepository.openIfReady(1L)).thenReturn(1);
-        when(userTicketRepository.findUserIdsByEventId(1L)).thenReturn(issuedUsers);
+        when(userTicketRepository.findUserIdsByEventIdAndStatusIn(
+                eq(1L),
+                eq(List.of(com.danzzan.domain.ticket.model.entity.TicketStatus.CONFIRMED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.ISSUED))
+        )).thenReturn(issuedUsers);
         when(ticketInitService.syncIssuedUsers("1", issuedUsers)).thenReturn(2L);
 
         boolean opened = eventOpenService.openNow(1L);
@@ -57,7 +62,11 @@ class EventOpenServiceImplTest {
         assertThat(opened).isTrue();
         verify(ticketInitService).initStock("1", 100L);
         verify(ticketInitService).setEventStatus("1", TicketingStatus.OPEN);
-        verify(userTicketRepository).findUserIdsByEventId(1L);
+        verify(userTicketRepository).findUserIdsByEventIdAndStatusIn(
+                eq(1L),
+                eq(List.of(com.danzzan.domain.ticket.model.entity.TicketStatus.CONFIRMED,
+                        com.danzzan.domain.ticket.model.entity.TicketStatus.ISSUED))
+        );
         verify(ticketInitService).syncIssuedUsers("1", issuedUsers);
     }
 
@@ -72,7 +81,7 @@ class EventOpenServiceImplTest {
         assertThat(opened).isFalse();
         verify(ticketInitService, never()).initStock("1", 100L);
         verify(ticketInitService, never()).setEventStatus(anyString(), org.mockito.ArgumentMatchers.any());
-        verify(userTicketRepository, never()).findUserIdsByEventId(1L);
+        verify(userTicketRepository, never()).findUserIdsByEventIdAndStatusIn(eq(1L), anyList());
         verify(ticketInitService, never()).syncIssuedUsers(anyString(), anyList());
     }
 

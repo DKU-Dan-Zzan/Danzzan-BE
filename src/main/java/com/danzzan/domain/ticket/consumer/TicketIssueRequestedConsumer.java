@@ -46,6 +46,8 @@ public class TicketIssueRequestedConsumer {
             if (result == TicketIssueConsumerService.ProcessingResult.ISSUED
                     || result == TicketIssueConsumerService.ProcessingResult.ALREADY_SUCCESS) {
                 markSuccessAndDone(event);
+            } else if (result == TicketIssueConsumerService.ProcessingResult.WITHDRAWN_CANCELLED) {
+                markWithdrawnCancelled(event);
             }
             acknowledgment.acknowledge();
         } catch (NonRetryableTicketIssueException e) {
@@ -92,6 +94,19 @@ public class TicketIssueRequestedConsumer {
         } catch (Exception e) {
             log.error("markDone failed after issue success eventId={} userId={}", eventId, userId, e);
         }
+    }
+
+    private void markWithdrawnCancelled(TicketIssueRequestedEvent event) {
+        String eventId = String.valueOf(event.eventId());
+        String userId = String.valueOf(event.userId());
+        redisTemplate.opsForValue().set(TicketRedisKeys.statusKey(eventId, userId), TicketRequestStatus.FAILED.name());
+        ticketIssueRequestStatusCacheService.setFailed(
+                event.eventId(),
+                event.userId(),
+                event.requestId(),
+                "USER_WITHDRAWN",
+                System.currentTimeMillis()
+        );
     }
 
     private void handleNonRetryable(TicketIssueRequestedEvent event, NonRetryableTicketIssueException e) {

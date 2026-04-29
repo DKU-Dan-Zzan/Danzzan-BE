@@ -103,6 +103,9 @@ public class TicketIssueEnqueueService {
                     .eventId(eventId)
                     .userId(userId)
                     .status(TicketIssueRequestStatus.PROCESSING)
+                    .remainingAfterClaim(remaining)
+                    .seq(seq)
+                    .acceptedAt(acceptedAtEpochMs)
                     .build();
             ticketIssueRequestRepository.save(request);
 

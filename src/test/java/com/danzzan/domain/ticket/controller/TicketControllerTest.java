@@ -83,7 +83,7 @@ class TicketControllerTest {
         mockMvc.perform(post("/tickets/10/queue/enter").principal(USER_AUTH))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("WAITING"))
-                .andExpect(jsonPath("$.queuePosition").doesNotExist())
+                .andExpect(jsonPath("$.queuePosition").value(5))
                 .andExpect(jsonPath("$.requestId").doesNotExist())
                 .andExpect(jsonPath("$.acceptedAt").doesNotExist());
     }

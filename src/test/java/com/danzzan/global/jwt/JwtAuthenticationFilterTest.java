@@ -34,13 +34,16 @@ class JwtAuthenticationFilterTest {
     private UserRepository userRepository;
 
     @Mock
+    private JwtRevocationService jwtRevocationService;
+
+    @Mock
     private FilterChain filterChain;
 
     private JwtAuthenticationFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter(jwtTokenProvider, userRepository);
+        filter = new JwtAuthenticationFilter(jwtTokenProvider, userRepository, jwtRevocationService);
     }
 
     @AfterEach
@@ -63,6 +66,38 @@ class JwtAuthenticationFilterTest {
         verify(userRepository, never()).findById(1L);
         verify(jwtTokenProvider, never()).getTokenVersion(claims);
         verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void blacklist된_accessToken은_즉시_401을_반환한다() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/user/me");
+        request.addHeader("Authorization", "Bearer token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(jwtRevocationService.isBlacklisted("token")).thenReturn(true);
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(jwtTokenProvider, never()).getValidClaims("token");
+        verify(filterChain, never()).doFilter(request, response);
+        org.assertj.core.api.Assertions.assertThat(response.getStatus()).isEqualTo(401);
+    }
+
+    @Test
+    void 탈퇴마커가_있는_유저는_tickets요청에서도_401을_반환한다() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/tickets/1/queue/enter");
+        request.addHeader("Authorization", "Bearer token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        Claims claims = mock(Claims.class);
+        when(jwtTokenProvider.getValidClaims("token")).thenReturn(claims);
+        when(jwtTokenProvider.getUserId(claims)).thenReturn(1L);
+        when(jwtTokenProvider.getRole(claims)).thenReturn("ROLE_USER");
+        when(jwtRevocationService.isWithdrawnUser(1L)).thenReturn(true);
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(userRepository, never()).findById(1L);
+        verify(filterChain, never()).doFilter(request, response);
+        org.assertj.core.api.Assertions.assertThat(response.getStatus()).isEqualTo(401);
     }
 
     @Test

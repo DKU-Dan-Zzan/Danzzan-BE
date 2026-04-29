@@ -30,4 +30,16 @@ public class PubOperation {
 
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
+
+    public PubOperation(LocalDate operationDate, LocalTime startTime, LocalTime endTime) {
+        this.operationDate = operationDate;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
+
+    public void updateOperation(LocalDate operationDate, LocalTime startTime, LocalTime endTime) {
+        this.operationDate = operationDate;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
 }

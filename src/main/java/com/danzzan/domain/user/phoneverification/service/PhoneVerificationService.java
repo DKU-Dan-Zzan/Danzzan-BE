@@ -45,6 +45,7 @@ public class PhoneVerificationService {
     @Transactional
     public ResponsePhoneVerificationCreateDto createSession(String signupToken, String clientIp) {
         signupTokenStore.getCachedStudentInfo(signupToken);
+        signupTokenStore.clearVerifiedPhone(signupToken);
 
         LocalDateTime now = LocalDateTime.now();
         String normalizedIpHash = sha256(normalizeClientIp(clientIp));
@@ -111,7 +112,17 @@ public class PhoneVerificationService {
                 throw new PhoneVerificationException(PhoneVerificationErrorType.PHONE_ALREADY_LINKED);
             }
             session.markVerified(normalizedPhoneNumber, now);
-            return toStatusDto(session, now);
+            String consumedPhoneNumber = consumeVerifiedPhoneNumber(session.getSignupToken(), session.getSessionId());
+            signupTokenStore.cacheVerifiedPhone(session.getSignupToken(), consumedPhoneNumber, now);
+            return ResponsePhoneVerificationStatusDto.builder()
+                    .sessionId(session.getSessionId())
+                    .status(PhoneVerificationStatus.VERIFIED)
+                    .attemptCount(session.getAttemptCount())
+                    .expiresInSec(Math.max(0, Duration.between(now, session.getExpiresAt()).getSeconds()))
+                    .expiresAt(session.getExpiresAt())
+                    .verifiedAt(now)
+                    .verifiedPhoneNumberMasked(maskPhoneNumber(consumedPhoneNumber))
+                    .build();
         }
 
         session.incrementAttempt();

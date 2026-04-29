@@ -8,7 +8,7 @@ import java.util.List;
 @Getter
 @AllArgsConstructor
 public class AdminMapResponse {
-    private String activeOperationDate;
+    private boolean comingSoonOverlayEnabled;
     private List<AdminMapCollegeResponse> colleges;
     private List<AdminMapBoothResponse> booths;
 }

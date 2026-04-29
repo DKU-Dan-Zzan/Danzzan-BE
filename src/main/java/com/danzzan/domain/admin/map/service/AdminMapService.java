@@ -1,23 +1,20 @@
 package com.danzzan.domain.admin.map.service;
 
 import com.danzzan.domain.admin.map.dto.request.UpdateMapLocationRequest;
-import com.danzzan.domain.admin.map.dto.request.UpdateActiveOperationDateRequest;
 import com.danzzan.domain.admin.map.dto.response.AdminMapBoothResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminMapCollegeResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminMapResponse;
 import com.danzzan.domain.boothmap.model.entity.Booth;
 import com.danzzan.domain.boothmap.model.entity.College;
-import com.danzzan.domain.admin.map.model.entity.FestivalMapSetting;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.repository.CollegeRepository;
-import com.danzzan.domain.admin.map.repository.FestivalMapSettingRepository;
-
+import com.danzzan.domain.timetable.service.TimetableDisplaySettingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.time.LocalDate;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -25,11 +22,9 @@ import java.time.LocalDate;
 public class AdminMapService {
     private final CollegeRepository collegeRepository;
     private final BoothRepository boothRepository;
-    private final FestivalMapSettingRepository festivalMapSettingRepository;
+    private final TimetableDisplaySettingService timetableDisplaySettingService;
 
     public AdminMapResponse getAdminMap(LocalDate operationDate) {
-        FestivalMapSetting setting = getSetting();
-
         List<AdminMapCollegeResponse> colleges = collegeRepository.findAll().stream()
                 .map(college -> new AdminMapCollegeResponse(
                         college.getId(),
@@ -39,7 +34,11 @@ public class AdminMapService {
                 ))
                 .toList();
 
-        List<AdminMapBoothResponse> booths = boothRepository.findAllByOperationDate(operationDate).stream()
+        List<Booth> boothsForDate = operationDate == null
+                ? boothRepository.findAll()
+                : boothRepository.findAllByOperationDate(operationDate);
+
+        List<AdminMapBoothResponse> booths = boothsForDate.stream()
                 .map(booth -> new AdminMapBoothResponse(
                         booth.getId(),
                         booth.getName(),
@@ -51,7 +50,7 @@ public class AdminMapService {
                 .toList();
 
         return new AdminMapResponse(
-                setting.getActiveOperationDate().toString(),
+                timetableDisplaySettingService.isComingSoonOverlayEnabled(),
                 colleges,
                 booths
         );
@@ -60,7 +59,7 @@ public class AdminMapService {
     @Transactional
     public void updateCollegeLocation(Long collegeId, UpdateMapLocationRequest request) {
         College college = collegeRepository.findById(collegeId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 단과대학입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 단과대입니다."));
 
         validateLocation(request.getLocationX(), request.getLocationY());
         college.updateLocation(request.getLocationX(), request.getLocationY());
@@ -85,7 +84,7 @@ public class AdminMapService {
 
     private void validateLocation(Double locationX, Double locationY) {
         if (locationX == null || locationY == null) {
-            throw new IllegalArgumentException("좌표 값은 비어 있을 수 없습니다.");
+            throw new IllegalArgumentException("좌표 값이 비어 있을 수 없습니다.");
         }
 
         if (locationX < -180 || locationX > 180) {
@@ -97,20 +96,4 @@ public class AdminMapService {
         }
     }
 
-    private FestivalMapSetting getSetting() {
-        return festivalMapSettingRepository.findById(1L)
-                .orElseThrow(() -> new IllegalArgumentException("지도 설정 정보가 존재하지 않습니다."));
-    }
-
-    public LocalDate getActiveOperationDate() {
-        return getSetting().getActiveOperationDate();
-    }
-
-    @Transactional
-    public void updateActiveDate(UpdateActiveOperationDateRequest request) {
-        LocalDate operationDate = LocalDate.parse(request.getOperationDate());
-
-        FestivalMapSetting setting = getSetting();
-        setting.updateActiveOperationDate(operationDate);
-    }
 }

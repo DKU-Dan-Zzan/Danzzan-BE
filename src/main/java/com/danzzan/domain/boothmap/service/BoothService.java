@@ -3,7 +3,9 @@ package com.danzzan.domain.boothmap.service;
 import com.danzzan.domain.boothmap.model.dto.BoothSummaryResponse;
 import com.danzzan.domain.boothmap.model.entity.Booth;
 import com.danzzan.domain.boothmap.model.entity.BoothOperation;
+import com.danzzan.domain.boothmap.model.entity.BoothOperationStatus;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
+import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.util.ThumbnailUrlResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,16 +18,15 @@ import java.time.LocalTime;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BoothService {
+    private final BoothRepository boothRepository;
     private final BoothOperationRepository boothOperationRepository;
 
     public BoothSummaryResponse getBoothSummary(Long boothId, LocalDate operationDate) {
+        Booth booth = boothRepository.findById(boothId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 부스를 찾을 수 없습니다. id=" + boothId));
         BoothOperation boothOperation = (operationDate == null)
-                ? boothOperationRepository.findFirstByBoothIdOrderByOperationDateAsc(boothId)
-                    .orElseThrow(() -> new IllegalArgumentException("해당 부스를 찾을 수 없습니다. id=" + boothId))
-                : boothOperationRepository.findByBoothIdAndOperationDate(boothId, operationDate)
-                    .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 부스를 찾을 수 없습니다. id=" + boothId));
-
-        Booth booth = boothOperation.getBooth();
+                ? boothOperationRepository.findFirstByBoothIdOrderByOperationDateAsc(boothId).orElse(null)
+                : boothOperationRepository.findByBoothIdAndOperationDate(boothId, operationDate).orElse(null);
 
         return new BoothSummaryResponse(
                 booth.getId(),
@@ -33,8 +34,9 @@ public class BoothService {
                 booth.getDescription(),
                 booth.getImageUrl(),
                 ThumbnailUrlResolver.toThumbnailUrl(booth.getImageUrl()),
-                formatTime(boothOperation.getStartTime()),
-                formatTime(boothOperation.getEndTime())
+                boothOperation != null ? boothOperation.getOperationStatus() : BoothOperationStatus.UNKNOWN,
+                boothOperation != null ? formatTime(boothOperation.getStartTime()) : null,
+                boothOperation != null ? formatTime(boothOperation.getEndTime()) : null
         );
     }
 

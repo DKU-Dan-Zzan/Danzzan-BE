@@ -24,6 +24,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String AUTH_PATH_PREFIX = "/auth/";
+    private static final String ADMIN_API_PREFIX = "/api/admin/";
+    private static final String ADMIN_MAP_PREFIX = "/admin/map/";
 
     private final JwtProvider jwtProvider;
     private final UrlPathHelper urlPathHelper = new UrlPathHelper();
@@ -34,7 +36,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return true;
         }
         String path = urlPathHelper.getPathWithinApplication(request);
-        return path != null && path.startsWith(AUTH_PATH_PREFIX);
+        if (path == null) {
+            return true;
+        }
+        if (path.startsWith(AUTH_PATH_PREFIX)) {
+            return true;
+        }
+        return !(path.startsWith(ADMIN_API_PREFIX) || path.startsWith(ADMIN_MAP_PREFIX));
     }
 
     @Override

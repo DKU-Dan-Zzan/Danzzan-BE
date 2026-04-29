@@ -2,6 +2,8 @@ package com.danzzan.global.jwt;
 
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.repository.UserRepository;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
+    private final JwtRevocationService jwtRevocationService;
 
     private static final java.util.Set<String> PUBLIC_PATHS = java.util.Set.of(
             "/user/login",
@@ -53,26 +56,47 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
 
         if (token != null) {
-            // 토큰이 있지만 서명/만료 검증 실패 → 401 반환 (프론트 갱신 트리거)
-            if (!jwtTokenProvider.validateToken(token)) {
+            if (jwtRevocationService.isBlacklisted(token)) {
+                sendUnauthorized(response, "무효화된 토큰입니다. 다시 로그인해 주세요.");
+                return;
+            }
+
+            Claims claims;
+            try {
+                claims = jwtTokenProvider.getValidClaims(token);
+            } catch (JwtException | IllegalArgumentException e) {
+                // 토큰이 있지만 서명/만료 검증 실패 → 401 반환 (프론트 갱신 트리거)
                 sendUnauthorized(response, "토큰이 만료되었거나 유효하지 않습니다.");
                 return;
             }
 
-            Long userId = jwtTokenProvider.getUserId(token);
-            String role = jwtTokenProvider.getRole(token);
+            Long userId = jwtTokenProvider.getUserId(claims);
+            String role = jwtTokenProvider.getRole(claims);
             if (role == null || role.isBlank()) {
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            int tokenVersion = jwtTokenProvider.getTokenVersion(token);
-            User user = userRepository.findById(userId).orElse(null);
-
-            // tokenVersion 불일치(비밀번호 변경 등) → 401 반환 (프론트 갱신 트리거)
-            if (user == null || user.getTokenVersion() != tokenVersion) {
-                sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
+            if (jwtRevocationService.isWithdrawnUser(userId)) {
+                sendUnauthorized(response, "탈퇴 처리된 회원입니다.");
                 return;
+            }
+
+            if (requiresTokenVersionValidation(request)) {
+                int tokenVersion = jwtTokenProvider.getTokenVersion(claims);
+                Integer cachedTokenVersion = jwtRevocationService.getCachedUserVersion(userId).orElse(null);
+                if (cachedTokenVersion != null && cachedTokenVersion != tokenVersion) {
+                    sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
+                    return;
+                }
+
+                User user = cachedTokenVersion == null ? userRepository.findById(userId).orElse(null) : null;
+
+                // tokenVersion 불일치(비밀번호 변경 등) → 401 반환 (프론트 갱신 트리거)
+                if (cachedTokenVersion == null && (user == null || user.isDeleted() || user.getTokenVersion() != tokenVersion)) {
+                    sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
+                    return;
+                }
             }
 
             UsernamePasswordAuthenticationToken authentication =
@@ -102,5 +126,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write("{\"error\":\"" + message + "\",\"status\":401}");
+    }
+
+    private boolean requiresTokenVersionValidation(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path == null || !path.startsWith("/tickets/");
     }
 }

@@ -4,6 +4,7 @@ import com.danzzan.domain.event.model.entity.FestivalEvent;
 import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.event.repository.FestivalEventRepository;
 import com.danzzan.domain.event.service.EventOpenService;
+import com.danzzan.domain.ticket.model.entity.TicketStatus;
 import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import com.danzzan.domain.ticket.service.TicketInitService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,16 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class EventAutoOpenScheduler {
+
+    private static final List<TicketStatus> CONSUMED_TICKET_STATUSES = List.of(
+            TicketStatus.CONFIRMED,
+            TicketStatus.ISSUED,
+            TicketStatus.CANCELLED_WITHDRAWAL
+    );
+    private static final List<TicketStatus> REDIS_ISSUED_USER_STATUSES = List.of(
+            TicketStatus.CONFIRMED,
+            TicketStatus.ISSUED
+    );
 
     private final FestivalEventRepository eventRepository;
     private final EventOpenService eventOpenService;
@@ -59,15 +70,41 @@ public class EventAutoOpenScheduler {
 
         for (FestivalEvent event : openEvents) {
             try {
-                long issued = userTicketRepository.countByEventId(event.getId());
+                ticketInitService.setEventStatus(String.valueOf(event.getId()), TicketingStatus.OPEN);
+                long issued = userTicketRepository.countByEventIdAndStatusIn(
+                        event.getId(),
+                        CONSUMED_TICKET_STATUSES
+                );
                 long remaining = Math.max(0, event.getTotalCapacity() - issued);
                 boolean restored = ticketInitService.restoreStockIfMissing(
                         String.valueOf(event.getId()), remaining);
                 if (restored) {
-                    log.warn("stock 복구 완료 eventId={} remaining={}", event.getId(), remaining);
+                    List<Long> issuedUserIds = userTicketRepository.findUserIdsByEventIdAndStatusIn(
+                            event.getId(),
+                            REDIS_ISSUED_USER_STATUSES
+                    );
+                    long synced = ticketInitService.syncIssuedUsers(String.valueOf(event.getId()), issuedUserIds);
+                    log.warn(
+                            "stock 복구 완료 eventId={} remaining={} syncedUsers={}",
+                            event.getId(),
+                            remaining,
+                            synced
+                    );
                 }
             } catch (Exception e) {
                 log.error("stock 복구 실패 eventId={}", event.getId(), e);
+            }
+        }
+    }
+
+    @Scheduled(fixedDelay = 10000, initialDelay = 5000)
+    public void syncClosedEventStatuses() {
+        List<FestivalEvent> closedEvents = eventRepository.findAllByTicketingStatus(TicketingStatus.CLOSED);
+        for (FestivalEvent event : closedEvents) {
+            try {
+                ticketInitService.setEventStatus(String.valueOf(event.getId()), TicketingStatus.CLOSED);
+            } catch (Exception e) {
+                log.error("closed status 캐시 동기화 실패 eventId={}", event.getId(), e);
             }
         }
     }

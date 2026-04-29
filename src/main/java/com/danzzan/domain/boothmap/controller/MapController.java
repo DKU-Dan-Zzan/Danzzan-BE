@@ -7,24 +7,26 @@ import com.danzzan.domain.boothmap.model.dto.PubSummaryResponse;
 import com.danzzan.domain.boothmap.service.BoothMapService;
 import com.danzzan.domain.boothmap.service.BoothService;
 import com.danzzan.domain.boothmap.service.PubService;
-import com.danzzan.domain.admin.map.service.AdminMapService;
-
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @Validated
 @RestController
@@ -35,12 +37,11 @@ public class MapController {
     private final BoothMapService boothMapService;
     private final BoothService boothService;
     private final PubService pubService;
-    private final AdminMapService adminMapService;
 
     @GetMapping("/booth-map")
     @Operation(
             summary = "부스맵 전체 조회",
-            description = "지도에 표시할 단과대 및 부스 위치 정보를 조회합니다."
+            description = "지도에 표시할 단과대와 부스 위치 정보를 조회합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -80,14 +81,11 @@ public class MapController {
             )
     })
     public BoothMapResponse getBoothMap(
-        @Parameter(
-                description = "조회할 축제 날짜",
-                example = "2026-05-20"
-        )
-        @RequestParam(required = false)
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return boothMapService.getBoothMap(resolveDate(date));
+        return boothMapService.getBoothMap(date);
     }
 
     @GetMapping("/booths/{boothId}")
@@ -95,101 +93,36 @@ public class MapController {
             summary = "부스 요약 정보 조회",
             description = "부스 클릭 시 표시할 요약 정보를 조회합니다."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "부스 요약 정보 조회 성공",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = BoothSummaryResponse.class),
-                            examples = @ExampleObject(
-                                    name = "success",
-                                    value = """
-                                            {
-                                              "boothId": 3,
-                                              "name": "심폐소생술 체험",
-                                              "description": "응급상황 대처 체험 부스",
-                                              "imageUrl": "https://cdn.example.com/booth3.jpg",
-                                              "thumbnailUrl": "https://cdn.example.com/thumb/booth3.webp",
-                                              "startTime": "18:00",
-                                              "endTime": "21:00"
-                                            }
-                                            """
-                            )
-                    )
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "404",
-                    description = "해당 부스(boothId)가 존재하지 않음"
-            )
-    })
     public BoothSummaryResponse getBoothSummary(
-        @NotNull @PathVariable Long boothId,
-        @Parameter(
-                description = "조회할 축제 날짜",
-                example = "2026-05-20"
-        )
-        @RequestParam(required = false)
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @NotNull @PathVariable Long boothId,
+            @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return boothService.getBoothSummary(boothId, resolveDate(date));
+        return boothService.getBoothSummary(boothId, date);
     }
 
     @GetMapping("/pubs")
     @Operation(
-            summary = "학과 주점 전체 리스트 조회",
+            summary = "학과 주점 전체 목록 조회",
             description = "학과 주점 목록을 조회합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "200",
-                    description = "학과 주점 전체 리스트 조회 성공",
+                    description = "학과 주점 전체 목록 조회 성공",
                     content = @Content(
                             mediaType = "application/json",
-                            array = @ArraySchema(schema = @Schema(implementation = PubSummaryResponse.class)),
-                            examples = @ExampleObject(
-                                    name = "success",
-                                    value = """
-                                            [
-                                              {
-                                                "pubId": 1,
-                                                "name": "소프트웨어학과 주점",
-                                                "intro": "오늘만 사는 주점",
-                                                "department": "소프트웨어학과",
-                                                "collegeId": 1,
-                                                "collegeName": "SW융합대학",
-                                                "mainImageUrl": "https://image.url/main.png",
-                                                "thumbnailUrl": "https://image.url/thumb/main.webp",
-                                                "startTime": "18:00",
-                                                "endTime": "23:00"
-                                              },
-                                              {
-                                                "pubId": 2,
-                                                "name": "전자공학과 주점",
-                                                "intro": "신나는 주점",
-                                                "department": "전자공학과",
-                                                "collegeId": 2,
-                                                "collegeName": "공과대학",
-                                                "mainImageUrl": "https://image.url/main2.png",
-                                                "thumbnailUrl": "https://image.url/thumb/main2.webp",
-                                                "startTime": "18:00",
-                                                "endTime": "23:00"
-                                              }
-                                            ]
-                                            """
-                            )
+                            array = @ArraySchema(schema = @Schema(implementation = PubSummaryResponse.class))
                     )
             )
     })
     public List<PubSummaryResponse> getPubs(
-        @Parameter(
-                description = "조회할 축제 날짜",
-                example = "2026-05-20"
-        )
-        @RequestParam(required = false)
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return pubService.getPubs(resolveDate(date));
+        return pubService.getPubs(date);
     }
 
     @GetMapping("/pubs/{pubId}")
@@ -197,69 +130,12 @@ public class MapController {
             summary = "학과 주점 상세 조회",
             description = "특정 학과 주점의 상세 정보를 조회합니다."
     )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "학과 주점 상세 조회 성공",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = PubDetailResponse.class),
-                            examples = @ExampleObject(
-                                    name = "success",
-                                    value = """
-                                            {
-                                              "pubId": 1,
-                                              "name": "소프트웨어학과 주점",
-                                              "intro": "오늘만 사는 주점",
-                                              "description": "시원한 맥주와 안주가 준비되어 있습니다.",
-                                              "department": "소프트웨어학과",
-                                              "collegeName": "SW융합대학",
-                                              "instagram": "@dku_software",
-                                              "imageUrls": [
-                                                "https://cdn.xxx/pub1_main.jpg",
-                                                "https://cdn.xxx/pub1_2.jpg"
-                                              ],
-                                              "thumbnailImageUrls": [
-                                                "https://cdn.xxx/thumb/pub1_main.webp",
-                                                "https://cdn.xxx/thumb/pub1_2.webp"
-                                              ],
-                                              "startTime": "18:00",
-                                              "endTime": "23:00"
-                                            }
-                                            """
-                            )
-                    )
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "404",
-                    description = "해당 주점(pubId)이 존재하지 않음",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(
-                                    description = "에러 응답",
-                                    example = """
-                                            {
-                                              "message": "해당 주점이 존재하지 않습니다.",
-                                              "status": 404
-                                            }
-                                            """
-                            )
-                    )
-            )
-    })
     public PubDetailResponse getPubDetail(
-        @NotNull @PathVariable Long pubId,
-        @Parameter(
-                description = "조회할 축제 날짜",
-                example = "2026-05-20"
-        )
-        @RequestParam(required = false)
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @NotNull @PathVariable Long pubId,
+            @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return pubService.getPubDetail(pubId, resolveDate(date));
-    }
-
-    private LocalDate resolveDate(LocalDate date) {
-        return date != null ? date : adminMapService.getActiveOperationDate();
+        return pubService.getPubDetail(pubId, date);
     }
 }

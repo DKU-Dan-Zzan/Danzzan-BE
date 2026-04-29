@@ -44,18 +44,18 @@ public class RedisLuaScriptConfig {
     }
 
     @Bean("enterQueueScript")
-    public RedisScript<Long> enterQueueScript() {
-        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+    public RedisScript<List> enterQueueScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
         script.setLocation(new ClassPathResource("redis/enter_queue.lua"));
-        script.setResultType(Long.class);
+        script.setResultType(List.class);
         return script;
     }
 
     @Bean("admitOneWaitingUserScript")
-    public RedisScript<String> admitOneWaitingUserScript() {
-        DefaultRedisScript<String> script = new DefaultRedisScript<>();
+    public RedisScript<Long> admitOneWaitingUserScript() {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
         script.setLocation(new ClassPathResource("redis/admit_one_waiting_user.lua"));
-        script.setResultType(String.class);
+        script.setResultType(Long.class);
         return script;
     }
 
@@ -74,4 +74,13 @@ public class RedisLuaScriptConfig {
         script.setResultType(List.class);
         return script;
     }
+
+    @Bean("queueStatusSnapshotScript")
+    public RedisScript<List> queueStatusSnapshotScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("redis/queue_status_snapshot.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
+
 }

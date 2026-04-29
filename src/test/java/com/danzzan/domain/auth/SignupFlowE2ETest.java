@@ -1,10 +1,10 @@
 package com.danzzan.domain.auth;
 
 import com.danzzan.domain.auth.service.SignupService;
+import com.danzzan.domain.auth.service.SignupTokenStore;
 import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
-import com.danzzan.domain.user.phoneverification.service.PhoneVerificationService;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,8 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,14 +56,12 @@ class SignupFlowE2ETest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private PhoneVerificationService phoneVerificationService;
+    @Autowired
+    private SignupTokenStore signupTokenStore;
 
     @BeforeEach
     void setUp() {
         userRepository.deleteAll();
-        when(phoneVerificationService.consumeVerifiedPhoneNumber("signup-token-123", "phone-session-123"))
-                .thenReturn("01012345678");
     }
 
     @Test
@@ -77,6 +75,7 @@ class SignupFlowE2ETest {
                 "컴퓨터공학과",
                 AcademicStatus.ENROLLED
         );
+        signupTokenStore.cacheVerifiedPhone(signupToken, "01012345678", LocalDateTime.now());
 
         mockMvc.perform(post("/user/" + signupToken)
                         .contentType(MediaType.APPLICATION_JSON)

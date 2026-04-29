@@ -1,230 +1,171 @@
 package com.danzzan.domain.admin.map.controller;
 
+import com.danzzan.domain.admin.map.dto.request.PresignAdminPubImageRequest;
+import com.danzzan.domain.admin.map.dto.request.RegisterAdminPubImagesRequest;
+import com.danzzan.domain.admin.map.dto.request.UpdateAdminBoothRequest;
+import com.danzzan.domain.admin.map.dto.request.UpdateAdminPubRequest;
 import com.danzzan.domain.admin.map.dto.request.UpdateMapLocationRequest;
-import com.danzzan.domain.admin.map.dto.request.UpdateActiveOperationDateRequest;
+import com.danzzan.domain.admin.map.dto.request.UpsertAdminPubOperationRequest;
+import com.danzzan.domain.admin.map.dto.response.AdminBoothManagementResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminMapResponse;
+import com.danzzan.domain.admin.map.dto.response.AdminPubImagePresignResponse;
+import com.danzzan.domain.admin.map.dto.response.AdminPubImageResponse;
+import com.danzzan.domain.admin.map.service.AdminBoothManagementService;
 import com.danzzan.domain.admin.map.service.AdminMapService;
+import com.danzzan.infra.s3.S3PresignedPutResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/map")
-@Tag(name = "관리자 지도", description = "관리자 지도 편집 API")
+@Tag(name = "관리자 지도", description = "관리자 지도/Booth 관리 API")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminMapController {
 
     private final AdminMapService adminMapService;
+    private final AdminBoothManagementService adminBoothManagementService;
 
     @GetMapping
-    @Operation(
-            summary = "관리자 지도 조회",
-            description = "선택한 날짜 기준으로 단과대/부스 배치 현황과 현재 활성 날짜를 조회합니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "관리자 지도 조회 성공",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = AdminMapResponse.class),
-                            examples = @ExampleObject(
-                                    name = "success",
-                                    value = """
-                                            {
-                                              "activeOperationDate": "2026-05-12",
-                                              "colleges": [
-                                                {
-                                                  "id": 1,
-                                                  "name": "SW융합대학",
-                                                  "locationX": 127.1265,
-                                                  "locationY": 37.3211
-                                                }
-                                              ],
-                                              "booths": [
-                                                {
-                                                  "id": 3,
-                                                  "name": "화장실",
-                                                  "type": "FACILITY",
-                                                  "locationX": 127.1271,
-                                                  "locationY": 37.3219,
-                                                  "placed": true
-                                                }
-                                              ]
-                                            }
-                                            """
-                            )
-                    )
-            )
-    })
+    @Operation(summary = "관리자 지도 조회", description = "지도 편집 탭용 관리자 맵 데이터를 조회합니다.")
     public AdminMapResponse getAdminMap(
-            @Parameter(
-                    description = "조회할 운영 날짜. 없으면 현재 활성 날짜로 조회합니다.",
-                    example = "2026-05-12"
-            )
+            @Parameter(description = "조회할 운영 날짜", example = "2026-05-12")
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        LocalDate operationDate = (date == null)
-                ? adminMapService.getActiveOperationDate()
-                : date;
+        return adminMapService.getAdminMap(date);
+    }
 
-        return adminMapService.getAdminMap(operationDate);
+    @GetMapping("/booth-management")
+    @Operation(summary = "Booth 탭 관리자 데이터 조회", description = "Booth 탭용 booth, pub, pub_operation 데이터를 조회합니다.")
+    public AdminBoothManagementResponse getBoothManagement(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        return adminBoothManagementService.getBoothManagement(date);
     }
 
     @PatchMapping("/colleges/{collegeId}/location")
-    @Operation(
-            summary = "단과대 마커 위치 수정",
-            description = "관리자 지도에서 특정 단과대 마커의 좌표를 수정합니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "단과대 위치 수정 성공"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "400",
-                    description = "좌표 값이 올바르지 않음"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "404",
-                    description = "해당 단과대가 존재하지 않음"
-            )
-    })
+    @Operation(summary = "단과대 위치 수정", description = "지도 편집 탭에서 단과대 마커 위치를 수정합니다.")
     public void updateCollegeLocation(
-            @Parameter(description = "위치를 수정할 단과대 ID", example = "1")
             @PathVariable Long collegeId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    required = true,
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = UpdateMapLocationRequest.class),
-                            examples = @ExampleObject(
-                                    name = "request",
-                                    value = """
-                                            {
-                                              "locationX": 127.1265,
-                                              "locationY": 37.3211
-                                            }
-                                            """
-                            )
-                    )
-            )
             @Valid @RequestBody UpdateMapLocationRequest request
     ) {
         adminMapService.updateCollegeLocation(collegeId, request);
     }
 
     @PatchMapping("/booths/{boothId}/location")
-    @Operation(
-            summary = "부스 마커 위치 수정",
-            description = "관리자 지도에서 특정 부스 마커의 좌표를 수정합니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "부스 위치 수정 성공"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "400",
-                    description = "좌표 값이 올바르지 않음"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "404",
-                    description = "해당 부스가 존재하지 않음"
-            )
-    })
+    @Operation(summary = "부스 위치 수정", description = "지도 편집 탭에서 부스 마커 위치를 수정합니다.")
     public void updateBoothLocation(
-            @Parameter(description = "위치를 수정할 부스 ID", example = "3")
             @PathVariable Long boothId,
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    required = true,
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = UpdateMapLocationRequest.class),
-                            examples = @ExampleObject(
-                                    name = "request",
-                                    value = """
-                                            {
-                                              "locationX": 127.1271,
-                                              "locationY": 37.3219
-                                            }
-                                            """
-                            )
-                    )
-            )
             @Valid @RequestBody UpdateMapLocationRequest request
     ) {
         adminMapService.updateBoothLocation(boothId, request);
     }
 
     @DeleteMapping("/booths/{boothId}/location")
-    @Operation(
-            summary = "부스 마커 위치 삭제",
-            description = "특정 부스의 배치 좌표를 제거하여 미배치 상태로 되돌립니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "부스 위치 삭제 성공"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "404",
-                    description = "해당 부스가 존재하지 않음"
-            )
-    })
-    public void clearBoothLocation(
-            @Parameter(description = "위치를 삭제할 부스 ID", example = "3")
-            @PathVariable Long boothId
-    ) {
+    @Operation(summary = "부스 위치 제거", description = "지도 편집 탭에서 부스 좌표를 제거합니다.")
+    public void clearBoothLocation(@PathVariable Long boothId) {
         adminMapService.clearBoothLocation(boothId);
     }
 
-    @PutMapping("/active-date")
-    @Operation(
-            summary = "활성 운영 날짜 변경",
-            description = "부스맵 기본 조회에 사용되는 활성 운영 날짜를 변경합니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "활성 운영 날짜 변경 성공"
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "400",
-                    description = "날짜 형식이 올바르지 않음"
-            )
-    })
-    public void updateActiveDate(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    required = true,
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = UpdateActiveOperationDateRequest.class),
-                            examples = @ExampleObject(
-                                    name = "request",
-                                    value = """
-                                            {
-                                              "operationDate": "2026-05-12"
-                                            }
-                                            """
-                            )
-                    )
-            )
-            @RequestBody UpdateActiveOperationDateRequest request
+    @PatchMapping("/booths/{boothId}/management")
+    @Operation(summary = "Booth 탭 부스 정보 수정", description = "booth description 및 booth_operation 정보를 수정합니다.")
+    public void updateBoothManagement(
+            @PathVariable Long boothId,
+            @Valid @RequestBody UpdateAdminBoothRequest request
     ) {
-        adminMapService.updateActiveDate(request);
+        adminBoothManagementService.updateBoothManagement(boothId, request);
+    }
+
+    @PatchMapping("/pubs/{pubId}/management")
+    @Operation(summary = "Booth 탭 주점 정보 수정", description = "pub intro, description, instagram 정보를 수정합니다.")
+    public void updatePubManagement(
+            @PathVariable Long pubId,
+            @Valid @RequestBody UpdateAdminPubRequest request
+    ) {
+        adminBoothManagementService.updatePubManagement(pubId, request);
+    }
+
+    @GetMapping("/pubs/{pubId}/images")
+    @Operation(summary = "주점 이미지 목록 조회", description = "특정 주점의 등록 이미지와 대표 이미지를 조회합니다.")
+    public List<AdminPubImageResponse> getPubImages(@PathVariable Long pubId) {
+        return adminBoothManagementService.getPubImages(pubId);
+    }
+
+    @PostMapping("/pubs/{pubId}/images/presign")
+    @Operation(summary = "주점 이미지 업로드용 Presigned URL 발급", description = "주점 이미지를 Object Storage에 업로드하기 위한 presigned URL을 발급합니다.")
+    public AdminPubImagePresignResponse presignPubImage(
+            @PathVariable Long pubId,
+            @Valid @RequestBody PresignAdminPubImageRequest request
+    ) {
+        S3PresignedPutResult result = adminBoothManagementService.presignPubImage(pubId, request);
+        return AdminPubImagePresignResponse.from(result);
+    }
+
+    @PostMapping("/pubs/{pubId}/images")
+    @Operation(summary = "주점 이미지 등록", description = "업로드 완료된 이미지 URL들을 pub_image 테이블에 등록합니다.")
+    public void registerPubImages(
+            @PathVariable Long pubId,
+            @Valid @RequestBody RegisterAdminPubImagesRequest request
+    ) {
+        adminBoothManagementService.registerPubImages(pubId, request);
+    }
+
+    @PatchMapping("/pubs/{pubId}/images/{imageId}/main")
+    @Operation(summary = "주점 메인 이미지 지정", description = "특정 주점의 대표 이미지를 하나로 지정합니다.")
+    public void updateMainPubImage(
+            @PathVariable Long pubId,
+            @PathVariable Long imageId
+    ) {
+        adminBoothManagementService.updateMainPubImage(pubId, imageId);
+    }
+
+    @DeleteMapping("/pubs/{pubId}/images/{imageId}")
+    @Operation(summary = "주점 이미지 삭제", description = "pub_image 테이블의 이미지 row를 삭제합니다.")
+    public void deletePubImage(
+            @PathVariable Long pubId,
+            @PathVariable Long imageId
+    ) {
+        adminBoothManagementService.deletePubImage(pubId, imageId);
+    }
+
+    @PostMapping("/pub-operations")
+    @Operation(summary = "주점 공통 운영정보 생성", description = "pub_operation 기준의 주점 공통 운영정보를 생성합니다.")
+    public void createPubOperation(@Valid @RequestBody UpsertAdminPubOperationRequest request) {
+        adminBoothManagementService.createPubOperation(request);
+    }
+
+    @PutMapping("/pub-operations/{pubOperationId}")
+    @Operation(summary = "주점 공통 운영정보 수정", description = "기존 pub_operation 정보를 수정합니다.")
+    public void updatePubOperation(
+            @PathVariable Long pubOperationId,
+            @Valid @RequestBody UpsertAdminPubOperationRequest request
+    ) {
+        adminBoothManagementService.updatePubOperation(pubOperationId, request);
+    }
+
+    @DeleteMapping("/pub-operations/{pubOperationId}")
+    @Operation(summary = "주점 공통 운영정보 삭제", description = "기존 pub_operation 정보를 삭제합니다.")
+    public void deletePubOperation(@PathVariable Long pubOperationId) {
+        adminBoothManagementService.deletePubOperation(pubOperationId);
     }
 }

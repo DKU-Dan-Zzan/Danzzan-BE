@@ -5,7 +5,8 @@ import com.danzzan.domain.user.exception.AlreadyStudentIdException;
 import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
-import com.danzzan.domain.user.phoneverification.service.PhoneVerificationService;
+import com.danzzan.domain.user.phoneverification.exception.PhoneVerificationErrorType;
+import com.danzzan.domain.user.phoneverification.exception.PhoneVerificationException;
 import com.danzzan.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,7 +22,6 @@ public class SignupService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final SignupTokenStore signupTokenStore;
-    private final PhoneVerificationService phoneVerificationService;
 
     public void cacheStudentInfo(String signupToken, String studentId, String name,
                                  String college, String major, AcademicStatus academicStatus) {
@@ -42,17 +42,14 @@ public class SignupService {
     @Transactional
     public void signup(RequestSignupDto dto, String signupToken) {
         StudentInfoCache cache = getCachedStudentInfo(signupToken);
-        String verifiedPhoneNumber = phoneVerificationService.consumeVerifiedPhoneNumber(
-                signupToken,
-                dto.getPhoneVerificationSessionId().trim()
-        );
+        SignupTokenStore.VerifiedPhoneCache verifiedPhone = signupTokenStore.getVerifiedPhone(signupToken)
+                .orElseThrow(() -> new PhoneVerificationException(PhoneVerificationErrorType.NOT_VERIFIED));
 
         if (userRepository.existsByStudentId(cache.studentId())) {
             throw new AlreadyStudentIdException();
         }
 
         String encodedPassword = passwordEncoder.encode(dto.getPassword());
-        LocalDateTime phoneVerifiedAt = LocalDateTime.now();
 
         User user = User.builder()
                 .studentId(cache.studentId())
@@ -63,9 +60,9 @@ public class SignupService {
                 .major(cache.major())
                 .academicStatus(cache.academicStatus())
                 .role(UserRole.ROLE_USER)
-                .phoneNumber(verifiedPhoneNumber)
+                .phoneNumber(verifiedPhone.phoneNumber())
                 .phoneVerified(true)
-                .phoneVerifiedAt(phoneVerifiedAt)
+                .phoneVerifiedAt(verifiedPhone.verifiedAt())
                 .build();
 
         userRepository.save(user);

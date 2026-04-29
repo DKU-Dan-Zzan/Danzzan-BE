@@ -4,6 +4,7 @@
 -- ARGV[1] = queueUserPrefix   (ticket:{eventId}:quser:)
 -- ARGV[2] = dedupKeyPrefix    (ticket:{eventId}:dedup:)
 -- ARGV[3] = nowMs             (현재 epoch ms, 문자열)
+-- ARGV[4] = batchLimit        (한 번에 처리할 최대 개수)
 --
 -- 반환값: 만료 처리된 userId 배열
 --
@@ -15,8 +16,13 @@ local active_key   = KEYS[1]
 local user_prefix  = ARGV[1]
 local dedup_prefix = ARGV[2]
 local now_ms       = ARGV[3]
+local batch_limit  = tonumber(ARGV[4]) or 200
 
-local candidates = redis.call('ZRANGEBYSCORE', active_key, 0, now_ms)
+if batch_limit < 1 then
+    batch_limit = 1
+end
+
+local candidates = redis.call('ZRANGEBYSCORE', active_key, 0, now_ms, 'LIMIT', 0, batch_limit)
 local expired = {}
 
 for _, user_id in ipairs(candidates) do

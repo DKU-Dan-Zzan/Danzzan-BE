@@ -62,6 +62,12 @@ public class AdminTicketServiceImpl implements AdminTicketService {
                     ticket.getIssuerAdmin() != null ? ticket.getIssuerAdmin().getName() : null
             );
         }
+        if (ticket.getStatus() == TicketStatus.CANCELLED_WITHDRAWAL) {
+            throw new IllegalStateException("회원 탈퇴로 권리포기 처리된 티켓은 팔찌 지급할 수 없습니다.");
+        }
+        if (ticket.getStatus() != TicketStatus.CONFIRMED) {
+            throw new IllegalStateException("팔찌 지급 가능한 티켓 상태가 아닙니다.");
+        }
 
         User admin = resolveAdmin();
         ticket.issue(admin);
@@ -85,7 +91,10 @@ public class AdminTicketServiceImpl implements AdminTicketService {
             throw new TicketEventMismatchException();
         }
 
-        if (ticket.getStatus() == TicketStatus.CONFIRMED) {
+        if (ticket.getStatus() == TicketStatus.CANCELLED_WITHDRAWAL) {
+            throw new IllegalStateException("회원 탈퇴로 권리포기 처리된 티켓은 복구할 수 없습니다.");
+        }
+        if (ticket.getStatus() != TicketStatus.ISSUED) {
             throw new TicketNotIssuedException();
         }
 

@@ -30,4 +30,14 @@ public class PubImage {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
+
+    public PubImage(Pub pub, String imageUrl, boolean isMain) {
+        this.pub = pub;
+        this.imageUrl = imageUrl;
+        this.isMain = isMain;
+    }
+
+    public void updateMain(boolean isMain) {
+        this.isMain = isMain;
+    }
 }

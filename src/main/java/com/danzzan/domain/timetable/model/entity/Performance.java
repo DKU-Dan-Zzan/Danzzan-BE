@@ -38,4 +38,42 @@ public class Performance {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
+
+    public static Performance create(
+            LocalDate performanceDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            Artist artist,
+            String stage
+    ) {
+        Performance performance = new Performance();
+        performance.performanceDate = performanceDate;
+        performance.startTime = startTime;
+        performance.endTime = endTime;
+        performance.artist = artist;
+        performance.stage = stage;
+        return performance;
+    }
+
+    public void update(
+            LocalDate performanceDate,
+            LocalTime startTime,
+            LocalTime endTime,
+            Artist artist,
+            String stage
+    ) {
+        if (performanceDate != null) {
+            this.performanceDate = performanceDate;
+        }
+        if (startTime != null) {
+            this.startTime = startTime;
+        }
+        if (endTime != null) {
+            this.endTime = endTime;
+        }
+        if (artist != null) {
+            this.artist = artist;
+        }
+        this.stage = stage;
+    }
 }

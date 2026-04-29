@@ -22,6 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AdminEventServiceImpl implements AdminEventService {
 
+    private static final List<TicketStatus> CONSUMED_TICKET_STATUSES = List.of(
+            TicketStatus.CONFIRMED,
+            TicketStatus.ISSUED,
+            TicketStatus.CANCELLED_WITHDRAWAL
+    );
+
     private final FestivalEventRepository festivalEventRepository;
     private final UserTicketRepository userTicketRepository;
 
@@ -54,13 +60,16 @@ public class AdminEventServiceImpl implements AdminEventService {
         FestivalEvent event = festivalEventRepository.findById(eventId)
                 .orElseThrow(EventNotFoundException::new);
 
-        long totalTickets = userTicketRepository.countByEventId(eventId);
+        long totalTickets = userTicketRepository.countByEventIdAndStatusIn(eventId, CONSUMED_TICKET_STATUSES);
         long ticketsConfirmed = userTicketRepository.countByEventIdAndStatus(eventId, TicketStatus.CONFIRMED);
         long ticketsIssued = userTicketRepository.countByEventIdAndStatus(eventId, TicketStatus.ISSUED);
+        long ticketsCancelledByWithdrawal =
+                userTicketRepository.countByEventIdAndStatus(eventId, TicketStatus.CANCELLED_WITHDRAWAL);
 
         int totalCapacity = event.getTotalCapacity();
         int remainingCapacity = Math.max(0, totalCapacity - (int) totalTickets);
-        double issueRate = totalTickets == 0 ? 0.0 : ((double) ticketsIssued / totalTickets) * 100.0;
+        long activeTickets = ticketsConfirmed + ticketsIssued;
+        double issueRate = activeTickets == 0 ? 0.0 : ((double) ticketsIssued / activeTickets) * 100.0;
 
         return EventStatsResponseDTO.builder()
                 .eventId(event.getId())
@@ -70,6 +79,7 @@ public class AdminEventServiceImpl implements AdminEventService {
                 .totalTickets(totalTickets)
                 .ticketsConfirmed(ticketsConfirmed)
                 .ticketsIssued(ticketsIssued)
+                .ticketsCancelledByWithdrawal(ticketsCancelledByWithdrawal)
                 .issueRate(issueRate)
                 .remainingCapacity(remainingCapacity)
                 .build();

@@ -10,4 +10,8 @@ public interface PubImageRepository extends JpaRepository<PubImage, Long> {
     Optional<PubImage> findByPubIdAndIsMainTrue(Long pubId);
 
     List<PubImage> findByPubId(Long pubId);
+
+    List<PubImage> findByPubIdOrderByCreatedAtAscIdAsc(Long pubId);
+
+    Optional<PubImage> findByIdAndPubId(Long id, Long pubId);
 }

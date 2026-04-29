@@ -9,21 +9,7 @@ spring:
   application:
     name: danzzan-be
 
-  datasource:
-    url: ${DB_URL:jdbc:mysql://05436352-5959-4640-9a69-3070c16e0a36.external.kr1.mysql.rds.nhncloudservice.com:3306/festival_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
-    username: ${DB_USERNAME:danzzan}
-    password: ${DB_PASSWORD:}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      maximum-pool-size: 30
-      minimum-idle: 5
-      connection-timeout: 10000
-      max-lifetime: 600000
-      idle-timeout: 300000
-
   jpa:
-    hibernate:
-      ddl-auto: validate
     open-in-view: false
     properties:
       hibernate:
@@ -31,8 +17,6 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
       lettuce:
         pool:
           max-active: ${REDIS_POOL_MAX_ACTIVE:200}
@@ -41,7 +25,6 @@ spring:
           max-wait: 1000ms
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
     producer:
       acks: all
       retries: 10

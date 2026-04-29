@@ -6,7 +6,7 @@ services:
     env_file:
       - .env
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
       REDIS_HOST: localhost
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: 192.168.0.88:9092

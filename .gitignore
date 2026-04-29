@@ -7,7 +7,6 @@ build/
 !**/src/test/**/build/
 
 ### application.yml ###
-src/main/resources/application-local.yml
 *.pem
 
 ### Docker / env ###
@@ -59,7 +58,6 @@ out/
 *.log
 
 # Prevent accidental commit of local test overrides
-src/test/resources/application.yml
 src/test/resources/application.properties
 k8s/
 ### k6 load test ###

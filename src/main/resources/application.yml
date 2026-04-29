@@ -6,6 +6,8 @@ server:
     accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:2000}
 
 spring:
+  profiles:
+    default: dev
   application:
     name: danzzan-be
 

@@ -143,23 +143,34 @@ docker compose up -d mysql redis kafka kafka-init
 ```
 처음 실행하면 이미지를 다운로드하고 MySQL DB, Redis, Kafka가 자동 생성됩니다.
 
-**Step 2. Spring Boot 실행**
+**Step 2. application-local.yml 생성 (최초 1회)**
+
+`src/main/resources/application-local.yml.example` 파일을 복사해서 `application-local.yml`로 이름 바꿉니다.
+이 파일은 gitignore 되어 있어서 GitHub에 올라가지 않습니다.
+
+```bash
+cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
+```
+
+내용은 기본적으로 AWS RDS 테스트 DB 연결 정보가 들어있습니다.
+
+**Step 3. Spring Boot 실행**
 
 터미널에서:
 ```bash
-SPRING_PROFILES_ACTIVE=dev ./gradlew bootRun
+SPRING_PROFILES_ACTIVE=dev,local ./gradlew bootRun
 ```
 
 IntelliJ에서:
 ```
 Run → Edit Configurations
 → Environment variables 항목에 추가
-   SPRING_PROFILES_ACTIVE=dev
+   SPRING_PROFILES_ACTIVE=dev,local
 → 실행
 ```
 
-> `application-dev.yml`이 적용되어 localhost MySQL/Redis/Kafka에 자동 연결됩니다.
-> 첫 실행 시 `ddl-auto: update` 덕분에 테이블이 자동 생성됩니다.
+> 프로파일 적용 순서: `application.yml` → `application-dev.yml` → `application-local.yml`
+> `application-local.yml`의 DB 설정이 최종적으로 적용되어 AWS RDS 테스트 DB에 연결됩니다.
 
 **Step 3. 개발 및 테스트**
 

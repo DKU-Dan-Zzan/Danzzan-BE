@@ -1,0 +1,8 @@
+# 이 파일을 복사해서 application-local.yml 로 이름 바꾸고 본인 설정 입력
+# application-local.yml 은 gitignore 되어 있어서 GitHub에 올라가지 않음
+
+spring:
+  datasource:
+    url: jdbc:mysql://danzzan.cjoo2uugo4tk.ap-northeast-2.rds.amazonaws.com:3306/festival_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: admin
+    password: dan2026zzan!

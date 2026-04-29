@@ -43,6 +43,15 @@ public class TicketIssueRequest {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "remaining_after_claim")
+    private Long remainingAfterClaim;
+
+    @Column(name = "seq")
+    private Long seq;
+
+    @Column(name = "accepted_at")
+    private Long acceptedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private TicketIssueRequestStatus status;
@@ -79,11 +88,17 @@ public class TicketIssueRequest {
             String requestId,
             Long eventId,
             Long userId,
-            TicketIssueRequestStatus status
+            TicketIssueRequestStatus status,
+            Long remainingAfterClaim,
+            Long seq,
+            Long acceptedAt
     ) {
         this.requestId = requestId;
         this.eventId = eventId;
         this.userId = userId;
+        this.remainingAfterClaim = remainingAfterClaim;
+        this.seq = seq;
+        this.acceptedAt = acceptedAt;
         this.status = status;
         this.compensated = false;
         this.compensationPending = false;

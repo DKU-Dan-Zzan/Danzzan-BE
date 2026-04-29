@@ -27,6 +27,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
+    private final JwtRevocationService jwtRevocationService;
 
     private static final java.util.Set<String> PUBLIC_PATHS = java.util.Set.of(
             "/user/login",
@@ -55,6 +56,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = resolveToken(request);
 
         if (token != null) {
+            if (jwtRevocationService.isBlacklisted(token)) {
+                sendUnauthorized(response, "무효화된 토큰입니다. 다시 로그인해 주세요.");
+                return;
+            }
+
             Claims claims;
             try {
                 claims = jwtTokenProvider.getValidClaims(token);
@@ -71,12 +77,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
+            if (jwtRevocationService.isWithdrawnUser(userId)) {
+                sendUnauthorized(response, "탈퇴 처리된 회원입니다.");
+                return;
+            }
+
             if (requiresTokenVersionValidation(request)) {
                 int tokenVersion = jwtTokenProvider.getTokenVersion(claims);
-                User user = userRepository.findById(userId).orElse(null);
+                Integer cachedTokenVersion = jwtRevocationService.getCachedUserVersion(userId).orElse(null);
+                if (cachedTokenVersion != null && cachedTokenVersion != tokenVersion) {
+                    sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
+                    return;
+                }
+
+                User user = cachedTokenVersion == null ? userRepository.findById(userId).orElse(null) : null;
 
                 // tokenVersion 불일치(비밀번호 변경 등) → 401 반환 (프론트 갱신 트리거)
-                if (user == null || user.getTokenVersion() != tokenVersion) {
+                if (cachedTokenVersion == null && (user == null || user.isDeleted() || user.getTokenVersion() != tokenVersion)) {
                     sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
                     return;
                 }

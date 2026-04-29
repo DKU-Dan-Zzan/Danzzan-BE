@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/festival_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    url: jdbc:mysql://localhost:3306/danzzan?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: danzzan
-    password:
+    password: change-me
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -22,3 +22,6 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9094
+
+jwt:
+  secret: dev-secret-key-for-local-testing-only-do-not-use-in-prod

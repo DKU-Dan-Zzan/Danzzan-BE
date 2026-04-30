@@ -36,7 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.data.redis.host=localhost",
         "spring.data.redis.port=6379",
         "octomo.api-key=test-octomo-api-key",
-        "phone-verification.code-encryption-secret=test-secret-for-phone-verification"
+        "phone-verification.code-encryption-secret=test-secret-for-phone-verification",
+        "jwt.secret=test-secret-key-for-jwt-at-least-32-characters-long"
 })
 class SignupFlowE2ETest {
     private static final String VALID_PASSWORD = String.join("", "My", "Secure", "!", "123");

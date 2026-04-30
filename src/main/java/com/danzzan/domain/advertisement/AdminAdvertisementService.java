@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -42,10 +44,27 @@ public class AdminAdvertisementService {
         Advertisement ad = new Advertisement();
         ad.setTitle(request.getTitle());
         ad.setImageUrl(request.getImageUrl());
+        ad.setLinkUrl(normalizeRedirectionUrl(request.getLinkUrl()));
         ad.setPlacement(request.getPlacement());
         ad.setIsActive(true);
-        ad.setEndDate(request.getEndDate());
         ad.setDeletedAt(null);
+
+        return AdvertisementResponse.from(advertisementRepository.save(ad));
+    }
+
+    /**
+     * ID로 특정 광고를 수정합니다.
+     */
+    @Transactional
+    public AdvertisementResponse updateById(Long id, CreateAdvertisementRequest request) {
+        Advertisement ad = advertisementRepository.findById(id)
+                .filter(row -> row.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "광고를 찾을 수 없습니다."));
+
+        ad.setTitle(request.getTitle());
+        ad.setImageUrl(request.getImageUrl());
+        ad.setLinkUrl(normalizeRedirectionUrl(request.getLinkUrl()));
+        ad.setPlacement(request.getPlacement());
 
         return AdvertisementResponse.from(advertisementRepository.save(ad));
     }
@@ -137,6 +156,30 @@ public class AdminAdvertisementService {
                     ad.setIsActive(false);
                     ad.setDeletedAt(LocalDateTime.now());
                 });
+    }
+
+    private String normalizeRedirectionUrl(String rawUrl) {
+        if (rawUrl == null) {
+            return null;
+        }
+
+        String trimmed = rawUrl.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        URI uri;
+        try {
+            uri = new URI(trimmed);
+        } catch (URISyntaxException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "광고 이동 URL 형식이 올바르지 않습니다.");
+        }
+
+        if (!uri.isAbsolute() || uri.getHost() == null || !"https".equalsIgnoreCase(uri.getScheme())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "광고 이동 URL은 HTTPS 절대 URL만 허용됩니다.");
+        }
+
+        return uri.toString();
     }
 
 }

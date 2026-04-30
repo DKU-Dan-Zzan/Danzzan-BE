@@ -24,22 +24,15 @@ public class Advertisement {
     @Column(nullable = false, length = 2048)
     private String imageUrl;
 
+    @Column(name = "link_url", length = 2048)
+    private String linkUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private AdvertisementPlacement placement;
 
     @Column(nullable = false)
     private Boolean isActive = true;
-
-    /**
-     * 광고 이미지의 object-position 값 (예: "50% 50%"). null이면 기본값 적용.
-     */
-    @Column(name = "object_position", length = 32)
-    private String objectPosition;
-
-    /** 광고 노출 종료 일시. null이면 종료일 없음. */
-    @Column(name = "end_date")
-    private LocalDateTime endDate;
 
     /**
      * 관리자 삭제(소프트 삭제). null이면 삭제되지 않은 행.

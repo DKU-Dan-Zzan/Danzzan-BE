@@ -47,6 +47,17 @@ public class AdminAdvertisementController {
     }
 
     /**
+     * ID로 특정 광고를 수정합니다.
+     */
+    @PatchMapping("/item/{id}")
+    public ResponseEntity<AdvertisementResponse> updateById(
+            @PathVariable Long id,
+            @Valid @RequestBody CreateAdvertisementRequest request
+    ) {
+        return ResponseEntity.ok(adminAdvertisementService.updateById(id, request));
+    }
+
+    /**
      * 광고 이미지 업로드용 S3 Presigned PUT URL 발급.
      */
     @PostMapping("/images/presign")

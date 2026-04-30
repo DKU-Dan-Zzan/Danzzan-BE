@@ -22,10 +22,14 @@ public class S3Uploader {
 
     private final S3Client s3Client;
 
-    @Value("${nhn.object-storage.container}")
+    @Value("${aws.s3.bucket}")
     private String bucket;
 
-    @Value("${nhn.object-storage.public-read:false}")
+    /**
+     * true면 업로드 시 객체 ACL을 PUBLIC_READ로 설정합니다.
+     * (버킷 정책으로 공개를 관리한다면 false로 두세요)
+     */
+    @Value("${aws.s3.public-read:false}")
     private boolean publicRead;
 
     public S3UploadResult uploadNoticeImage(MultipartFile file) {

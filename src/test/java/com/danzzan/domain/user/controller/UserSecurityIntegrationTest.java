@@ -14,11 +14,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:user-security;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=test-secret-key-for-jwt-at-least-32-characters-long",
         "jwt.access-validity-ms=3600000",
         "jwt.refresh-validity-ms=604800000",
@@ -26,11 +21,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "jwt.refresh-token-expiration=604800000",
         "app.cors.allowed-origins=http://localhost:5173",
         "app.cors.allowed-origin-patterns=http://localhost:*,http://127.0.0.1:*,http://10.*:*,http://172.*:*,http://192.168.*:*,http://169.254.*:*",
+        "aws.region=ap-northeast-2",
+        "aws.s3.bucket=test-bucket",
         "spring.mail.host=localhost",
         "spring.mail.port=1025",
         "password-reset.mail.subject=[TEST] reset",
-        "password-reset.mail.from=test@danzzan.com",
-        "octomo.api-key=test-octomo-api-key"
+        "password-reset.mail.from=test@danzzan.com"
 })
 @AutoConfigureMockMvc
 class UserSecurityIntegrationTest {

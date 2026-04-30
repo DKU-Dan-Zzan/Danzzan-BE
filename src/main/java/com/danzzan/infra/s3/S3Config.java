@@ -10,24 +10,19 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-
-import java.net.URI;
 
 @Configuration
 public class S3Config {
 
-    @Value("${nhn.object-storage.endpoint}")
-    private String endpoint;
-
-    @Value("${nhn.object-storage.region}")
-    private String region;
-
-    @Value("${nhn.object-storage.access-key:}")
+    /**
+     * 설정 시 StaticCredentialsProvider 사용 (로컬 개발 시 application-local.yml 등에 설정).
+     * 미설정이면 DefaultCredentialsProvider(환경변수, ~/.aws/credentials 등) 사용.
+     */
+    @Value("${aws.access-key-id:}")
     private String accessKeyId;
 
-    @Value("${nhn.object-storage.secret-key:}")
+    @Value("${aws.secret-access-key:}")
     private String secretAccessKey;
 
     @Bean
@@ -41,26 +36,22 @@ public class S3Config {
     }
 
     @Bean
-    public S3Client s3Client(AwsCredentialsProvider awsCredentialsProvider) {
+    public S3Client s3Client(
+            @Value("${aws.region}") String region,
+            AwsCredentialsProvider awsCredentialsProvider) {
         return S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
                 .credentialsProvider(awsCredentialsProvider)
-                .serviceConfiguration(S3Configuration.builder()
-                        .pathStyleAccessEnabled(true)
-                        .build())
                 .build();
     }
 
     @Bean
-    public S3Presigner s3Presigner(AwsCredentialsProvider awsCredentialsProvider) {
+    public S3Presigner s3Presigner(
+            @Value("${aws.region}") String region,
+            AwsCredentialsProvider awsCredentialsProvider) {
         return S3Presigner.builder()
-                .endpointOverride(URI.create(endpoint))
                 .region(Region.of(region))
                 .credentialsProvider(awsCredentialsProvider)
-                .serviceConfiguration(S3Configuration.builder()
-                        .pathStyleAccessEnabled(true)
-                        .build())
                 .build();
     }
 }

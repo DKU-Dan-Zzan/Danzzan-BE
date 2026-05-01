@@ -4,8 +4,8 @@ import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
 import com.danzzan.domain.user.repository.UserRepository;
+import com.danzzan.global.jwt.JwtRevocationService;
 import com.danzzan.global.jwt.JwtTokenProvider;
-import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,13 +36,13 @@ class AuthServiceTest {
     private JwtTokenProvider jwtTokenProvider;
 
     @Mock
-    private HttpServletResponse response;
+    private JwtRevocationService jwtRevocationService;
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, jwtTokenProvider);
+        authService = new AuthService(userRepository, passwordEncoder, jwtTokenProvider, jwtRevocationService);
     }
 
     @Test
@@ -55,11 +55,12 @@ class AuthServiceTest {
         when(jwtTokenProvider.getTokenVersion(refreshToken)).thenReturn(0);
         when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
 
-        authService.logout(refreshToken, response);
+        authService.logout(refreshToken);
 
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
         assertThat(userCaptor.getValue().getTokenVersion()).isEqualTo(1);
+        verify(jwtRevocationService).cacheUserVersion(1L, 1);
     }
 
     @Test
@@ -68,7 +69,7 @@ class AuthServiceTest {
 
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(false);
 
-        authService.logout(refreshToken, response);
+        authService.logout(refreshToken);
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -83,7 +84,7 @@ class AuthServiceTest {
         when(jwtTokenProvider.getTokenVersion(refreshToken)).thenReturn(0);
         when(userRepository.findById(2L)).thenReturn(Optional.of(user));
 
-        authService.logout(refreshToken, response);
+        authService.logout(refreshToken);
 
         verify(userRepository, never()).save(any(User.class));
     }
@@ -99,7 +100,7 @@ class AuthServiceTest {
         when(jwtTokenProvider.getTokenVersion(refreshToken)).thenReturn(0);
         when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
 
-        authService.logout(refreshToken, response);
+        authService.logout(refreshToken);
 
         verify(userRepository, never()).save(any(User.class));
     }

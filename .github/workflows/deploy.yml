@@ -74,5 +74,5 @@ jobs:
             docker pull danzzan/danzzan-be:latest
             docker stop danzzan-nhn-dev || true
             docker rm danzzan-nhn-dev || true
-            docker compose -f docker-compose.prod.yml up -d
+            docker-compose -f docker-compose.prod.yml up -d
             docker image prune -f

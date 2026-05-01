@@ -43,6 +43,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64
           tags: |
             danzzan/danzzan-be:latest
             danzzan/danzzan-be:${{ github.sha }}

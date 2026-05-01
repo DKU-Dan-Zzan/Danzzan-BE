@@ -1,13 +1,14 @@
 package com.danzzan.domain.admin.service;
 
-import com.danzzan.domain.admin.dto.response.TokenResponse;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.global.exception.AuthException;
-import com.danzzan.global.jwt.JwtRevocationService;
 import com.danzzan.global.jwt.JwtTokenProvider;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -20,9 +21,11 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
-    private final JwtRevocationService jwtRevocationService;
 
-    public TokenResponse login(String studentNumber, String password) {
+    @Value("${jwt.refresh-token-expiration}")
+    private long refreshTokenExpiration;
+
+    public String login(String studentNumber, String password, HttpServletResponse response) {
         User admin = userRepository.findByStudentId(studentNumber)
                 .orElseThrow(() -> new AuthException(HttpStatus.UNAUTHORIZED, "관리자를 찾을 수 없습니다."));
 
@@ -39,12 +42,19 @@ public class AuthService {
         );
         String refreshToken = jwtTokenProvider.createRefreshToken(admin.getId(), admin.getTokenVersion());
 
-        jwtRevocationService.cacheUserVersion(admin.getId(), admin.getTokenVersion());
+        ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(refreshTokenExpiration / 1000)
+                .sameSite("Strict")
+                .build();
+        response.addHeader("Set-Cookie", cookie.toString());
 
-        return new TokenResponse(accessToken, refreshToken);
+        return accessToken;
     }
 
-    public TokenResponse reissue(String refreshToken) {
+    public String reissue(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new AuthException(HttpStatus.UNAUTHORIZED, "Refresh Token이 없습니다.");
         }
@@ -62,20 +72,15 @@ public class AuthService {
             throw new AuthException(HttpStatus.UNAUTHORIZED, "만료된 세션입니다. 다시 로그인해주세요.");
         }
 
-        String newAccessToken = jwtTokenProvider.createAccessToken(
+        return jwtTokenProvider.createAccessToken(
                 admin.getId(),
                 admin.getStudentId(),
                 admin.getRole().name(),
                 admin.getTokenVersion()
         );
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(admin.getId(), admin.getTokenVersion());
-
-        jwtRevocationService.cacheUserVersion(admin.getId(), admin.getTokenVersion());
-
-        return new TokenResponse(newAccessToken, newRefreshToken);
     }
 
-    public void logout(String refreshToken) {
+    public void logout(String refreshToken, HttpServletResponse response) {
         if (refreshToken != null && !refreshToken.isBlank() && jwtTokenProvider.validateToken(refreshToken)) {
             Long userId = jwtTokenProvider.getUserId(refreshToken);
             int tokenVersion = jwtTokenProvider.getTokenVersion(refreshToken);
@@ -86,9 +91,17 @@ public class AuthService {
                     .ifPresent(user -> {
                         user.bumpTokenVersion();
                         userRepository.save(user);
-                        jwtRevocationService.cacheUserVersion(user.getId(), user.getTokenVersion());
                     });
         }
+
+        ResponseCookie clearCookie = ResponseCookie.from("refreshToken", "")
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(0)
+                .sameSite("Strict")
+                .build();
+        response.addHeader("Set-Cookie", clearCookie.toString());
     }
 
     private void validateAdminRole(User user) {

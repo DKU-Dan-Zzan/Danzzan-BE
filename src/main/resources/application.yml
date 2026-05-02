@@ -151,6 +151,7 @@ nhn:
     access-key: ${NHN_OBJECT_STORAGE_ACCESS_KEY:}
     secret-key: ${NHN_OBJECT_STORAGE_SECRET_KEY:}
     container: ${NHN_OBJECT_STORAGE_CONTAINER:danzzan-bucket}
+    swift-auth-path: ${NHN_OBJECT_STORAGE_SWIFT_AUTH_PATH:v1/AUTH_e18f23a8ff3449b78d8eec89c0e08bc6}
     public-read: false
     presign:
       put-expiration-sec: 300

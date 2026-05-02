@@ -22,8 +22,14 @@ public class S3Uploader {
 
     private final S3Client s3Client;
 
+    @Value("${nhn.object-storage.endpoint}")
+    private String endpoint;
+
     @Value("${nhn.object-storage.container}")
     private String bucket;
+
+    @Value("${nhn.object-storage.swift-auth-path:}")
+    private String swiftAuthPath;
 
     @Value("${nhn.object-storage.public-read:false}")
     private boolean publicRead;
@@ -62,14 +68,20 @@ public class S3Uploader {
         }
 
         try {
-            s3Client.putObject(req.build(), RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            byte[] bytes = file.getBytes();
+            s3Client.putObject(req.build(), RequestBody.fromBytes(bytes));
         } catch (IOException e) {
             throw new IllegalStateException("이미지 업로드에 실패했습니다.", e);
         }
 
-        String url = s3Client.utilities()
-                .getUrl(GetUrlRequest.builder().bucket(bucket).key(key).build())
-                .toExternalForm();
+        String url;
+        if (swiftAuthPath != null && !swiftAuthPath.isBlank()) {
+            url = endpoint + "/" + swiftAuthPath + "/" + bucket + "/" + key;
+        } else {
+            url = s3Client.utilities()
+                    .getUrl(GetUrlRequest.builder().bucket(bucket).key(key).build())
+                    .toExternalForm();
+        }
 
         return new S3UploadResult(key, url);
     }

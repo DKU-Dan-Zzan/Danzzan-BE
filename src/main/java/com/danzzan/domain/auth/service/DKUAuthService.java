@@ -92,15 +92,14 @@ public class DKUAuthService {
             "간호", "의과", "치과", "약학", "과학기술", "바이오융합", "스포츠", "외국어", "공공", "보건"
     );
 
-    // 죽전캠퍼스 학생 여부 검증
+    // 죽전캠퍼스 학부생만 가입 가능
     // - 학부생(3xxxxx): 단과대학명이 천안 블랙리스트에 없으면 죽전으로 판단
-    // - 대학원생(7xxxxx): 단과대학명이 천안 블랙리스트에 없으면 죽전으로 판단
+    // - 대학원생(7xxxxx): 가입 차단
     // - 그 외 학번: 차단
     private void validateJukjeonCampus(String studentId, String college) {
         boolean isUndergrad = studentId.startsWith("3");
-        boolean isGrad = studentId.startsWith("7");
 
-        if (!isUndergrad && !isGrad) {
+        if (!isUndergrad) {
             throw new CheonanCampusException();
         }
 

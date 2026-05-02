@@ -13,6 +13,8 @@ import com.danzzan.domain.admin.map.dto.response.AdminPubImageResponse;
 import com.danzzan.domain.admin.map.service.AdminBoothManagementService;
 import com.danzzan.domain.admin.map.service.AdminMapService;
 import com.danzzan.infra.s3.S3PresignedPutResult;
+import com.danzzan.infra.s3.S3UploadResult;
+import com.danzzan.infra.s3.S3Uploader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -30,9 +32,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -43,6 +47,7 @@ public class AdminMapController {
 
     private final AdminMapService adminMapService;
     private final AdminBoothManagementService adminBoothManagementService;
+    private final S3Uploader s3Uploader;
 
     @GetMapping
     @Operation(summary = "관리자 지도 조회", description = "지도 편집 탭용 관리자 맵 데이터를 조회합니다.")
@@ -119,6 +124,16 @@ public class AdminMapController {
     ) {
         S3PresignedPutResult result = adminBoothManagementService.presignPubImage(pubId, request);
         return AdminPubImagePresignResponse.from(result);
+    }
+
+    @PostMapping("/pubs/{pubId}/images/upload")
+    @Operation(summary = "주점 이미지 직접 업로드", description = "주점 이미지를 서버를 통해 Object Storage에 직접 업로드합니다.")
+    public Map<String, String> uploadPubImage(
+            @PathVariable Long pubId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        S3UploadResult result = adminBoothManagementService.uploadPubImage(pubId, file);
+        return Map.of("imageUrl", result.url(), "key", result.key());
     }
 
     @PostMapping("/pubs/{pubId}/images")

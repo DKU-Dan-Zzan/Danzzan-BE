@@ -24,9 +24,12 @@ import com.danzzan.domain.boothmap.repository.PubOperationRepository;
 import com.danzzan.domain.boothmap.repository.PubRepository;
 import com.danzzan.infra.s3.S3PresignService;
 import com.danzzan.infra.s3.S3PresignedPutResult;
+import com.danzzan.infra.s3.S3UploadResult;
+import com.danzzan.infra.s3.S3Uploader;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -47,6 +50,7 @@ public class AdminBoothManagementService {
     private final PubImageRepository pubImageRepository;
     private final PubOperationRepository pubOperationRepository;
     private final S3PresignService s3PresignService;
+    private final S3Uploader s3Uploader;
 
     public AdminBoothManagementResponse getBoothManagement(LocalDate operationDate) {
         List<Booth> booths = boothRepository.findAll();
@@ -118,6 +122,13 @@ public class AdminBoothManagementService {
                 request.getContentType(),
                 request.getFileSize()
         );
+    }
+
+    public S3UploadResult uploadPubImage(Long pubId, MultipartFile file) {
+        Pub pub = pubRepository.findByIdWithCollege(pubId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
+
+        return s3Uploader.uploadPubImage(pub.getCollege().getName(), pub.getDepartment(), file);
     }
 
     @Transactional

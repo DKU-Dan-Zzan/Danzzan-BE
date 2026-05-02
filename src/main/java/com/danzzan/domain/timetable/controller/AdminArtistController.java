@@ -6,6 +6,8 @@ import com.danzzan.domain.timetable.dto.admin.request.UpdateArtistRequest;
 import com.danzzan.domain.timetable.dto.admin.response.AdminArtistResponse;
 import com.danzzan.domain.timetable.dto.admin.response.ArtistImagePresignResponse;
 import com.danzzan.domain.timetable.service.AdminArtistService;
+import com.danzzan.infra.s3.S3UploadResult;
+import com.danzzan.infra.s3.S3Uploader;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,9 +21,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/timetable/artists")
@@ -32,6 +37,7 @@ import java.util.List;
 public class AdminArtistController {
 
     private final AdminArtistService adminArtistService;
+    private final S3Uploader s3Uploader;
 
     @GetMapping
     public ResponseEntity<List<AdminArtistResponse>> getArtists() {
@@ -65,5 +71,14 @@ public class AdminArtistController {
             @Valid @RequestBody PresignArtistImageRequest request
     ) {
         return ResponseEntity.ok(adminArtistService.presignArtistImage(artistId, request));
+    }
+
+    @PostMapping("/{artistId}/images/upload")
+    public ResponseEntity<Map<String, String>> uploadArtistImage(
+            @PathVariable Long artistId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        S3UploadResult result = s3Uploader.uploadArtistImage(artistId, file);
+        return ResponseEntity.ok(Map.of("imageUrl", result.url(), "key", result.key()));
     }
 }

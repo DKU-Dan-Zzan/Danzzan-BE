@@ -48,6 +48,7 @@ public class S3Config {
                 .credentialsProvider(awsCredentialsProvider)
                 .serviceConfiguration(S3Configuration.builder()
                         .pathStyleAccessEnabled(true)
+                        .chunkedEncodingEnabled(false)
                         .build())
                 .build();
     }

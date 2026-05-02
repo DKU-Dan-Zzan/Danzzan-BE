@@ -5,6 +5,8 @@ import com.danzzan.domain.advertisement.dto.CreateAdvertisementRequest;
 import com.danzzan.domain.advertisement.dto.request.PresignAdvertisementImageRequest;
 import com.danzzan.domain.advertisement.dto.request.SetAdvertisementActiveRequest;
 import com.danzzan.domain.advertisement.dto.response.AdvertisementImagePresignResponse;
+import com.danzzan.infra.s3.S3UploadResult;
+import com.danzzan.infra.s3.S3Uploader;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,9 +18,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/ads")
@@ -27,6 +32,7 @@ import java.util.List;
 public class AdminAdvertisementController {
 
     private final AdminAdvertisementService adminAdvertisementService;
+    private final S3Uploader s3Uploader;
 
     /**
      * 삭제되지 않은 모든 광고 목록 조회.
@@ -75,6 +81,18 @@ public class AdminAdvertisementController {
             @Valid @RequestBody PresignAdvertisementImageRequest request
     ) {
         return ResponseEntity.ok(adminAdvertisementService.presignAdImage(request));
+    }
+
+    /**
+     * 광고 이미지 직접 업로드 (multipart). presign CORS 문제 우회용.
+     */
+    @PostMapping("/images/upload")
+    public ResponseEntity<Map<String, String>> uploadAdImage(@RequestParam("file") MultipartFile file) {
+        S3UploadResult result = s3Uploader.uploadAdImage(file);
+        return ResponseEntity.ok(Map.of(
+                "imageUrl", result.url(),
+                "key", result.key()
+        ));
     }
 
     /**

@@ -305,9 +305,7 @@ public class AdminBoothManagementService {
     }
 
     private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
-        if (startTime != null && endTime != null && !startTime.isBefore(endTime)) {
-            throw new IllegalArgumentException("시작 시간은 종료 시간보다 빨라야 합니다.");
-        }
+        // 자정을 넘기는 운영(예: 11:00 → 01:00)을 허용하기 위해 검증 제거
     }
 
     private String normalizeNullableText(String value) {

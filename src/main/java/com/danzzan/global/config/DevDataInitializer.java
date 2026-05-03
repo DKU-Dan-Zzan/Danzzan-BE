@@ -32,25 +32,7 @@ public class DevDataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        seedAdminAccount();
         seedLoadtestUsersIfEnabled();
-    }
-
-    private void seedAdminAccount() {
-        // 관리자 계정이 없으면 생성
-        if (!userRepository.existsByStudentId("1234")) {
-            User admin = User.builder()
-                    .studentId("1234")
-                    .password(passwordEncoder.encode("1234"))
-                    .name("관리자")
-                    .college("SW융합대학")
-                    .major("소프트웨어학과")
-                    .academicStatus(AcademicStatus.ENROLLED)
-                    .role(UserRole.ROLE_ADMIN)
-                    .build();
-            userRepository.save(admin);
-            log.info("개발용 관리자 계정 생성 완료: studentId=1234, password=1234");
-        }
     }
 
     private void seedLoadtestUsersIfEnabled() {

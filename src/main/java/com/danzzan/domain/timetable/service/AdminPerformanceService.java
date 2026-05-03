@@ -97,15 +97,7 @@ public class AdminPerformanceService {
     }
 
     private void validateTimeRange(LocalTime start, LocalTime end) {
-        if (start == null || end == null) {
-            return;
-        }
-        if (!start.isBefore(end)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "시작 시간은 종료 시간보다 빨라야 합니다."
-            );
-        }
+        // 자정을 넘기는 공연(예: 23:00 → 01:00)을 허용하기 위해 검증 제거
     }
 
     private String trimToNull(String value) {

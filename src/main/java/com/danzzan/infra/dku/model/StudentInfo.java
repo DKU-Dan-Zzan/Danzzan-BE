@@ -15,4 +15,5 @@ public class StudentInfo {
     private final String major;             // 학과
     private final String academicStatus;    // 학적상태 (재학, 휴학, 졸업 등)
     private final int yearOfAdmission;      // 입학년도
+    private final String registrationDate;  // 등록일자 (예: "20260311")
 }

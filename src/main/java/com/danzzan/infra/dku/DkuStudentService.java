@@ -237,6 +237,7 @@ public class DkuStudentService {
         String academicStatus = getElementValue(doc, "scregStaNm");   // 학적상태 (재학/휴학/졸업/수료)
         String affiliation    = getElementValue(doc, "pstnOrgzNm");   // 소속 (예: "공과대학 컴퓨터공학과")
         String yearStr        = getElementValue(doc, "etrsYy");       // 입학년도
+        String registrationDate = getElementValue(doc, "regsDt");     // 등록일자 (예: "20260311")
 
         // studentId가 없으면 학생정보 페이지가 아닌 다른 페이지가 반환된 것
         if (studentId == null || studentId.isEmpty()) {
@@ -283,7 +284,8 @@ public class DkuStudentService {
                 college,
                 major,
                 academicStatus != null ? academicStatus : "",
-                yearOfAdmission
+                yearOfAdmission,
+                registrationDate != null ? registrationDate : ""
         );
     }
 

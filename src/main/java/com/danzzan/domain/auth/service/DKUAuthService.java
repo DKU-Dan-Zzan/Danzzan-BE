@@ -47,12 +47,21 @@ public class DKUAuthService {
         // 학적 상태 변환
         AcademicStatus academicStatus = parseAcademicStatus(studentInfo.getAcademicStatus());
 
+        // 휴학인데 등록일자가 2026년이면 등록휴학으로 처리
+        if (academicStatus == AcademicStatus.LEAVE
+                && studentInfo.getRegistrationDate().startsWith("2026")) {
+            academicStatus = AcademicStatus.ENROLLED_LEAVE;
+        }
+
         // 죽전캠퍼스 학생만 가입 가능 (학부: 3xxxxx, 대학원: 7xxxxx)
         validateJukjeonCampus(studentInfo.getStudentId(), studentInfo.getCollege());
 
-        // 재학생·수료생만 가입 가능
-        if (academicStatus != AcademicStatus.ENROLLED && academicStatus != AcademicStatus.COMPLETED) {
-            throw new IllegalStateException("재학생 및 수료생만 회원가입이 가능합니다.");
+        // 재학생·수료생·졸업유예생·등록휴학생만 가입 가능
+        if (academicStatus != AcademicStatus.ENROLLED
+                && academicStatus != AcademicStatus.COMPLETED
+                && academicStatus != AcademicStatus.GRADUATION_DEFERRED
+                && academicStatus != AcademicStatus.ENROLLED_LEAVE) {
+            throw new IllegalStateException("재학생, 수료생, 졸업유예생, 등록휴학생만 회원가입이 가능합니다.");
         }
 
         // 회원가입 토큰 생성
@@ -128,6 +137,8 @@ public class DKUAuthService {
             return AcademicStatus.ENROLLED;
         } else if (normalized.contains("휴학") || normalized.equals("LEAVE")) {
             return AcademicStatus.LEAVE;
+        } else if (normalized.contains("졸업유예") || normalized.equals("GRADUATION_DEFERRED")) {
+            return AcademicStatus.GRADUATION_DEFERRED;
         } else if (normalized.contains("졸업") || normalized.equals("GRADUATED")) {
             return AcademicStatus.GRADUATED;
         } else if (normalized.contains("수료") || normalized.equals("COMPLETED")) {

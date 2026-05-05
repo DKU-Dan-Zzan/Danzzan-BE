@@ -4,6 +4,7 @@ import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.global.exception.AuthException;
+import com.danzzan.global.jwt.JwtRevocationService;
 import com.danzzan.global.jwt.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,11 +22,12 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final JwtRevocationService jwtRevocationService;
 
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
 
-    public String login(String studentNumber, String password, HttpServletResponse response) {
+    public String[] login(String studentNumber, String password, HttpServletResponse response) {
         User admin = userRepository.findByStudentId(studentNumber)
                 .orElseThrow(() -> new AuthException(HttpStatus.UNAUTHORIZED, "관리자를 찾을 수 없습니다."));
 
@@ -51,7 +53,9 @@ public class AuthService {
                 .build();
         response.addHeader("Set-Cookie", cookie.toString());
 
-        return accessToken;
+        jwtRevocationService.cacheUserVersion(admin.getId(), admin.getTokenVersion());
+
+        return new String[]{accessToken, refreshToken};
     }
 
     public String reissue(String refreshToken) {
@@ -91,6 +95,7 @@ public class AuthService {
                     .ifPresent(user -> {
                         user.bumpTokenVersion();
                         userRepository.save(user);
+                        jwtRevocationService.cacheUserVersion(userId, user.getTokenVersion());
                     });
         }
 

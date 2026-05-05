@@ -25,27 +25,37 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
-        String accessToken = authService.login(
+        String[] tokens = authService.login(
                 request.getStudentNumber(),
                 request.getPassword(),
                 response
         );
-        return ResponseEntity.ok(new TokenResponse(accessToken));
+        return ResponseEntity.ok(new TokenResponse(tokens[0], tokens[1]));
     }
 
     @PostMapping("/reissue")
     public ResponseEntity<TokenResponse> reissue(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) java.util.Map<String, String> body
     ) {
+        String refreshToken = cookieRefreshToken;
+        if ((refreshToken == null || refreshToken.isBlank()) && body != null) {
+            refreshToken = body.get("refreshToken");
+        }
         String newAccess = authService.reissue(refreshToken);
         return ResponseEntity.ok(new TokenResponse(newAccess));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<LogoutResponse> logout(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) java.util.Map<String, String> body,
             HttpServletResponse response
     ) {
+        String refreshToken = cookieRefreshToken;
+        if ((refreshToken == null || refreshToken.isBlank()) && body != null) {
+            refreshToken = body.get("refreshToken");
+        }
         authService.logout(refreshToken, response);
         return ResponseEntity.ok(LogoutResponse.ok());
     }

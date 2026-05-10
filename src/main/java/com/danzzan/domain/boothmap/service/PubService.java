@@ -26,13 +26,8 @@ public class PubService {
     private final PubOperationRepository pubOperationRepository;
 
     public List<PubSummaryResponse> getPubs(LocalDate operationDate) {
-        List<Pub> pubs = pubRepository.findAllWithCollegeAndImages();
-
-        PubOperation pubOperation = (operationDate == null)
-                ? pubOperationRepository.findFirstByOrderByOperationDateAsc()
-                    .orElseThrow(() -> new IllegalArgumentException("주점 운영정보가 없습니다."))
-                : pubOperationRepository.findByOperationDate(operationDate)
-                    .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 주점 운영정보가 없습니다."));
+        PubOperation pubOperation = resolvePubOperation(operationDate);
+        List<Pub> pubs = pubRepository.findAllVisibleByPubOperationIdWithCollegeAndImages(pubOperation.getId());
 
         String startTime = formatTime(pubOperation.getStartTime());
         String endTime = formatTime(pubOperation.getEndTime());
@@ -62,14 +57,9 @@ public class PubService {
     }
 
     public PubDetailResponse getPubDetail(Long pubId, LocalDate operationDate) {
+        PubOperation pubOperation = resolvePubOperation(operationDate);
         Pub pub = pubRepository.findByIdWithCollege(pubId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 주점을 찾을 수 없습니다. id=" + pubId));
-
-        PubOperation pubOperation = (operationDate == null)
-                ? pubOperationRepository.findFirstByOrderByOperationDateAsc()
-                    .orElseThrow(() -> new IllegalArgumentException("주점 운영정보가 없습니다."))
-                : pubOperationRepository.findByOperationDate(operationDate)
-                    .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 주점 운영정보가 없습니다."));
 
         List<String> imageUrls = pubImageRepository.findByPubId(pubId)
                 .stream()
@@ -92,6 +82,14 @@ public class PubService {
                 formatTime(pubOperation.getStartTime()),
                 formatTime(pubOperation.getEndTime())
         );
+    }
+
+    private PubOperation resolvePubOperation(LocalDate operationDate) {
+        return (operationDate == null)
+                ? pubOperationRepository.findFirstByOrderByOperationDateAsc()
+                .orElseThrow(() -> new IllegalArgumentException("주점 운영 정보가 없습니다."))
+                : pubOperationRepository.findByOperationDate(operationDate)
+                .orElseThrow(() -> new IllegalArgumentException("해당 날짜의 주점 운영 정보가 없습니다."));
     }
 
     private String formatTime(LocalTime time) {

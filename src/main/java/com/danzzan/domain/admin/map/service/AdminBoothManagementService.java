@@ -8,13 +8,14 @@ import com.danzzan.domain.admin.map.dto.request.UpsertAdminPubOperationRequest;
 import com.danzzan.domain.admin.map.dto.response.AdminBoothManagementBoothResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminBoothManagementPubResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminBoothManagementResponse;
-import com.danzzan.domain.admin.map.dto.response.AdminPubOperationResponse;
 import com.danzzan.domain.admin.map.dto.response.AdminPubImageResponse;
+import com.danzzan.domain.admin.map.dto.response.AdminPubOperationResponse;
 import com.danzzan.domain.boothmap.model.entity.Booth;
 import com.danzzan.domain.boothmap.model.entity.BoothOperation;
 import com.danzzan.domain.boothmap.model.entity.BoothOperationStatus;
 import com.danzzan.domain.boothmap.model.entity.BoothType;
 import com.danzzan.domain.boothmap.model.entity.Pub;
+import com.danzzan.domain.boothmap.model.entity.PubDisplayDay;
 import com.danzzan.domain.boothmap.model.entity.PubImage;
 import com.danzzan.domain.boothmap.model.entity.PubOperation;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
@@ -34,9 +35,11 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -54,12 +57,15 @@ public class AdminBoothManagementService {
 
     public AdminBoothManagementResponse getBoothManagement(LocalDate operationDate) {
         List<Booth> booths = boothRepository.findAll();
-        List<Pub> pubs = pubRepository.findAllWithCollege();
+        List<Pub> pubs = pubRepository.findAllWithCollegeAndDisplayDays();
         List<PubOperation> pubOperations = pubOperationRepository.findAllByOrderByOperationDateAsc();
+        Long selectedPubOperationId = pubOperations.stream()
+                .filter(pubOperation -> operationDate != null && pubOperation.getOperationDate().equals(operationDate))
+                .map(PubOperation::getId)
+                .findFirst()
+                .orElse(null);
 
         Map<Long, BoothOperation> boothOperationsByBoothId = resolveBoothOperationsByBoothId(operationDate);
-        boolean hasPubOperationForDate = operationDate != null
-                && pubOperations.stream().anyMatch(pubOperation -> pubOperation.getOperationDate().equals(operationDate));
 
         List<AdminBoothManagementBoothResponse> boothResponses = booths.stream()
                 .map(booth -> {
@@ -87,7 +93,13 @@ public class AdminBoothManagementService {
                         pub.getCollege().getName(),
                         pub.getDepartment(),
                         pub.getInstagram(),
-                        hasPubOperationForDate
+                        isVisibleOnSelectedDate(pub, selectedPubOperationId),
+                        pub.getDisplayDays().stream()
+                                .map(PubDisplayDay::getPubOperation)
+                                .map(PubOperation::getId)
+                                .distinct()
+                                .sorted()
+                                .toList()
                 ))
                 .toList();
 
@@ -165,6 +177,7 @@ public class AdminBoothManagementService {
     public void updatePubManagement(Long pubId, UpdateAdminPubRequest request) {
         Pub pub = pubRepository.findById(pubId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
+        List<PubOperation> displayOperations = resolveDisplayOperations(request.getDisplayOperationIds());
 
         pub.updateAdminInfo(
                 normalizeRequiredText(request.getName(), pub.getName()),
@@ -172,6 +185,7 @@ public class AdminBoothManagementService {
                 normalizeNullableText(request.getDescription()),
                 normalizeNullableText(request.getInstagram())
         );
+        pub.replaceDisplayDays(displayOperations);
     }
 
     @Transactional
@@ -253,7 +267,7 @@ public class AdminBoothManagementService {
     public void createPubOperation(UpsertAdminPubOperationRequest request) {
         validateTimeRange(request.getStartTime(), request.getEndTime());
         if (pubOperationRepository.findByOperationDate(request.getOperationDate()).isPresent()) {
-            throw new IllegalArgumentException("해당 날짜의 주점 공통 운영정보가 이미 존재합니다.");
+            throw new IllegalArgumentException("해당 날짜의 주점 공통 운영 정보가 이미 존재합니다.");
         }
 
         pubOperationRepository.save(new PubOperation(
@@ -268,12 +282,12 @@ public class AdminBoothManagementService {
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
         PubOperation pubOperation = pubOperationRepository.findById(pubOperationId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 공통 운영정보입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 공통 운영 정보입니다."));
 
         pubOperationRepository.findByOperationDate(request.getOperationDate())
                 .filter(existing -> !existing.getId().equals(pubOperationId))
                 .ifPresent(existing -> {
-                    throw new IllegalArgumentException("해당 날짜의 주점 공통 운영정보가 이미 존재합니다.");
+                    throw new IllegalArgumentException("해당 날짜의 주점 공통 운영 정보가 이미 존재합니다.");
                 });
 
         pubOperation.updateOperation(
@@ -286,7 +300,7 @@ public class AdminBoothManagementService {
     @Transactional
     public void deletePubOperation(Long pubOperationId) {
         PubOperation pubOperation = pubOperationRepository.findById(pubOperationId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 공통 운영정보입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 공통 운영 정보입니다."));
         pubOperationRepository.delete(pubOperation);
     }
 
@@ -305,7 +319,7 @@ public class AdminBoothManagementService {
     }
 
     private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
-        // 자정을 넘기는 운영(예: 11:00 → 01:00)을 허용하기 위해 검증 제거
+        // 자정을 넘기는 운영(예: 11:00 ~ 01:00)도 허용하기 위해 검증을 두지 않음
     }
 
     private String normalizeNullableText(String value) {
@@ -324,6 +338,32 @@ public class AdminBoothManagementService {
     private String normalizeRequiredText(String value, String fallback) {
         String normalized = normalizeNullableText(value);
         return normalized == null ? fallback : normalized;
+    }
+
+    private boolean isVisibleOnSelectedDate(Pub pub, Long pubOperationId) {
+        if (pubOperationId == null) {
+            return false;
+        }
+
+        return pub.getDisplayDays().stream()
+                .map(PubDisplayDay::getPubOperation)
+                .map(PubOperation::getId)
+                .anyMatch(pubOperationId::equals);
+    }
+
+    private List<PubOperation> resolveDisplayOperations(List<Long> displayOperationIds) {
+        Set<Long> distinctIds = new LinkedHashSet<>(displayOperationIds);
+        List<PubOperation> operations = pubOperationRepository.findAllById(distinctIds);
+        if (operations.size() != distinctIds.size()) {
+            throw new IllegalArgumentException("존재하지 않는 주점 운영일이 포함되어 있습니다.");
+        }
+
+        Map<Long, PubOperation> operationById = operations.stream()
+                .collect(Collectors.toMap(PubOperation::getId, Function.identity()));
+
+        return distinctIds.stream()
+                .map(operationById::get)
+                .toList();
     }
 
     private void ensurePubExists(Long pubId) {

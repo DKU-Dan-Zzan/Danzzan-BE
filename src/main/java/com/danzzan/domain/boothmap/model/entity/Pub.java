@@ -42,6 +42,14 @@ public class Pub {
     @OneToMany(mappedBy = "pub", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<PubImage> images = new ArrayList<>();
 
+    @OneToMany(
+            mappedBy = "pub",
+            fetch = FetchType.LAZY,
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<PubDisplayDay> displayDays = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
@@ -51,5 +59,10 @@ public class Pub {
         this.intro = intro;
         this.description = description;
         this.instagram = instagram;
+    }
+
+    public void replaceDisplayDays(List<PubOperation> pubOperations) {
+        this.displayDays.clear();
+        pubOperations.forEach(pubOperation -> this.displayDays.add(new PubDisplayDay(this, pubOperation)));
     }
 }

@@ -10,6 +10,7 @@ import java.util.List;
 public class AdminBoothManagementPubResponse {
     private Long id;
     private String type;
+    private Long collegeId;
     private String name;
     private String intro;
     private String description;

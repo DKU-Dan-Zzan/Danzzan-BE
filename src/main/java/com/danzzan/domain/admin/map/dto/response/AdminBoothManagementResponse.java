@@ -11,4 +11,5 @@ public class AdminBoothManagementResponse {
     private List<AdminBoothManagementBoothResponse> booths;
     private List<AdminBoothManagementPubResponse> pubs;
     private List<AdminPubOperationResponse> pubOperations;
+    private List<AdminCollegeOptionResponse> colleges;
 }

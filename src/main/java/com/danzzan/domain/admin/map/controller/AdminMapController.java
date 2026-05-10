@@ -1,5 +1,6 @@
 package com.danzzan.domain.admin.map.controller;
 
+import com.danzzan.domain.admin.map.dto.request.CreateAdminPubRequest;
 import com.danzzan.domain.admin.map.dto.request.PresignAdminPubImageRequest;
 import com.danzzan.domain.admin.map.dto.request.RegisterAdminPubImagesRequest;
 import com.danzzan.domain.admin.map.dto.request.UpdateAdminBoothRequest;
@@ -108,6 +109,18 @@ public class AdminMapController {
             @Valid @RequestBody UpdateAdminPubRequest request
     ) {
         adminBoothManagementService.updatePubManagement(pubId, request);
+    }
+
+    @PostMapping("/pubs")
+    @Operation(summary = "주점 추가", description = "pub row와 pub_display_day row를 함께 생성합니다.")
+    public Long createPubManagement(@Valid @RequestBody CreateAdminPubRequest request) {
+        return adminBoothManagementService.createPubManagement(request);
+    }
+
+    @PatchMapping("/pubs/{pubId}/hide")
+    @Operation(summary = "주점 숨김", description = "pub는 유지하고 pub_display_day row만 모두 제거합니다.")
+    public void hidePubManagement(@PathVariable Long pubId) {
+        adminBoothManagementService.hidePubManagement(pubId);
     }
 
     @GetMapping("/pubs/{pubId}/images")

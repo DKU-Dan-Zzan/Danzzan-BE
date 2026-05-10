@@ -33,7 +33,7 @@ public class Pub {
     @Column(name = "intro")
     private String intro;
 
-    @Column(name = "description")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "instagram")

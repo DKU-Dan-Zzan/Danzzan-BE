@@ -49,6 +49,9 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
       MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-at-least-32-characters}
+      OCTOMO_API_KEY: ${OCTOMO_API_KEY:-}
+      OCTOMO_RECEIVE_NUMBER: ${OCTOMO_RECEIVE_NUMBER:-16663538}
+      CODE_ENCRYPTION_SECRET: ${CODE_ENCRYPTION_SECRET:-}
     restart: unless-stopped
 
   mysql:

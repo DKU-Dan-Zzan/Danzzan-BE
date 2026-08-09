@@ -160,7 +160,6 @@ class UserServiceTest {
         assertThat(user.getDeletedAt()).isNotNull();
         assertThat(user.getStudentId()).startsWith("withdrawn:1:");
         assertThat(user.getPassword()).isEqualTo("encoded-random-password");
-        assertThat(user.getNaverId()).isNull();
         assertThat(user.getName()).isEqualTo("김단짠");
         assertThat(user.getCollege()).isEqualTo("WITHDRAWN");
         assertThat(user.getMajor()).isEqualTo("WITHDRAWN");
@@ -179,7 +178,6 @@ class UserServiceTest {
         User user = User.builder()
                 .studentId(studentId)
                 .password("pw")
-                .naverId("naver@example.com")
                 .name("김단짠")
                 .college("공과대학")
                 .major("컴퓨터공학과")

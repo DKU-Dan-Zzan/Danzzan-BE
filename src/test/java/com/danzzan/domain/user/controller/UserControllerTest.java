@@ -60,8 +60,6 @@ class UserControllerTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "password", VALID_PASSWORD,
                                 "confirmPassword", VALID_PASSWORD,
-                                "naverId", "danzzan_festa",
-                                "confirmNaverId", "danzzan_festa",
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isOk());
@@ -70,8 +68,6 @@ class UserControllerTest {
         verify(signupService).signup(captor.capture(), eq("signup-token-123"));
         assertThat(captor.getValue().getPassword()).isEqualTo(VALID_PASSWORD);
         assertThat(captor.getValue().getConfirmPassword()).isEqualTo(VALID_PASSWORD);
-        assertThat(captor.getValue().getNaverId()).isEqualTo("danzzan_festa");
-        assertThat(captor.getValue().getConfirmNaverId()).isEqualTo("danzzan_festa");
         assertThat(captor.getValue().getPhoneVerificationSessionId()).isEqualTo("phone-session-123");
     }
 
@@ -81,9 +77,7 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "password", VALID_PASSWORD,
-                                "confirmPassword", VALID_PASSWORD,
-                                "naverId", "danzzan_festa",
-                                "confirmNaverId", "danzzan_festa"
+                                "confirmPassword", VALID_PASSWORD
                         ))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("전화번호 인증 세션 ID는 필수입니다."));
@@ -98,8 +92,6 @@ class UserControllerTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "password", WEAK_PASSWORD,
                                 "confirmPassword", WEAK_PASSWORD,
-                                "naverId", "danzzan_festa",
-                                "confirmNaverId", "danzzan_festa",
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isBadRequest())
@@ -115,29 +107,10 @@ class UserControllerTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "password", VALID_PASSWORD,
                                 "confirmPassword", DIFFERENT_PASSWORD,
-                                "naverId", "danzzan_festa",
-                                "confirmNaverId", "danzzan_festa",
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("비밀번호 확인이 일치하지 않습니다."));
-
-        verify(signupService, never()).signup(any(), anyString());
-    }
-
-    @Test
-    void signupNaverIdConfirmMismatchReturnsBadRequest() throws Exception {
-        mockMvc.perform(post("/user/signup-token-123")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "password", VALID_PASSWORD,
-                                "confirmPassword", VALID_PASSWORD,
-                                "naverId", "danzzan_festa",
-                                "confirmNaverId", "danzzan_fast",
-                                "phoneVerificationSessionId", "phone-session-123"
-                        ))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("네이버 아이디가 서로 일치하지 않습니다."));
 
         verify(signupService, never()).signup(any(), anyString());
     }

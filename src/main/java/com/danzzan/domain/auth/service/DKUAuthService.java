@@ -59,12 +59,10 @@ public class DKUAuthService {
         // 죽전캠퍼스 학생만 가입 가능 (학부: 3xxxxx, 대학원: 7xxxxx)
         validateJukjeonCampus(studentInfo.getStudentId(), studentInfo.getCollege());
 
-        // 재학생·수료생·졸업유예생·등록휴학생만 가입 가능
+        // 재학생·등록휴학생만 가입 가능
         if (academicStatus != AcademicStatus.ENROLLED
-                && academicStatus != AcademicStatus.COMPLETED
-                && academicStatus != AcademicStatus.GRADUATION_DEFERRED
                 && academicStatus != AcademicStatus.ENROLLED_LEAVE) {
-            throw new IllegalStateException("재학생, 수료생, 졸업유예생, 등록휴학생만 회원가입이 가능합니다.");
+            throw new IllegalStateException("재학생, 2026학년도 2학기 등록휴학생만 회원가입이 가능합니다.");
         }
 
         // 회원가입 토큰 생성

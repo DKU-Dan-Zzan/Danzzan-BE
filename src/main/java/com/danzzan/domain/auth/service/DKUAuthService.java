@@ -28,6 +28,9 @@ public class DKUAuthService {
     private final DkuAuthenticationService dkuAuthenticationService;
     private final DkuStudentService dkuStudentService;
 
+    // 등록휴학으로 인정하는 최소 등록년월 (2026년 8월 = 2026학년도 2학기 등록분부터)
+    private static final int ENROLLED_LEAVE_MIN_YEAR_MONTH = 202608;
+
     // 단국대 포털을 통해 학생 인증 진행
     // 1. 이미 가입된 학번인지 확인
     // 2. 단국대 포털에 로그인하여 학생 정보 크롤링
@@ -47,9 +50,9 @@ public class DKUAuthService {
         // 학적 상태 변환
         AcademicStatus academicStatus = parseAcademicStatus(studentInfo.getAcademicStatus());
 
-        // 휴학인데 등록일자가 2026년이면 등록휴학으로 처리
+        // 휴학인데 2026년 8월 이후에 등록한 경우(등록 후 휴학)만 등록휴학으로 처리
         if (academicStatus == AcademicStatus.LEAVE
-                && studentInfo.getRegistrationDate().startsWith("2026")) {
+                && isEnrolledLeaveRegistrationDate(studentInfo.getRegistrationDate())) {
             academicStatus = AcademicStatus.ENROLLED_LEAVE;
         }
 
@@ -121,6 +124,33 @@ public class DKUAuthService {
 
         if (isCheonan || isCheonanArts) {
             throw new CheonanCampusException();
+        }
+    }
+
+    // 등록일자가 "등록휴학"으로 인정되는 시점인지 판별한다.
+    //
+    // 휴학생 중에서도 2026년 8월(2026학년도 2학기) 이후에 등록을 마치고 휴학한 학생만
+    // 등록휴학으로 인정한다. 즉 학적상태가 "휴학"이면서 등록일자가 "2026-08-xx" 이후여야 한다.
+    //
+    // 등록일자는 포털에 따라 "20260811" / "2026-08-11" / "2026.08.11" 등으로 내려올 수 있으므로
+    // 숫자만 추려 앞 6자리(yyyyMM)를 기준년월과 비교한다.
+    private boolean isEnrolledLeaveRegistrationDate(String registrationDate) {
+        if (registrationDate == null) {
+            return false;
+        }
+
+        String digits = registrationDate.replaceAll("[^0-9]", "");
+        if (digits.length() < 6) {
+            log.warn("등록일자 형식을 인식할 수 없음: {}", registrationDate);
+            return false;
+        }
+
+        try {
+            int yearMonth = Integer.parseInt(digits.substring(0, 6));
+            return yearMonth >= ENROLLED_LEAVE_MIN_YEAR_MONTH;
+        } catch (NumberFormatException e) {
+            log.warn("등록일자 파싱 실패: {}", registrationDate);
+            return false;
         }
     }
 

@@ -154,8 +154,7 @@ public class UserService {
                 user.getName(),
                 roleStr,
                 user.getMajor(),
-                user.getCollege(),
-                user.getNaverId()
+                user.getCollege()
         );
     }
 

@@ -4,6 +4,7 @@ import com.danzzan.domain.advertisement.dto.AdvertisementResponse;
 import com.danzzan.domain.advertisement.dto.CreateAdvertisementRequest;
 import com.danzzan.domain.advertisement.dto.response.AdvertisementImagePresignResponse;
 import com.danzzan.infra.s3.S3PresignedPutResult;
+import com.danzzan.infra.s3.S3Uploader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,9 +36,12 @@ class AdminAdvertisementControllerTest {
     @Mock
     private AdminAdvertisementService adminAdvertisementService;
 
+    @Mock
+    private S3Uploader s3Uploader;
+
     @BeforeEach
     void setUp() {
-        AdminAdvertisementController controller = new AdminAdvertisementController(adminAdvertisementService);
+        AdminAdvertisementController controller = new AdminAdvertisementController(adminAdvertisementService, s3Uploader);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

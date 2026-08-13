@@ -85,6 +85,9 @@ public class AdminBoothManagementService {
                             booth.getType().name(),
                             booth.getName(),
                             booth.getDescription(),
+                            booth.getLocationX(),
+                            booth.getLocationY(),
+                            booth.hasLocation(),
                             operation != null,
                             operation != null ? operation.getOperationStatus() : BoothOperationStatus.UNKNOWN,
                             operation != null ? formatTime(operation.getStartTime()) : null,
@@ -146,7 +149,6 @@ public class AdminBoothManagementService {
 
     @Transactional
     public Long createBoothManagement(CreateAdminBoothRequest request) {
-        validateLocation(request.getLocationX(), request.getLocationY());
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
         Set<LocalDate> distinctOperationDates = new LinkedHashSet<>(request.getOperationDates());
@@ -168,8 +170,8 @@ public class AdminBoothManagementService {
                 request.getType(),
                 request.getType() == BoothType.FOOD_TRUCK ? normalizeNullableText(request.getDescription()) : null,
                 null,
-                request.getLocationX(),
-                request.getLocationY()
+                null,
+                null
         ));
 
         List<BoothOperation> operations = distinctOperationDates.stream()

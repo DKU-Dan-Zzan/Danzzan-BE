@@ -56,6 +56,7 @@ public class BoothMapService {
                 .toList();
 
         List<BoothMapItemResponse> boothDtos = booths.stream()
+                .filter(Booth::hasLocation)
                 .map(booth -> {
                     BoothOperation boothOperation = boothOperationMap.get(booth.getId());
                     return new BoothMapItemResponse(

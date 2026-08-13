@@ -45,7 +45,7 @@ public class AdminMapService {
                         booth.getType().name(),
                         booth.getLocationX(),
                         booth.getLocationY(),
-                        booth.getLocationX() != null && booth.getLocationY() != null
+                        booth.hasLocation()
                 ))
                 .toList();
 

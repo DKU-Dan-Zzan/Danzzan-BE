@@ -30,10 +30,10 @@ public class Booth {
     @Column(name = "image_url")
     private String imageUrl;
 
-    @Column(name = "location_x", nullable = false)
+    @Column(name = "location_x")
     private Double locationX;
 
-    @Column(name = "location_y", nullable = false)
+    @Column(name = "location_y")
     private Double locationY;
 
     @CreationTimestamp
@@ -41,6 +41,7 @@ public class Booth {
     private LocalDateTime createdAt;
 
     public Booth(String name, BoothType type, String description, String imageUrl, Double locationX, Double locationY) {
+        validateLocationPair(locationX, locationY);
         this.name = name;
         this.type = type;
         this.description = description;
@@ -50,6 +51,7 @@ public class Booth {
     }
 
     public void updateLocation(Double locationX, Double locationY) {
+        validateLocationPair(locationX, locationY);
         this.locationX = locationX;
         this.locationY = locationY;
     }
@@ -66,5 +68,15 @@ public class Booth {
     public void updateAdminInfo(String name, String description) {
         this.name = name;
         this.description = description;
+    }
+
+    public boolean hasLocation() {
+        return locationX != null && locationY != null;
+    }
+
+    private void validateLocationPair(Double locationX, Double locationY) {
+        if ((locationX == null) != (locationY == null)) {
+            throw new IllegalArgumentException("부스 좌표는 모두 비어 있거나 모두 존재해야 합니다.");
+        }
     }
 }

@@ -14,19 +14,13 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 public class CreateAdminBoothRequest {
-    @NotNull(message = "type은 필수입니다.")
+    @NotNull(message = "type는 필수입니다.")
     private BoothType type;
 
     @NotBlank(message = "name은 필수입니다.")
     private String name;
 
     private String description;
-
-    @NotNull(message = "locationX는 필수입니다.")
-    private Double locationX;
-
-    @NotNull(message = "locationY는 필수입니다.")
-    private Double locationY;
 
     @NotNull(message = "operationStatus는 필수입니다.")
     private BoothOperationStatus operationStatus;

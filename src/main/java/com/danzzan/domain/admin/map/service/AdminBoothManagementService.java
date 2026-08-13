@@ -64,6 +64,16 @@ public class AdminBoothManagementService {
 
     public AdminBoothManagementResponse getBoothManagement(LocalDate operationDate) {
         List<Booth> booths = boothRepository.findAll();
+        List<Long> boothIds = booths.stream()
+                .map(Booth::getId)
+                .toList();
+        Map<Long, List<BoothOperation>> boothOperationsByBoothId = boothIds.isEmpty()
+                ? Map.of()
+                : boothOperationRepository.findAllByBoothIdInOrderByOperationDateAsc(boothIds).stream()
+                .collect(Collectors.groupingBy(
+                        boothOperation -> boothOperation.getBooth().getId(),
+                        Collectors.toList()
+                ));
         List<Pub> pubs = pubRepository.findAllWithCollegeAndDisplayDays();
         List<PubOperation> pubOperations = pubOperationRepository.findAllByOrderByOperationDateAsc();
         List<AdminCollegeOptionResponse> colleges = collegeRepository.findAll().stream()
@@ -75,11 +85,13 @@ public class AdminBoothManagementService {
                 .findFirst()
                 .orElse(null);
 
-        Map<Long, BoothOperation> boothOperationsByBoothId = resolveBoothOperationsByBoothId(operationDate);
-
         List<AdminBoothManagementBoothResponse> boothResponses = booths.stream()
                 .map(booth -> {
-                    BoothOperation operation = boothOperationsByBoothId.get(booth.getId());
+                    List<BoothOperation> boothOperations = boothOperationsByBoothId.getOrDefault(booth.getId(), List.of());
+                    BoothOperation operation = boothOperations.stream()
+                            .filter(boothOperation -> operationDate != null && boothOperation.getOperationDate().equals(operationDate))
+                            .findFirst()
+                            .orElse(null);
                     return new AdminBoothManagementBoothResponse(
                             booth.getId(),
                             booth.getType().name(),
@@ -91,7 +103,11 @@ public class AdminBoothManagementService {
                             operation != null,
                             operation != null ? operation.getOperationStatus() : BoothOperationStatus.UNKNOWN,
                             operation != null ? formatTime(operation.getStartTime()) : null,
-                            operation != null ? formatTime(operation.getEndTime()) : null
+                            operation != null ? formatTime(operation.getEndTime()) : null,
+                            boothOperations.stream()
+                                    .map(BoothOperation::getOperationDate)
+                                    .map(LocalDate::toString)
+                                    .toList()
                     );
                 })
                 .toList();
@@ -132,7 +148,7 @@ public class AdminBoothManagementService {
     @Transactional
     public Long createPubManagement(CreateAdminPubRequest request) {
         College college = collegeRepository.findById(request.getCollegeId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 단과대입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 ?④낵??낅땲??"));
         List<PubOperation> displayOperations = resolveDisplayOperations(request.getDisplayOperationIds());
 
         Pub pub = new Pub(
@@ -153,17 +169,9 @@ public class AdminBoothManagementService {
 
         Set<LocalDate> distinctOperationDates = new LinkedHashSet<>(request.getOperationDates());
         if (distinctOperationDates.isEmpty()) {
-            throw new IllegalArgumentException("운영 날짜를 최소 1개 이상 선택해야 합니다.");
+            throw new IllegalArgumentException("?댁쁺 ?좎쭨瑜?理쒖냼 1媛??댁긽 ?좏깮?댁빞 ?⑸땲??");
         }
-
-        List<PubOperation> supportedOperations = pubOperationRepository.findAllByOperationDateIn(distinctOperationDates);
-        Set<LocalDate> supportedOperationDates = supportedOperations.stream()
-                .map(PubOperation::getOperationDate)
-                .collect(Collectors.toCollection(HashSet::new));
-        if (supportedOperationDates.size() != distinctOperationDates.size()
-                || !supportedOperationDates.containsAll(distinctOperationDates)) {
-            throw new IllegalArgumentException("지원하지 않는 운영 날짜가 포함되어 있습니다.");
-        }
+        validateSupportedOperationDates(distinctOperationDates);
 
         Booth booth = boothRepository.save(new Booth(
                 normalizeRequiredText(request.getName(), ""),
@@ -198,7 +206,7 @@ public class AdminBoothManagementService {
 
     public S3PresignedPutResult presignPubImage(Long pubId, PresignAdminPubImageRequest request) {
         Pub pub = pubRepository.findByIdWithCollege(pubId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??"));
 
         return s3PresignService.presignPutPubImage(
                 pub.getCollege().getName(),
@@ -211,7 +219,7 @@ public class AdminBoothManagementService {
 
     public S3UploadResult uploadPubImage(Long pubId, MultipartFile file) {
         Pub pub = pubRepository.findByIdWithCollege(pubId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??"));
 
         return s3Uploader.uploadPubImage(pub.getCollege().getName(), pub.getDepartment(), file);
     }
@@ -219,9 +227,15 @@ public class AdminBoothManagementService {
     @Transactional
     public void updateBoothManagement(Long boothId, UpdateAdminBoothRequest request) {
         Booth booth = boothRepository.findById(boothId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 부스입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 遺?ㅼ엯?덈떎."));
 
         validateTimeRange(request.getStartTime(), request.getEndTime());
+
+        Set<LocalDate> requestedOperationDates = new LinkedHashSet<>(request.getOperationDates());
+        if (requestedOperationDates.isEmpty()) {
+            throw new IllegalArgumentException("운영 날짜를 최소 1개 이상 선택해 주세요.");
+        }
+        validateSupportedOperationDates(requestedOperationDates);
 
         String nextName = normalizeRequiredText(request.getName(), booth.getName());
         String nextDescription = booth.getType() == BoothType.FOOD_TRUCK
@@ -229,27 +243,45 @@ public class AdminBoothManagementService {
                 : booth.getDescription();
         booth.updateAdminInfo(nextName, nextDescription);
 
-        BoothOperation boothOperation = boothOperationRepository.findByBoothIdAndOperationDate(boothId, request.getOperationDate())
-                .orElseGet(() -> new BoothOperation(
+        List<BoothOperation> existingOperations = boothOperationRepository.findAllByBoothIdInOrderByOperationDateAsc(List.of(boothId));
+        Map<LocalDate, BoothOperation> existingOperationByDate = existingOperations.stream()
+                .collect(Collectors.toMap(BoothOperation::getOperationDate, Function.identity()));
+
+        List<BoothOperation> operationsToDelete = existingOperations.stream()
+                .filter(operation -> !requestedOperationDates.contains(operation.getOperationDate()))
+                .toList();
+        if (!operationsToDelete.isEmpty()) {
+            boothOperationRepository.deleteAll(operationsToDelete);
+        }
+
+        List<BoothOperation> operationsToCreate = requestedOperationDates.stream()
+                .filter(operationDate -> !existingOperationByDate.containsKey(operationDate))
+                .map(operationDate -> new BoothOperation(
                         booth,
-                        request.getOperationDate(),
+                        operationDate,
                         request.getOperationStatus(),
                         request.getStartTime(),
                         request.getEndTime()
-                ));
+                ))
+                .toList();
+        if (!operationsToCreate.isEmpty()) {
+            boothOperationRepository.saveAll(operationsToCreate);
+        }
 
-        boothOperation.updateOperation(
-                request.getOperationStatus(),
-                request.getStartTime(),
-                request.getEndTime()
-        );
-        boothOperationRepository.save(boothOperation);
+        BoothOperation selectedDateOperation = existingOperationByDate.get(request.getOperationDate());
+        if (selectedDateOperation != null && requestedOperationDates.contains(request.getOperationDate())) {
+            selectedDateOperation.updateOperation(
+                    request.getOperationStatus(),
+                    request.getStartTime(),
+                    request.getEndTime()
+            );
+        }
     }
 
     @Transactional
     public void updatePubManagement(Long pubId, UpdateAdminPubRequest request) {
         Pub pub = pubRepository.findById(pubId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??"));
         List<PubOperation> displayOperations = resolveDisplayOperations(request.getDisplayOperationIds());
 
         pub.updateAdminInfo(
@@ -264,14 +296,14 @@ public class AdminBoothManagementService {
     @Transactional
     public void hidePubManagement(Long pubId) {
         Pub pub = pubRepository.findById(pubId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??"));
         pub.replaceDisplayDays(List.of());
     }
 
     @Transactional
     public void registerPubImages(Long pubId, RegisterAdminPubImagesRequest request) {
         Pub pub = pubRepository.findById(pubId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??"));
 
         List<String> imageUrls = request.getImageUrls().stream()
                 .filter(Objects::nonNull)
@@ -281,12 +313,12 @@ public class AdminBoothManagementService {
                 .toList();
 
         if (imageUrls.isEmpty()) {
-            throw new IllegalArgumentException("등록할 이미지 URL이 비어 있습니다.");
+            throw new IllegalArgumentException("?깅줉???대?吏 URL??鍮꾩뼱 ?덉뒿?덈떎.");
         }
 
         String mainImageUrl = normalizeNullableText(request.getMainImageUrl());
         if (mainImageUrl != null && imageUrls.stream().noneMatch(mainImageUrl::equals)) {
-            throw new IllegalArgumentException("대표 이미지 URL은 등록 대상 이미지 중 하나여야 합니다.");
+            throw new IllegalArgumentException("????대?吏 URL? ?깅줉 ????대?吏 以??섎굹?ъ빞 ?⑸땲??");
         }
 
         List<PubImage> existingImages = pubImageRepository.findByPubIdOrderByCreatedAtAscIdAsc(pubId);
@@ -313,13 +345,13 @@ public class AdminBoothManagementService {
     public void updateMainPubImage(Long pubId, Long imageId) {
         List<PubImage> pubImages = pubImageRepository.findByPubIdOrderByCreatedAtAscIdAsc(pubId);
         if (pubImages.isEmpty()) {
-            throw new IllegalArgumentException("등록된 주점 이미지가 없습니다.");
+            throw new IllegalArgumentException("?깅줉??二쇱젏 ?대?吏媛 ?놁뒿?덈떎.");
         }
 
         PubImage targetImage = pubImages.stream()
                 .filter(pubImage -> pubImage.getId().equals(imageId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 이미지입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏 ?대?吏?낅땲??"));
 
         pubImages.forEach(image -> image.updateMain(false));
         targetImage.updateMain(true);
@@ -328,7 +360,7 @@ public class AdminBoothManagementService {
     @Transactional
     public void deletePubImage(Long pubId, Long imageId) {
         PubImage pubImage = pubImageRepository.findByIdAndPubId(imageId, pubId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 이미지입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏 ?대?吏?낅땲??"));
 
         boolean wasMainImage = pubImage.isMain();
         pubImageRepository.delete(pubImage);
@@ -347,7 +379,7 @@ public class AdminBoothManagementService {
     public void createPubOperation(UpsertAdminPubOperationRequest request) {
         validateTimeRange(request.getStartTime(), request.getEndTime());
         if (pubOperationRepository.findByOperationDate(request.getOperationDate()).isPresent()) {
-            throw new IllegalArgumentException("해당 날짜의 주점 공통 운영 정보가 이미 존재합니다.");
+            throw new IllegalArgumentException("?대떦 ?좎쭨??二쇱젏 怨듯넻 ?댁쁺 ?뺣낫媛 ?대? 議댁옱?⑸땲??");
         }
 
         pubOperationRepository.save(new PubOperation(
@@ -362,12 +394,12 @@ public class AdminBoothManagementService {
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
         PubOperation pubOperation = pubOperationRepository.findById(pubOperationId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 공통 운영 정보입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏 怨듯넻 ?댁쁺 ?뺣낫?낅땲??"));
 
         pubOperationRepository.findByOperationDate(request.getOperationDate())
                 .filter(existing -> !existing.getId().equals(pubOperationId))
                 .ifPresent(existing -> {
-                    throw new IllegalArgumentException("해당 날짜의 주점 공통 운영 정보가 이미 존재합니다.");
+                    throw new IllegalArgumentException("?대떦 ?좎쭨??二쇱젏 怨듯넻 ?댁쁺 ?뺣낫媛 ?대? 議댁옱?⑸땲??");
                 });
 
         pubOperation.updateOperation(
@@ -380,39 +412,36 @@ public class AdminBoothManagementService {
     @Transactional
     public void deletePubOperation(Long pubOperationId) {
         PubOperation pubOperation = pubOperationRepository.findById(pubOperationId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 주점 공통 운영 정보입니다."));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏 怨듯넻 ?댁쁺 ?뺣낫?낅땲??"));
         pubOperationRepository.delete(pubOperation);
     }
 
-    private Map<Long, BoothOperation> resolveBoothOperationsByBoothId(LocalDate operationDate) {
-        if (operationDate == null) {
-            return Map.of();
-        }
-
-        return boothOperationRepository.findAllWithBoothByOperationDate(operationDate)
-                .stream()
-                .collect(Collectors.toMap(
-                        boothOperation -> boothOperation.getBooth().getId(),
-                        Function.identity(),
-                        (left, right) -> left
-                ));
-    }
-
     private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
-        // 자정을 넘기는 운영(예: 11:00 ~ 01:00)도 허용하기 위해 검증을 두지 않음
+        // ?먯젙???섍린???댁쁺(?? 11:00 ~ 01:00)???덉슜?섍린 ?꾪빐 寃利앹쓣 ?먯? ?딆쓬
     }
 
     private void validateLocation(Double locationX, Double locationY) {
         if (locationX == null || locationY == null) {
-            throw new IllegalArgumentException("좌표 값이 비어 있을 수 없습니다.");
+            throw new IllegalArgumentException("醫뚰몴 媛믪씠 鍮꾩뼱 ?덉쓣 ???놁뒿?덈떎.");
         }
 
         if (locationX < -180 || locationX > 180) {
-            throw new IllegalArgumentException("경도(locationX) 범위가 올바르지 않습니다.");
+            throw new IllegalArgumentException("寃쎈룄(locationX) 踰붿쐞媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
         }
 
         if (locationY < -90 || locationY > 90) {
-            throw new IllegalArgumentException("위도(locationY) 범위가 올바르지 않습니다.");
+            throw new IllegalArgumentException("?꾨룄(locationY) 踰붿쐞媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
+        }
+    }
+
+    private void validateSupportedOperationDates(Set<LocalDate> operationDates) {
+        List<PubOperation> supportedOperations = pubOperationRepository.findAllByOperationDateIn(operationDates);
+        Set<LocalDate> supportedOperationDates = supportedOperations.stream()
+                .map(PubOperation::getOperationDate)
+                .collect(Collectors.toCollection(HashSet::new));
+        if (supportedOperationDates.size() != operationDates.size()
+                || !supportedOperationDates.containsAll(operationDates)) {
+            throw new IllegalArgumentException("지원하지 않는 운영 날짜가 포함되어 있습니다.");
         }
     }
 
@@ -449,7 +478,7 @@ public class AdminBoothManagementService {
         Set<Long> distinctIds = new LinkedHashSet<>(displayOperationIds);
         List<PubOperation> operations = pubOperationRepository.findAllById(distinctIds);
         if (operations.size() != distinctIds.size()) {
-            throw new IllegalArgumentException("존재하지 않는 주점 운영일이 포함되어 있습니다.");
+            throw new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏 ?댁쁺?쇱씠 ?ы븿?섏뼱 ?덉뒿?덈떎.");
         }
 
         Map<Long, PubOperation> operationById = operations.stream()
@@ -462,7 +491,7 @@ public class AdminBoothManagementService {
 
     private void ensurePubExists(Long pubId) {
         if (!pubRepository.existsById(pubId)) {
-            throw new IllegalArgumentException("존재하지 않는 주점입니다.");
+            throw new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??");
         }
     }
 }

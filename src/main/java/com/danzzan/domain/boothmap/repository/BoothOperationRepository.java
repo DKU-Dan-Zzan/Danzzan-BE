@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +29,14 @@ public interface BoothOperationRepository extends JpaRepository<BoothOperation, 
 
     @Query("select bo from BoothOperation bo join fetch bo.booth")
     List<BoothOperation> findAllWithBooth();
+
+    @Query("""
+        select bo
+        from BoothOperation bo
+        where bo.booth.id in :boothIds
+        order by bo.operationDate asc
+    """)
+    List<BoothOperation> findAllByBoothIdInOrderByOperationDateAsc(Collection<Long> boothIds);
 
     Optional<BoothOperation> findFirstByBoothIdOrderByOperationDateAsc(Long boothId);
 }

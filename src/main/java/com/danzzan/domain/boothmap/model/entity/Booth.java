@@ -40,6 +40,15 @@ public class Booth {
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
 
+    public Booth(String name, BoothType type, String description, String imageUrl, Double locationX, Double locationY) {
+        this.name = name;
+        this.type = type;
+        this.description = description;
+        this.imageUrl = imageUrl;
+        this.locationX = locationX;
+        this.locationY = locationY;
+    }
+
     public void updateLocation(Double locationX, Double locationY) {
         this.locationX = locationX;
         this.locationY = locationY;

@@ -1,5 +1,6 @@
 package com.danzzan.domain.admin.map.service;
 
+import com.danzzan.domain.admin.map.dto.request.CreateAdminBoothRequest;
 import com.danzzan.domain.admin.map.dto.request.CreateAdminPubRequest;
 import com.danzzan.domain.admin.map.dto.request.PresignAdminPubImageRequest;
 import com.danzzan.domain.admin.map.dto.request.RegisterAdminPubImagesRequest;
@@ -39,6 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -140,6 +142,48 @@ public class AdminBoothManagementService {
         );
         pub.replaceDisplayDays(displayOperations);
         return pubRepository.save(pub).getId();
+    }
+
+    @Transactional
+    public Long createBoothManagement(CreateAdminBoothRequest request) {
+        validateLocation(request.getLocationX(), request.getLocationY());
+        validateTimeRange(request.getStartTime(), request.getEndTime());
+
+        Set<LocalDate> distinctOperationDates = new LinkedHashSet<>(request.getOperationDates());
+        if (distinctOperationDates.isEmpty()) {
+            throw new IllegalArgumentException("운영 날짜를 최소 1개 이상 선택해야 합니다.");
+        }
+
+        List<PubOperation> supportedOperations = pubOperationRepository.findAllByOperationDateIn(distinctOperationDates);
+        Set<LocalDate> supportedOperationDates = supportedOperations.stream()
+                .map(PubOperation::getOperationDate)
+                .collect(Collectors.toCollection(HashSet::new));
+        if (supportedOperationDates.size() != distinctOperationDates.size()
+                || !supportedOperationDates.containsAll(distinctOperationDates)) {
+            throw new IllegalArgumentException("지원하지 않는 운영 날짜가 포함되어 있습니다.");
+        }
+
+        Booth booth = boothRepository.save(new Booth(
+                normalizeRequiredText(request.getName(), ""),
+                request.getType(),
+                request.getType() == BoothType.FOOD_TRUCK ? normalizeNullableText(request.getDescription()) : null,
+                null,
+                request.getLocationX(),
+                request.getLocationY()
+        ));
+
+        List<BoothOperation> operations = distinctOperationDates.stream()
+                .map(operationDate -> new BoothOperation(
+                        booth,
+                        operationDate,
+                        request.getOperationStatus(),
+                        request.getStartTime(),
+                        request.getEndTime()
+                ))
+                .toList();
+        boothOperationRepository.saveAll(operations);
+
+        return booth.getId();
     }
 
     public List<AdminPubImageResponse> getPubImages(Long pubId) {
@@ -354,6 +398,20 @@ public class AdminBoothManagementService {
 
     private void validateTimeRange(LocalTime startTime, LocalTime endTime) {
         // 자정을 넘기는 운영(예: 11:00 ~ 01:00)도 허용하기 위해 검증을 두지 않음
+    }
+
+    private void validateLocation(Double locationX, Double locationY) {
+        if (locationX == null || locationY == null) {
+            throw new IllegalArgumentException("좌표 값이 비어 있을 수 없습니다.");
+        }
+
+        if (locationX < -180 || locationX > 180) {
+            throw new IllegalArgumentException("경도(locationX) 범위가 올바르지 않습니다.");
+        }
+
+        if (locationY < -90 || locationY > 90) {
+            throw new IllegalArgumentException("위도(locationY) 범위가 올바르지 않습니다.");
+        }
     }
 
     private String normalizeNullableText(String value) {

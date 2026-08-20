@@ -4,6 +4,8 @@ import com.danzzan.domain.boothmap.model.entity.BoothOperationStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 @AllArgsConstructor
 public class AdminBoothManagementBoothResponse {
@@ -11,8 +13,12 @@ public class AdminBoothManagementBoothResponse {
     private String type;
     private String name;
     private String description;
+    private Double locationX;
+    private Double locationY;
+    private boolean placed;
     private boolean operationInfoExists;
     private BoothOperationStatus operationStatus;
     private String startTime;
     private String endTime;
+    private List<String> operationDates;
 }

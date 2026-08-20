@@ -1,6 +1,7 @@
 package com.danzzan.domain.admin.map.controller;
 
 import com.danzzan.domain.admin.map.dto.request.CreateAdminPubRequest;
+import com.danzzan.domain.admin.map.dto.request.CreateAdminBoothRequest;
 import com.danzzan.domain.admin.map.dto.request.PresignAdminPubImageRequest;
 import com.danzzan.domain.admin.map.dto.request.RegisterAdminPubImagesRequest;
 import com.danzzan.domain.admin.map.dto.request.UpdateAdminBoothRequest;
@@ -100,6 +101,11 @@ public class AdminMapController {
             @Valid @RequestBody UpdateAdminBoothRequest request
     ) {
         adminBoothManagementService.updateBoothManagement(boothId, request);
+    }
+
+    @PostMapping("/booths")
+    public Long createBoothManagement(@Valid @RequestBody CreateAdminBoothRequest request) {
+        return adminBoothManagementService.createBoothManagement(request);
     }
 
     @PatchMapping("/pubs/{pubId}/management")

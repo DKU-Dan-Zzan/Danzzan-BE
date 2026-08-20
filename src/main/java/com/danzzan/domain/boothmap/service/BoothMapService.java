@@ -7,6 +7,7 @@ import com.danzzan.domain.boothmap.model.entity.Booth;
 import com.danzzan.domain.boothmap.model.entity.BoothOperation;
 import com.danzzan.domain.boothmap.model.entity.BoothOperationStatus;
 import com.danzzan.domain.boothmap.model.entity.BoothSubType;
+import com.danzzan.domain.boothmap.model.entity.BoothType;
 import com.danzzan.domain.boothmap.model.entity.College;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
@@ -56,6 +57,7 @@ public class BoothMapService {
                 .toList();
 
         List<BoothMapItemResponse> boothDtos = booths.stream()
+                .filter(booth -> booth.hasLocation() || booth.getType() == BoothType.FOOD_TRUCK)
                 .map(booth -> {
                     BoothOperation boothOperation = boothOperationMap.get(booth.getId());
                     return new BoothMapItemResponse(

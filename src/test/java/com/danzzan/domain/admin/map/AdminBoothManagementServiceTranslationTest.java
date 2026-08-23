@@ -1,10 +1,16 @@
 package com.danzzan.domain.admin.map;
 
+import com.danzzan.domain.admin.map.dto.request.CreateAdminBoothRequest;
 import com.danzzan.domain.admin.map.dto.request.CreateAdminPubRequest;
+import com.danzzan.domain.admin.map.dto.request.UpdateAdminBoothRequest;
 import com.danzzan.domain.admin.map.dto.request.UpdateAdminPubRequest;
 import com.danzzan.domain.admin.map.service.AdminBoothManagementService;
+import com.danzzan.domain.boothmap.model.entity.Booth;
+import com.danzzan.domain.boothmap.model.entity.BoothOperationStatus;
+import com.danzzan.domain.boothmap.model.entity.BoothType;
 import com.danzzan.domain.boothmap.model.entity.College;
 import com.danzzan.domain.boothmap.model.entity.Pub;
+import com.danzzan.domain.boothmap.model.entity.PubOperation;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.repository.CollegeRepository;
@@ -23,6 +29,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.BeanUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -134,6 +142,84 @@ class AdminBoothManagementServiceTranslationTest {
 
         adminBoothManagementService.updatePubManagement(
                 1L, updateRequest("기계공학과 주점", "환영합니다", "즐거운 시간"));
+
+        verify(translationService, never()).translateAll(any());
+    }
+
+    private CreateAdminBoothRequest createBoothRequest() {
+        CreateAdminBoothRequest request = new CreateAdminBoothRequest();
+        ReflectionTestUtils.setField(request, "type", BoothType.FOOD_TRUCK);
+        ReflectionTestUtils.setField(request, "name", "떡볶이 부스");
+        ReflectionTestUtils.setField(request, "description", "매운맛 주의");
+        ReflectionTestUtils.setField(request, "operationStatus", BoothOperationStatus.OPEN);
+        ReflectionTestUtils.setField(request, "startTime", LocalTime.of(11, 0));
+        ReflectionTestUtils.setField(request, "endTime", LocalTime.of(22, 0));
+        ReflectionTestUtils.setField(request, "operationDates", List.of(LocalDate.of(2026, 5, 13)));
+        return request;
+    }
+
+    private PubOperation supportedOperation() {
+        return new PubOperation(LocalDate.of(2026, 5, 13), LocalTime.of(11, 0), LocalTime.of(22, 0));
+    }
+
+    @Test
+    void 부스_생성시_영문을_함께_저장한다() {
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Tteokbokki Booth", "Spicy warning"));
+        when(boothRepository.save(any(Booth.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        adminBoothManagementService.createBoothManagement(createBoothRequest());
+
+        ArgumentCaptor<Booth> captor = ArgumentCaptor.forClass(Booth.class);
+        verify(boothRepository).save(captor.capture());
+
+        assertEquals("Tteokbokki Booth", captor.getValue().getNameEn());
+        assertEquals("Spicy warning", captor.getValue().getDescriptionEn());
+    }
+
+    private Booth existingBooth() {
+        return new Booth("떡볶이 부스", BoothType.FOOD_TRUCK, "매운맛 주의", null, null, null);
+    }
+
+    private UpdateAdminBoothRequest updateBoothRequest(String name, String description) {
+        UpdateAdminBoothRequest request = new UpdateAdminBoothRequest();
+        ReflectionTestUtils.setField(request, "operationDate", LocalDate.of(2026, 5, 13));
+        ReflectionTestUtils.setField(request, "operationStatus", BoothOperationStatus.OPEN);
+        ReflectionTestUtils.setField(request, "name", name);
+        ReflectionTestUtils.setField(request, "description", description);
+        ReflectionTestUtils.setField(request, "startTime", LocalTime.of(11, 0));
+        ReflectionTestUtils.setField(request, "endTime", LocalTime.of(22, 0));
+        ReflectionTestUtils.setField(request, "operationDates", List.of(LocalDate.of(2026, 5, 13)));
+        return request;
+    }
+
+    @Test
+    void 부스_한국어가_바뀌면_재번역한다() {
+        Booth booth = existingBooth();
+        when(boothRepository.findById(1L)).thenReturn(Optional.of(booth));
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("New Booth Name", "New Description"));
+
+        adminBoothManagementService.updateBoothManagement(1L, updateBoothRequest("새 부스 이름", "새 설명"));
+
+        verify(translationService).translateAll(any());
+        assertEquals("New Booth Name", booth.getNameEn());
+        assertEquals("New Description", booth.getDescriptionEn());
+    }
+
+    @Test
+    void 부스_한국어가_바뀌지_않으면_재번역하지_않는다() {
+        Booth booth = existingBooth();
+        when(boothRepository.findById(1L)).thenReturn(Optional.of(booth));
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+
+        adminBoothManagementService.updateBoothManagement(1L, updateBoothRequest("떡볶이 부스", "매운맛 주의"));
 
         verify(translationService, never()).translateAll(any());
     }

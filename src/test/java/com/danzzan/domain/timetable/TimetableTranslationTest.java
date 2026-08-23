@@ -15,6 +15,7 @@ import com.danzzan.infra.translation.TranslationService;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -67,7 +68,11 @@ class TimetableTranslationTest {
 
             adminArtistService.createArtist(request);
 
-            verify(translationService).translateAll(any());
+            ArgumentCaptor<Artist> captor = ArgumentCaptor.forClass(Artist.class);
+            verify(artistRepository).save(captor.capture());
+
+            assertEquals("Jannabi", captor.getValue().getNameEn());
+            assertEquals("Emotional rock band", captor.getValue().getDescriptionEn());
         }
 
         private Artist existingArtist() {
@@ -142,7 +147,10 @@ class TimetableTranslationTest {
 
             adminPerformanceService.createPerformance(request);
 
-            verify(translationService).translate("메인 스테이지");
+            ArgumentCaptor<Performance> captor = ArgumentCaptor.forClass(Performance.class);
+            verify(performanceRepository).save(captor.capture());
+
+            assertEquals("Main Stage", captor.getValue().getStageEn());
         }
 
         private Performance existingPerformance() {

@@ -14,17 +14,27 @@ public class EmergencyNoticeService {
 
     private final EmergencyNoticeRepository emergencyNoticeRepository;
 
+    /**
+     * 조회는 절대 저장하지 않는다.
+     *
+     * 예전에는 행이 없을 때 기본 행을 만들어 저장했는데, 이 메서드는 읽기 전용
+     * 트랜잭션이라 "Connection is read-only" 로 500 이 났다. 긴급공지를 한 번도
+     * 등록한 적 없는 상태에서 관리자 페이지를 여는 것만으로 터졌다.
+     *
+     * 행은 실제로 수정할 때(update) 만들면 충분하므로, 여기서는 저장하지 않은
+     * 기본값을 그대로 돌려준다.
+     */
     @Transactional(readOnly = true)
     public EmergencyNoticeResponse get() {
         EmergencyNotice entity = emergencyNoticeRepository.findFirstByOrderByIdAsc()
-                .orElseGet(this::createDefault);
+                .orElseGet(EmergencyNoticeService::emptyEmergencyNotice);
         return EmergencyNoticeResponse.from(entity);
     }
 
     @Transactional
     public EmergencyNoticeResponse update(UpdateEmergencyRequest request) {
         EmergencyNotice entity = emergencyNoticeRepository.findFirstByOrderByIdAsc()
-                .orElseGet(this::createDefault);
+                .orElseGet(EmergencyNoticeService::emptyEmergencyNotice);
         if (request.getMessage() != null) {
             entity.setMessage(request.getMessage());
         }
@@ -34,10 +44,11 @@ public class EmergencyNoticeService {
         return EmergencyNoticeResponse.from(emergencyNoticeRepository.save(entity));
     }
 
-    private EmergencyNotice createDefault() {
+    /** 저장하지 않은 기본값. 조회 응답용이다. */
+    private static EmergencyNotice emptyEmergencyNotice() {
         EmergencyNotice entity = new EmergencyNotice();
         entity.setMessage("");
         entity.setIsActive(false);
-        return emergencyNoticeRepository.save(entity);
+        return entity;
     }
 }

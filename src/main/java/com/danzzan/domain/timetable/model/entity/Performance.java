@@ -35,6 +35,12 @@ public class Performance {
     @Column(name = "stage")
     private String stage;
 
+    @Column(name = "stage_en")
+    private String stageEn;
+
+    @Column(name = "en_is_manual", nullable = false)
+    private boolean enIsManual = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
@@ -75,5 +81,23 @@ public class Performance {
             this.artist = artist;
         }
         this.stage = stage;
+    }
+
+    /**
+     * 기계번역 결과를 반영한다. 보호는 필드 단위다.
+     * null 인자는 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
+     */
+    public void applyTranslation(String stageEn) {
+        if (stageEn != null && (!this.enIsManual || this.stageEn == null)) {
+            this.stageEn = stageEn;
+        }
+    }
+
+    /**
+     * 관리자가 직접 입력한 번역을 반영하고 수동 플래그를 켠다.
+     */
+    public void applyManualTranslation(String stageEn) {
+        this.stageEn = stageEn;
+        this.enIsManual = true;
     }
 }

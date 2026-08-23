@@ -19,6 +19,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -131,5 +132,26 @@ class NoticeServiceTranslationTest {
         noticeService.update(1L, updateRequest("우천 안내", "야외 부스 운영이 중단될 수 있습니다."));
 
         verify(translationService, never()).translateAll(any());
+    }
+
+    @Test
+    void 한국어가_바뀌지_않아도_수동_영문을_입력하면_저장하고_수동_플래그를_켠다() {
+        Notice notice = existingNotice();
+        when(noticeRepository.findById(1L)).thenReturn(Optional.of(notice));
+        when(noticeRepository.save(any(Notice.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateNoticeRequest request = updateRequest("우천 안내", "야외 부스 운영이 중단될 수 있습니다.");
+        request.setTitleEn("Rain notice");
+        request.setContentEn("Outdoor booths may close.");
+
+        noticeService.update(1L, request);
+
+        verify(translationService, never()).translateAll(any());
+        ArgumentCaptor<Notice> captor = ArgumentCaptor.forClass(Notice.class);
+        verify(noticeRepository).save(captor.capture());
+        assertEquals("Rain notice", captor.getValue().getTitleEn());
+        assertEquals("Outdoor booths may close.", captor.getValue().getContentEn());
+        assertTrue(captor.getValue().isEnIsManual());
     }
 }

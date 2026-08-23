@@ -38,4 +38,14 @@ public class CreateNoticeRequest {
      * 미지정이고 images가 비어있지 않으면 서버에서 images[0]을 썸네일로 사용합니다.
      */
     private String thumbnailImageUrl;
+
+    /**
+     * 관리자가 직접 입력한 영문 제목. 비어 있으면 자동 번역한다.
+     */
+    private String titleEn;
+
+    /**
+     * 관리자가 직접 입력한 영문 본문. 비어 있으면 자동 번역한다.
+     */
+    private String contentEn;
 }

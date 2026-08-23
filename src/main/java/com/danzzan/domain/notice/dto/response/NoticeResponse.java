@@ -35,6 +35,14 @@ public class NoticeResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    /**
+     * 관리자가 직접 입력했거나 기계번역으로 채워진 영문 제목/본문.
+     * 공개 API(from(Notice, boolean))에서는 사용하지 않는다.
+     */
+    private String titleEn;
+    private String contentEn;
+    private boolean enIsManual;
+
     public static NoticeResponse from(Notice notice) {
         NoticeResponse res = new NoticeResponse();
         res.id = notice.getId();
@@ -53,6 +61,9 @@ public class NoticeResponse {
         }
         res.createdAt = notice.getCreatedAt();
         res.updatedAt = notice.getUpdatedAt();
+        res.titleEn = notice.getTitleEn();
+        res.contentEn = notice.getContentEn();
+        res.enIsManual = notice.isEnIsManual();
         return res;
     }
 

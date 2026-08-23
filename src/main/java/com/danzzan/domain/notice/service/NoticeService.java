@@ -67,13 +67,21 @@ public class NoticeService {
                 false
         );
 
-        List<String> translated = translationService.translateAll(
-                List.of(
-                        request.getTitle() == null ? "" : request.getTitle(),
-                        request.getContent() == null ? "" : request.getContent()
-                )
-        );
-        notice.applyTranslation(translated.get(0), translated.get(1));
+        boolean hasManualEnglish =
+                (request.getTitleEn() != null && !request.getTitleEn().isBlank())
+                        || (request.getContentEn() != null && !request.getContentEn().isBlank());
+
+        if (hasManualEnglish) {
+            notice.applyManualTranslation(request.getTitleEn(), request.getContentEn());
+        } else {
+            List<String> translated = translationService.translateAll(
+                    List.of(
+                            request.getTitle() == null ? "" : request.getTitle(),
+                            request.getContent() == null ? "" : request.getContent()
+                    )
+            );
+            notice.applyTranslation(translated.get(0), translated.get(1));
+        }
 
         return NoticeResponse.from(noticeRepository.save(notice));
     }
@@ -110,7 +118,15 @@ public class NoticeService {
                 !java.util.Objects.equals(previousTitle, request.getTitle())
                         || !java.util.Objects.equals(previousContent, request.getContent());
 
-        if (koreanChanged) {
+        boolean hasManualEnglish =
+                (request.getTitleEn() != null && !request.getTitleEn().isBlank())
+                        || (request.getContentEn() != null && !request.getContentEn().isBlank());
+
+        // 수동 입력이 최우선이다: 한국어 변경 여부와 무관하게 관리자가 직접 쓴 영문을 반영한다.
+        // 수동 입력이 없을 때만, 한국어가 바뀐 경우에 한해 재번역한다.
+        if (hasManualEnglish) {
+            notice.applyManualTranslation(request.getTitleEn(), request.getContentEn());
+        } else if (koreanChanged) {
             List<String> retranslated = translationService.translateAll(
                     List.of(
                             request.getTitle() == null ? "" : request.getTitle(),

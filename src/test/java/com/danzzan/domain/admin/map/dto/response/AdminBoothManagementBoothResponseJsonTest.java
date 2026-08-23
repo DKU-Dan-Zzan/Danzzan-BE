@@ -27,7 +27,10 @@ class AdminBoothManagementBoothResponseJsonTest {
                 BoothOperationStatus.OPEN,
                 "10:00",
                 "16:00",
-                List.of("2026-05-12")
+                List.of("2026-05-12"),
+                "Test",
+                null,
+                false
         );
 
         JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(response));

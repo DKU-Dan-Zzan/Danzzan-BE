@@ -146,6 +146,95 @@ class AdminBoothManagementServiceTranslationTest {
         verify(translationService, never()).translateAll(any());
     }
 
+    @Test
+    void 주점_생성시_영문을_모두_직접_입력하면_그대로_저장되고_수동_플래그가_켜진다() {
+        when(collegeRepository.findById(1L)).thenReturn(Optional.of(college()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Auto Name", "Auto Intro", "Auto Desc", "Auto Dept"));
+        when(pubRepository.save(any(Pub.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateAdminPubRequest request = createRequest();
+        ReflectionTestUtils.setField(request, "nameEn", "Manual Name");
+        ReflectionTestUtils.setField(request, "introEn", "Manual Intro");
+        ReflectionTestUtils.setField(request, "descriptionEn", "Manual Desc");
+        ReflectionTestUtils.setField(request, "departmentEn", "Manual Dept");
+
+        adminBoothManagementService.createPubManagement(request);
+
+        ArgumentCaptor<Pub> captor = ArgumentCaptor.forClass(Pub.class);
+        verify(pubRepository).save(captor.capture());
+
+        Pub saved = captor.getValue();
+        assertEquals("Manual Name", saved.getNameEn());
+        assertEquals("Manual Intro", saved.getIntroEn());
+        assertEquals("Manual Desc", saved.getDescriptionEn());
+        assertEquals("Manual Dept", saved.getDepartmentEn());
+        assertEquals(true, saved.isEnIsManual());
+    }
+
+    @Test
+    void 주점_생성시_일부_영문만_비워두면_비운_필드만_자동번역된다() {
+        when(collegeRepository.findById(1L)).thenReturn(Optional.of(college()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Auto Name", "Auto Intro", "Auto Desc", "Auto Dept"));
+        when(pubRepository.save(any(Pub.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateAdminPubRequest request = createRequest();
+        ReflectionTestUtils.setField(request, "nameEn", "Manual Name");
+        // introEn, descriptionEn, departmentEn 비워둠 -> 자동번역 결과가 채워져야 함
+
+        adminBoothManagementService.createPubManagement(request);
+
+        ArgumentCaptor<Pub> captor = ArgumentCaptor.forClass(Pub.class);
+        verify(pubRepository).save(captor.capture());
+
+        Pub saved = captor.getValue();
+        assertEquals("Manual Name", saved.getNameEn());
+        assertEquals("Auto Intro", saved.getIntroEn());
+        assertEquals("Auto Desc", saved.getDescriptionEn());
+        assertEquals("Auto Dept", saved.getDepartmentEn());
+        assertEquals(true, saved.isEnIsManual());
+    }
+
+    @Test
+    void 주점_수정시_이미_수동인_주점의_한국어를_바꾸고_영문을_비우면_새로_번역된다() {
+        Pub pub = existingPub();
+        pub.applyManualTranslation("Old Name EN", "Old Intro EN", "Old Desc EN", "Old Dept EN");
+        when(pubRepository.findById(1L)).thenReturn(Optional.of(pub));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Fresh Name EN", "Stale Intro Auto", "Stale Desc Auto", "Stale Dept Auto"));
+
+        // name의 한국어만 바꾸고, nameEn은 비워둔다 (나머지 한국어/영문은 그대로)
+        adminBoothManagementService.updatePubManagement(
+                1L, updateRequest("새 이름", "환영합니다", "즐거운 시간"));
+
+        verify(translationService).translateAll(any());
+        assertEquals("Fresh Name EN", pub.getNameEn());
+        assertEquals("Old Intro EN", pub.getIntroEn());
+        assertEquals("Old Desc EN", pub.getDescriptionEn());
+        assertEquals("Old Dept EN", pub.getDepartmentEn());
+        assertEquals(true, pub.isEnIsManual());
+    }
+
+    @Test
+    void 주점_수정시_한국어도_영문도_안바뀌면_재번역_호출이_없고_기존_수동_값이_유지된다() {
+        Pub pub = existingPub();
+        pub.applyManualTranslation("Old Name EN", "Old Intro EN", "Old Desc EN", "Old Dept EN");
+        when(pubRepository.findById(1L)).thenReturn(Optional.of(pub));
+
+        adminBoothManagementService.updatePubManagement(
+                1L, updateRequest("기계공학과 주점", "환영합니다", "즐거운 시간"));
+
+        verify(translationService, never()).translateAll(any());
+        assertEquals("Old Name EN", pub.getNameEn());
+        assertEquals("Old Intro EN", pub.getIntroEn());
+        assertEquals("Old Desc EN", pub.getDescriptionEn());
+        assertEquals("Old Dept EN", pub.getDepartmentEn());
+        assertEquals(true, pub.isEnIsManual());
+    }
+
     private CreateAdminBoothRequest createBoothRequest() {
         CreateAdminBoothRequest request = new CreateAdminBoothRequest();
         ReflectionTestUtils.setField(request, "type", BoothType.FOOD_TRUCK);
@@ -222,5 +311,88 @@ class AdminBoothManagementServiceTranslationTest {
         adminBoothManagementService.updateBoothManagement(1L, updateBoothRequest("떡볶이 부스", "매운맛 주의"));
 
         verify(translationService, never()).translateAll(any());
+    }
+
+    @Test
+    void 부스_생성시_영문을_모두_직접_입력하면_그대로_저장되고_수동_플래그가_켜진다() {
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Auto Booth Name", "Auto Booth Desc"));
+        when(boothRepository.save(any(Booth.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateAdminBoothRequest request = createBoothRequest();
+        ReflectionTestUtils.setField(request, "nameEn", "Manual Booth Name");
+        ReflectionTestUtils.setField(request, "descriptionEn", "Manual Booth Desc");
+
+        adminBoothManagementService.createBoothManagement(request);
+
+        ArgumentCaptor<Booth> captor = ArgumentCaptor.forClass(Booth.class);
+        verify(boothRepository).save(captor.capture());
+
+        Booth saved = captor.getValue();
+        assertEquals("Manual Booth Name", saved.getNameEn());
+        assertEquals("Manual Booth Desc", saved.getDescriptionEn());
+        assertEquals(true, saved.isEnIsManual());
+    }
+
+    @Test
+    void 부스_생성시_일부_영문만_비워두면_비운_필드만_자동번역된다() {
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Auto Booth Name", "Auto Booth Desc"));
+        when(boothRepository.save(any(Booth.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CreateAdminBoothRequest request = createBoothRequest();
+        ReflectionTestUtils.setField(request, "nameEn", "Manual Booth Name");
+        // descriptionEn은 비워둠 -> 자동번역 결과가 채워져야 함
+
+        adminBoothManagementService.createBoothManagement(request);
+
+        ArgumentCaptor<Booth> captor = ArgumentCaptor.forClass(Booth.class);
+        verify(boothRepository).save(captor.capture());
+
+        Booth saved = captor.getValue();
+        assertEquals("Manual Booth Name", saved.getNameEn());
+        assertEquals("Auto Booth Desc", saved.getDescriptionEn());
+        assertEquals(true, saved.isEnIsManual());
+    }
+
+    @Test
+    void 부스_수정시_이미_수동인_부스의_한국어를_바꾸고_영문을_비우면_새로_번역된다() {
+        Booth booth = existingBooth();
+        booth.applyManualTranslation("Old Booth Name EN", "Old Booth Desc EN");
+        when(boothRepository.findById(1L)).thenReturn(Optional.of(booth));
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Fresh Booth Name EN", "Stale Desc Auto"));
+
+        // name의 한국어만 바꾸고, nameEn은 비워둔다. description(한국어)은 그대로 두고 descriptionEn도 비워둔다.
+        adminBoothManagementService.updateBoothManagement(1L, updateBoothRequest("새 부스 이름", "매운맛 주의"));
+
+        verify(translationService).translateAll(any());
+        assertEquals("Fresh Booth Name EN", booth.getNameEn());
+        assertEquals("Old Booth Desc EN", booth.getDescriptionEn());
+        assertEquals(true, booth.isEnIsManual());
+    }
+
+    @Test
+    void 부스_수정시_한국어도_영문도_안바뀌면_재번역_호출이_없고_기존_수동_값이_유지된다() {
+        Booth booth = existingBooth();
+        booth.applyManualTranslation("Old Booth Name EN", "Old Booth Desc EN");
+        when(boothRepository.findById(1L)).thenReturn(Optional.of(booth));
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+
+        adminBoothManagementService.updateBoothManagement(1L, updateBoothRequest("떡볶이 부스", "매운맛 주의"));
+
+        verify(translationService, never()).translateAll(any());
+        assertEquals("Old Booth Name EN", booth.getNameEn());
+        assertEquals("Old Booth Desc EN", booth.getDescriptionEn());
+        assertEquals(true, booth.isEnIsManual());
     }
 }

@@ -20,4 +20,8 @@ public class UpdateArtistRequest {
     private String description;
 
     private String imageUrl;
+
+    private String nameEn;
+
+    private String descriptionEn;
 }

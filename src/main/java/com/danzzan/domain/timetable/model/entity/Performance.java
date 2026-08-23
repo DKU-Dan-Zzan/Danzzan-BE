@@ -100,4 +100,12 @@ public class Performance {
         this.stageEn = stageEn;
         this.enIsManual = true;
     }
+
+    /**
+     * decideEnglish가 계산한 최종 영문 값을 그대로 반영한다.
+     * null은 "번역하지 못했다"가 아니라 "비우라"는 뜻이므로 그대로 비운다.
+     */
+    public void applyDecidedTranslation(String stageEn) {
+        this.stageEn = stageEn;
+    }
 }

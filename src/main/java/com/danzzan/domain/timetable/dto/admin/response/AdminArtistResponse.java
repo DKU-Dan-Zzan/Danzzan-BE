@@ -11,13 +11,19 @@ public class AdminArtistResponse {
     private String name;
     private String description;
     private String imageUrl;
+    private String nameEn;
+    private String descriptionEn;
+    private boolean enIsManual;
 
     public static AdminArtistResponse from(Artist artist) {
         return new AdminArtistResponse(
                 artist.getId(),
                 artist.getName(),
                 artist.getDescription(),
-                artist.getImageUrl()
+                artist.getImageUrl(),
+                artist.getNameEn(),
+                artist.getDescriptionEn(),
+                artist.isEnIsManual()
         );
     }
 }

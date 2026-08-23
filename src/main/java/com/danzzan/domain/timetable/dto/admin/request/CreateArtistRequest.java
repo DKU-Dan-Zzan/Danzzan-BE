@@ -21,4 +21,8 @@ public class CreateArtistRequest {
      * 신규 생성 시점에 이미지가 이미 업로드된 경우 함께 저장한다. (선택)
      */
     private String imageUrl;
+
+    private String nameEn;
+
+    private String descriptionEn;
 }

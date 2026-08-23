@@ -10,6 +10,7 @@ import com.danzzan.domain.timetable.repository.ArtistRepository;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
 import com.danzzan.infra.s3.S3PresignService;
 import com.danzzan.infra.s3.S3PresignedPutResult;
+import com.danzzan.infra.translation.FieldTranslationDecision;
 import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
@@ -51,7 +52,18 @@ public class AdminArtistService {
                         artist.getDescription() == null ? "" : artist.getDescription()
                 )
         );
-        artist.applyTranslation(translated.get(0), translated.get(1));
+
+        // 생성 시에는 한국어가 늘 "새로 생겼다"고 보고(항상 변경), 저장된 영문은 늘 없다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                true, request.getNameEn(), artist.getNameEn(), translated.get(0));
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                true, request.getDescriptionEn(), artist.getDescriptionEn(), translated.get(1));
+
+        if (hasManualArtistInput(request.getNameEn(), request.getDescriptionEn())) {
+            artist.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            artist.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
+        }
 
         Artist saved = artistRepository.save(artist);
         return AdminArtistResponse.from(saved);
@@ -77,10 +89,13 @@ public class AdminArtistService {
             artist.changeImageUrl(trimmed.isEmpty() ? null : trimmed);
         }
 
-        boolean koreanChanged =
-                !java.util.Objects.equals(previousName, artist.getName())
-                        || !java.util.Objects.equals(previousDescription, artist.getDescription());
+        boolean nameKoreanChanged = !java.util.Objects.equals(previousName, artist.getName());
+        boolean descriptionKoreanChanged = !java.util.Objects.equals(previousDescription, artist.getDescription());
+        boolean koreanChanged = nameKoreanChanged || descriptionKoreanChanged;
 
+        // 한국어가 바뀐 경우에 한해 자동 재번역한다 (koreanChanged 가드 유지).
+        String autoNameEn = null;
+        String autoDescriptionEn = null;
         if (koreanChanged) {
             List<String> retranslated = translationService.translateAll(
                     List.of(
@@ -88,7 +103,20 @@ public class AdminArtistService {
                             artist.getDescription() == null ? "" : artist.getDescription()
                     )
             );
-            artist.applyTranslation(retranslated.get(0), retranslated.get(1));
+            autoNameEn = retranslated.get(0);
+            autoDescriptionEn = retranslated.get(1);
+        }
+
+        // 지우기 → 자동 채움 → 수동 값 덮어쓰기, 이 세 단계의 순서가 곧 정답이다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                nameKoreanChanged, request.getNameEn(), artist.getNameEn(), autoNameEn);
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                descriptionKoreanChanged, request.getDescriptionEn(), artist.getDescriptionEn(), autoDescriptionEn);
+
+        if (hasManualArtistInput(request.getNameEn(), request.getDescriptionEn())) {
+            artist.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            artist.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
         }
 
         return AdminArtistResponse.from(artist);
@@ -135,5 +163,9 @@ public class AdminArtistService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean hasManualArtistInput(String nameEn, String descriptionEn) {
+        return FieldTranslationDecision.isSupplied(nameEn) || FieldTranslationDecision.isSupplied(descriptionEn);
     }
 }

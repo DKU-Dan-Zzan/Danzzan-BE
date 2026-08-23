@@ -55,4 +55,21 @@ public class NoticeResponse {
         res.updatedAt = notice.getUpdatedAt();
         return res;
     }
+
+    /**
+     * 언어에 따라 값을 골라 담는다. 필드명은 바뀌지 않는다.
+     * 영문이 비어 있으면 한국어로 폴백한다.
+     */
+    public static NoticeResponse from(Notice notice, boolean english) {
+        NoticeResponse res = from(notice);
+        if (english) {
+            if (notice.getTitleEn() != null && !notice.getTitleEn().isBlank()) {
+                res.title = notice.getTitleEn();
+            }
+            if (notice.getContentEn() != null && !notice.getContentEn().isBlank()) {
+                res.content = notice.getContentEn();
+            }
+        }
+        return res;
+    }
 }

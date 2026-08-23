@@ -23,11 +23,11 @@ public class NoticeService {
     private final TranslationService translationService;
 
     @Transactional(readOnly = true)
-    public Page<NoticeResponse> getActiveNotices(String keyword, String category, Pageable pageable) {
+    public Page<NoticeResponse> getActiveNotices(String keyword, String category, boolean english, Pageable pageable) {
         String normalizedKeyword = normalizeOptional(keyword);
         String normalizedCategory = normalizeOptional(category);
         Page<Notice> page = noticeRepository.searchActive(normalizedKeyword, normalizedCategory, pageable);
-        return page.map(NoticeResponse::from);
+        return page.map(notice -> NoticeResponse.from(notice, english));
     }
 
     @Transactional(readOnly = true)
@@ -48,10 +48,10 @@ public class NoticeService {
     }
 
     @Transactional(readOnly = true)
-    public NoticeResponse getNotice(Long id) {
+    public NoticeResponse getNotice(Long id, boolean english) {
         Notice notice = noticeRepository.findActiveById(id)
                 .orElseThrow(() -> new IllegalArgumentException("공지를 찾을 수 없습니다. id=" + id));
-        return NoticeResponse.from(notice);
+        return NoticeResponse.from(notice, english);
     }
 
     @Transactional

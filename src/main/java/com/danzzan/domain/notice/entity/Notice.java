@@ -131,17 +131,19 @@ public class Notice {
 
     /**
      * 기계번역 결과를 반영한다.
-     * 사람이 손댄 번역(enIsManual = true)은 덮어쓰지 않는다.
-     * null 값은 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
+     *
+     * 보호는 엔티티가 아니라 <b>필드</b> 단위다.
+     * 수동 플래그가 켜져 있어도 비어 있는 필드는 채운다. 사람이 실제로 쓴 값
+     * (null이 아닌 값)만 지켜주면 되기 때문이다. 엔티티 단위로 막으면
+     * 관리자가 영문 제목만 채우고 본문을 비워둔 순간 본문이 영원히 비게 된다.
+     *
+     * null 인자는 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
      */
     public void applyTranslation(String titleEn, String contentEn) {
-        if (this.enIsManual) {
-            return;
-        }
-        if (titleEn != null) {
+        if (titleEn != null && (!this.enIsManual || this.titleEn == null)) {
             this.titleEn = titleEn;
         }
-        if (contentEn != null) {
+        if (contentEn != null && (!this.enIsManual || this.contentEn == null)) {
             this.contentEn = contentEn;
         }
     }

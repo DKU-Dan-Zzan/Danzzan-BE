@@ -48,7 +48,7 @@ class NoticeTranslationTest {
     }
 
     @Test
-    void 자동번역은_수동플래그가_켜진_공지를_덮어쓰지_않는다() {
+    void 자동번역은_사람이_쓴_영문을_덮어쓰지_않는다() {
         Notice notice = sampleNotice();
         notice.applyManualTranslation("Manual Title", "Manual Content");
 
@@ -56,6 +56,18 @@ class NoticeTranslationTest {
 
         assertEquals("Manual Title", notice.getTitleEn());
         assertEquals("Manual Content", notice.getContentEn());
+    }
+
+    @Test
+    void 수동플래그가_켜져있어도_비어있는_필드는_자동번역이_채운다() {
+        Notice notice = sampleNotice();
+        // 관리자가 영문 제목만 채우고 본문은 비워둔 상황
+        notice.applyManualTranslation("Manual Title", null);
+
+        notice.applyTranslation("Machine Title", "Machine Content");
+
+        assertEquals("Manual Title", notice.getTitleEn());
+        assertEquals("Machine Content", notice.getContentEn());
     }
 
     @Test

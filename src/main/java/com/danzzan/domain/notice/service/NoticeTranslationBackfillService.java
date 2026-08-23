@@ -31,14 +31,20 @@ public class NoticeTranslationBackfillService {
 
         int filled = 0;
         for (Notice notice : targets) {
+            boolean titleWasBlank = notice.getTitleEn() == null;
+            boolean contentWasBlank = notice.getContentEn() == null;
+
             List<String> translated = translationService.translateAll(
                     List.of(
-                            notice.getTitleEn() == null ? safe(notice.getTitle()) : "",
-                            notice.getContentEn() == null ? safe(notice.getContent()) : ""
+                            titleWasBlank ? safe(notice.getTitle()) : "",
+                            contentWasBlank ? safe(notice.getContent()) : ""
                     )
             );
             notice.applyTranslation(translated.get(0), translated.get(1));
-            if (notice.getTitleEn() != null || notice.getContentEn() != null) {
+
+            boolean titleNewlyFilled = titleWasBlank && notice.getTitleEn() != null;
+            boolean contentNewlyFilled = contentWasBlank && notice.getContentEn() != null;
+            if (titleNewlyFilled || contentNewlyFilled) {
                 filled++;
             }
         }

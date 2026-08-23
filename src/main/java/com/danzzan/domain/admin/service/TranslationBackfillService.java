@@ -34,40 +34,71 @@ public class TranslationBackfillService {
         int filled = noticeBackfillService.backfill();
 
         for (var booth : boothRepository.findTop50ByNameEnIsNullOrDescriptionEnIsNull()) {
+            boolean nameWasBlank = booth.getNameEn() == null;
+            boolean descriptionWasBlank = booth.getDescriptionEn() == null;
+
             List<String> t = translationService.translateAll(
                     List.of(safe(booth.getNameEn(), booth.getName()),
                             safe(booth.getDescriptionEn(), booth.getDescription())));
             booth.applyTranslation(t.get(0), t.get(1));
-            filled++;
+
+            if ((nameWasBlank && booth.getNameEn() != null)
+                    || (descriptionWasBlank && booth.getDescriptionEn() != null)) {
+                filled++;
+            }
         }
 
         for (var pub : pubRepository
                 .findTop50ByNameEnIsNullOrIntroEnIsNullOrDescriptionEnIsNullOrDepartmentEnIsNull()) {
+            boolean nameWasBlank = pub.getNameEn() == null;
+            boolean introWasBlank = pub.getIntroEn() == null;
+            boolean descriptionWasBlank = pub.getDescriptionEn() == null;
+            boolean departmentWasBlank = pub.getDepartmentEn() == null;
+
             List<String> t = translationService.translateAll(
                     List.of(safe(pub.getNameEn(), pub.getName()),
                             safe(pub.getIntroEn(), pub.getIntro()),
                             safe(pub.getDescriptionEn(), pub.getDescription()),
                             safe(pub.getDepartmentEn(), pub.getDepartment())));
             pub.applyTranslation(t.get(0), t.get(1), t.get(2), t.get(3));
-            filled++;
+
+            if ((nameWasBlank && pub.getNameEn() != null)
+                    || (introWasBlank && pub.getIntroEn() != null)
+                    || (descriptionWasBlank && pub.getDescriptionEn() != null)
+                    || (departmentWasBlank && pub.getDepartmentEn() != null)) {
+                filled++;
+            }
         }
 
         for (var college : collegeRepository.findTop50ByNameEnIsNull()) {
+            boolean nameWasBlank = college.getNameEn() == null;
             college.applyTranslation(translationService.translate(college.getName()));
-            filled++;
+            if (nameWasBlank && college.getNameEn() != null) {
+                filled++;
+            }
         }
 
         for (var artist : artistRepository.findTop50ByNameEnIsNullOrDescriptionEnIsNull()) {
+            boolean nameWasBlank = artist.getNameEn() == null;
+            boolean descriptionWasBlank = artist.getDescriptionEn() == null;
+
             List<String> t = translationService.translateAll(
                     List.of(safe(artist.getNameEn(), artist.getName()),
                             safe(artist.getDescriptionEn(), artist.getDescription())));
             artist.applyTranslation(t.get(0), t.get(1));
-            filled++;
+
+            if ((nameWasBlank && artist.getNameEn() != null)
+                    || (descriptionWasBlank && artist.getDescriptionEn() != null)) {
+                filled++;
+            }
         }
 
         for (var performance : performanceRepository.findTop50ByStageEnIsNull()) {
+            boolean stageWasBlank = performance.getStageEn() == null;
             performance.applyTranslation(translationService.translate(performance.getStage()));
-            filled++;
+            if (stageWasBlank && performance.getStageEn() != null) {
+                filled++;
+            }
         }
 
         log.info("전체 번역 보정 완료. 처리={}", filled);

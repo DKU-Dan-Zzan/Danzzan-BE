@@ -148,4 +148,16 @@ public class Pub {
         this.departmentEn = departmentEn;
         this.enIsManual = true;
     }
+
+    /**
+     * decideEnglish가 계산한 최종 영문 값을 그대로 반영한다.
+     * null은 "번역하지 못했다"가 아니라 "비우라"는 뜻이므로 그대로 비운다.
+     */
+    public void applyDecidedTranslation(String nameEn, String introEn,
+                                         String descriptionEn, String departmentEn) {
+        this.nameEn = nameEn;
+        this.introEn = introEn;
+        this.descriptionEn = descriptionEn;
+        this.departmentEn = departmentEn;
+    }
 }

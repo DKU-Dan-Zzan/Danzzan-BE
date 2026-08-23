@@ -191,8 +191,11 @@ public class AdminBoothManagementService {
         String decidedDepartmentEn = FieldTranslationDecision.decideEnglish(
                 true, request.getDepartmentEn(), pub.getDepartmentEn(), translated.get(3));
 
-        applyDecidedPubTranslation(pub, decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn,
-                hasManualPubInput(request.getNameEn(), request.getIntroEn(), request.getDescriptionEn(), request.getDepartmentEn()));
+        if (hasManualPubInput(request.getNameEn(), request.getIntroEn(), request.getDescriptionEn(), request.getDepartmentEn())) {
+            pub.applyManualTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        } else {
+            pub.applyDecidedTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        }
 
         return pubRepository.save(pub).getId();
     }
@@ -229,8 +232,11 @@ public class AdminBoothManagementService {
         String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
                 true, request.getDescriptionEn(), booth.getDescriptionEn(), translated.get(1));
 
-        applyDecidedBoothTranslation(booth, decidedNameEn, decidedDescriptionEn,
-                hasManualBoothInput(request.getNameEn(), request.getDescriptionEn()));
+        if (hasManualBoothInput(request.getNameEn(), request.getDescriptionEn())) {
+            booth.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            booth.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
+        }
 
         Booth savedBooth = boothRepository.save(booth);
 
@@ -322,8 +328,11 @@ public class AdminBoothManagementService {
         String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
                 descriptionKoreanChanged, request.getDescriptionEn(), booth.getDescriptionEn(), autoDescriptionEn);
 
-        applyDecidedBoothTranslation(booth, decidedNameEn, decidedDescriptionEn,
-                hasManualBoothInput(request.getNameEn(), request.getDescriptionEn()));
+        if (hasManualBoothInput(request.getNameEn(), request.getDescriptionEn())) {
+            booth.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            booth.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
+        }
 
         List<BoothOperation> existingOperations = boothOperationRepository.findAllByBoothIdInOrderByOperationDateAsc(List.of(boothId));
         Map<LocalDate, BoothOperation> existingOperationByDate = existingOperations.stream()
@@ -418,8 +427,11 @@ public class AdminBoothManagementService {
         String decidedDepartmentEn = FieldTranslationDecision.decideEnglish(
                 departmentKoreanChanged, request.getDepartmentEn(), pub.getDepartmentEn(), autoDepartmentEn);
 
-        applyDecidedPubTranslation(pub, decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn,
-                hasManualPubInput(request.getNameEn(), request.getIntroEn(), request.getDescriptionEn(), request.getDepartmentEn()));
+        if (hasManualPubInput(request.getNameEn(), request.getIntroEn(), request.getDescriptionEn(), request.getDepartmentEn())) {
+            pub.applyManualTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        } else {
+            pub.applyDecidedTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        }
     }
 
     @Transactional
@@ -616,41 +628,6 @@ public class AdminBoothManagementService {
         return distinctIds.stream()
                 .map(operationById::get)
                 .toList();
-    }
-
-    /**
-     * decideEnglish가 계산한 최종 영문 값을 Booth 엔티티에 반영한다.
-     *
-     * Booth는 Notice와 달리 nameEn/descriptionEn에 대한 평범한 setter가 없고(엔티티 수정 금지),
-     * applyTranslation(가드 있음)/applyManualTranslation(무조건 덮어쓰고 enIsManual=true 고정) 두
-     * 메서드만 공개돼 있다. 이번 요청에서 수동 입력이 있었거나 엔티티가 이미 수동 상태라면
-     * applyManualTranslation으로 무조건 반영하고(그래야 decideEnglish가 계산한 null-클리어까지
-     * 정확히 반영된다), 그렇지 않다면(순수 자동번역 상태 유지) applyTranslation을 쓴다 —
-     * enIsManual이 false인 동안은 그 가드가 "널이 아니면 쓴다"로 축약되므로 decideEnglish의
-     * 결과와 동일하게 동작한다. 다만 이 경로에서는 "한국어가 바뀌었는데 번역까지 실패한" 극단적인
-     * 경우 decideEnglish가 요구하는 명시적 null-클리어를 못 하고 기존 값을 남겨두는 한계가 있다
-     * (엔티티를 건드리지 않고는 해결할 수 없음 — 보고서 참고).
-     */
-    private void applyDecidedBoothTranslation(Booth booth, String decidedNameEn, String decidedDescriptionEn,
-                                               boolean suppliedAny) {
-        if (booth.isEnIsManual() || suppliedAny) {
-            booth.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
-        } else {
-            booth.applyTranslation(decidedNameEn, decidedDescriptionEn);
-        }
-    }
-
-    /**
-     * Pub 버전. applyDecidedBoothTranslation과 동일한 이유로 존재한다.
-     */
-    private void applyDecidedPubTranslation(Pub pub, String decidedNameEn, String decidedIntroEn,
-                                             String decidedDescriptionEn, String decidedDepartmentEn,
-                                             boolean suppliedAny) {
-        if (pub.isEnIsManual() || suppliedAny) {
-            pub.applyManualTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
-        } else {
-            pub.applyTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
-        }
     }
 
     private boolean hasManualBoothInput(String nameEn, String descriptionEn) {

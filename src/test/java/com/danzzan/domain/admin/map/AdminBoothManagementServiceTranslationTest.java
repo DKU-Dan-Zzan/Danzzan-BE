@@ -31,6 +31,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -394,5 +395,66 @@ class AdminBoothManagementServiceTranslationTest {
         assertEquals("Old Booth Name EN", booth.getNameEn());
         assertEquals("Old Booth Desc EN", booth.getDescriptionEn());
         assertEquals(true, booth.isEnIsManual());
+    }
+
+    /**
+     * 재현 시나리오: enIsManual == false인 부스의 한국어 설명을 비우면,
+     * 낡은 영문 설명이 영원히 남아 ?lang=en API로 노출되는 버그.
+     * decideEnglish(true, null, "Extra spicy", null)은 null(비우라는 뜻)을 반환하지만,
+     * 이전 코드는 applyTranslation의 null-가드에 막혀 이 클리어를 반영하지 못했다.
+     */
+    @Test
+    void 부스_자동번역_상태에서_한국어_설명을_비우면_영문_설명도_비워진다() {
+        Booth booth = new Booth("떡볶이 부스", BoothType.FOOD_TRUCK, "매운맛 추가", null, null, null);
+        booth.applyTranslation("Tteokbokki Booth", "Extra spicy");
+        when(boothRepository.findById(1L)).thenReturn(Optional.of(booth));
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+        // 한국어 설명이 비어 있으므로 TranslationService는 해당 슬롯에 대해 null을 돌려준다(설계된 동작).
+        when(translationService.translateAll(any()))
+                .thenReturn(Arrays.asList("Tteokbokki Booth", null));
+
+        adminBoothManagementService.updateBoothManagement(1L, updateBoothRequest("떡볶이 부스", ""));
+
+        assertEquals(null, booth.getDescriptionEn());
+        assertEquals("Tteokbokki Booth", booth.getNameEn());
+    }
+
+    /**
+     * enIsManual이 자동 수정(자동번역 경로)만으로 true로 바뀌지 않는지 확인한다.
+     * 기존 테스트들은 모두 true를 기대하는 케이스뿐이라, 플래그를 잘못 켜는 회귀가
+     * 눈에 띄지 않고 통과할 수 있었다.
+     */
+    @Test
+    void 부스_자동_수정으로는_수동_플래그가_켜지지_않는다() {
+        Booth booth = existingBooth();
+        when(boothRepository.findById(1L)).thenReturn(Optional.of(booth));
+        when(pubOperationRepository.findAllByOperationDateIn(any()))
+                .thenReturn(List.of(supportedOperation()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("New Booth Name", "New Description"));
+
+        adminBoothManagementService.updateBoothManagement(1L, updateBoothRequest("새 부스 이름", "매운맛 주의"));
+
+        assertEquals(false, booth.isEnIsManual());
+    }
+
+    /**
+     * Pub 버전의 같은 재현 시나리오: intro 한국어를 비우면 introEn도 비워져야 한다.
+     */
+    @Test
+    void 주점_자동번역_상태에서_한국어_소개를_비우면_영문_소개도_비워진다() {
+        Pub pub = new Pub(college(), "기계공학과", "기계공학과 주점", "환영합니다", "즐거운 시간", null);
+        pub.applyTranslation("Mechanical Pub", "Welcome", "Good times", "Mechanical Engineering");
+        when(pubRepository.findById(1L)).thenReturn(Optional.of(pub));
+        // intro 슬롯만 비어 있으므로 그 슬롯만 null로 돌아온다(설계된 동작).
+        when(translationService.translateAll(any()))
+                .thenReturn(Arrays.asList("Mechanical Pub", null, "Good times", "Mechanical Engineering"));
+
+        adminBoothManagementService.updatePubManagement(
+                1L, updateRequest("기계공학과 주점", "", "즐거운 시간"));
+
+        assertEquals(null, pub.getIntroEn());
+        assertEquals("Mechanical Pub", pub.getNameEn());
     }
 }

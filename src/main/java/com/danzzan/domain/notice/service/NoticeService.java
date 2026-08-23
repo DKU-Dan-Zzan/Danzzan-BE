@@ -67,20 +67,27 @@ public class NoticeService {
                 false
         );
 
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        request.getTitle() == null ? "" : request.getTitle(),
+                        request.getContent() == null ? "" : request.getContent()
+                )
+        );
+        notice.applyTranslation(translated.get(0), translated.get(1));
+
         boolean hasManualEnglish =
                 (request.getTitleEn() != null && !request.getTitleEn().isBlank())
                         || (request.getContentEn() != null && !request.getContentEn().isBlank());
 
+        // 수동 입력 중 빈 값은 방금 채운 자동번역 결과를 그대로 남긴다.
         if (hasManualEnglish) {
-            notice.applyManualTranslation(request.getTitleEn(), request.getContentEn());
-        } else {
-            List<String> translated = translationService.translateAll(
-                    List.of(
-                            request.getTitle() == null ? "" : request.getTitle(),
-                            request.getContent() == null ? "" : request.getContent()
-                    )
-            );
-            notice.applyTranslation(translated.get(0), translated.get(1));
+            String titleEn = (request.getTitleEn() != null && !request.getTitleEn().isBlank())
+                    ? request.getTitleEn()
+                    : notice.getTitleEn();
+            String contentEn = (request.getContentEn() != null && !request.getContentEn().isBlank())
+                    ? request.getContentEn()
+                    : notice.getContentEn();
+            notice.applyManualTranslation(titleEn, contentEn);
         }
 
         return NoticeResponse.from(noticeRepository.save(notice));
@@ -118,15 +125,8 @@ public class NoticeService {
                 !java.util.Objects.equals(previousTitle, request.getTitle())
                         || !java.util.Objects.equals(previousContent, request.getContent());
 
-        boolean hasManualEnglish =
-                (request.getTitleEn() != null && !request.getTitleEn().isBlank())
-                        || (request.getContentEn() != null && !request.getContentEn().isBlank());
-
-        // 수동 입력이 최우선이다: 한국어 변경 여부와 무관하게 관리자가 직접 쓴 영문을 반영한다.
-        // 수동 입력이 없을 때만, 한국어가 바뀐 경우에 한해 재번역한다.
-        if (hasManualEnglish) {
-            notice.applyManualTranslation(request.getTitleEn(), request.getContentEn());
-        } else if (koreanChanged) {
+        // 한국어가 바뀐 경우에 한해 자동 재번역한다 (koreanChanged 가드 유지).
+        if (koreanChanged) {
             List<String> retranslated = translationService.translateAll(
                     List.of(
                             request.getTitle() == null ? "" : request.getTitle(),
@@ -134,6 +134,22 @@ public class NoticeService {
                     )
             );
             notice.applyTranslation(retranslated.get(0), retranslated.get(1));
+        }
+
+        boolean hasManualEnglish =
+                (request.getTitleEn() != null && !request.getTitleEn().isBlank())
+                        || (request.getContentEn() != null && !request.getContentEn().isBlank());
+
+        // 수동 입력이 최우선이다: 한국어 변경 여부와 무관하게 관리자가 직접 쓴 영문을 반영한다.
+        // 수동 입력 중 빈 값은 (방금 자동번역했거나 기존에 남아있던) 현재 값을 그대로 남긴다.
+        if (hasManualEnglish) {
+            String titleEn = (request.getTitleEn() != null && !request.getTitleEn().isBlank())
+                    ? request.getTitleEn()
+                    : notice.getTitleEn();
+            String contentEn = (request.getContentEn() != null && !request.getContentEn().isBlank())
+                    ? request.getContentEn()
+                    : notice.getContentEn();
+            notice.applyManualTranslation(titleEn, contentEn);
         }
 
         return NoticeResponse.from(noticeRepository.save(notice));

@@ -47,17 +47,36 @@ class AdminNoticeTranslationTest {
     }
 
     @Test
-    void 관리자가_영문을_입력하면_자동번역을_호출하지_않는다() {
+    void 관리자가_영문을_모두_입력하면_자동번역값은_살아남지_않고_수동값만_저장된다() {
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Auto title", "Auto content."));
         when(noticeRepository.save(any(Notice.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         noticeService.create(requestWithEnglish("Rain notice", "Outdoor booths may close."));
 
-        verify(translationService, never()).translateAll(any());
+        verify(translationService).translateAll(any());
 
         ArgumentCaptor<Notice> captor = ArgumentCaptor.forClass(Notice.class);
         verify(noticeRepository).save(captor.capture());
         assertEquals("Rain notice", captor.getValue().getTitleEn());
+        assertEquals("Outdoor booths may close.", captor.getValue().getContentEn());
+        assertTrue(captor.getValue().isEnIsManual());
+    }
+
+    @Test
+    void 관리자가_영문_제목만_입력하면_본문은_자동번역값이_남는다() {
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Auto title", "Auto content translated."));
+        when(noticeRepository.save(any(Notice.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        noticeService.create(requestWithEnglish("Rain notice", null));
+
+        ArgumentCaptor<Notice> captor = ArgumentCaptor.forClass(Notice.class);
+        verify(noticeRepository).save(captor.capture());
+        assertEquals("Rain notice", captor.getValue().getTitleEn());
+        assertEquals("Auto content translated.", captor.getValue().getContentEn());
         assertTrue(captor.getValue().isEnIsManual());
     }
 

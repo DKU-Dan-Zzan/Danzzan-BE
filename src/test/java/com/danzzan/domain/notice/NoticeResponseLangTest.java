@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NoticeResponseLangTest {
 
@@ -41,5 +43,23 @@ class NoticeResponseLangTest {
 
         assertEquals("제목", response.getTitle());
         assertEquals("내용", response.getContent());
+    }
+
+    @Test
+    void 공개_응답은_영문_필드를_노출하지_않는다() {
+        NoticeResponse response = NoticeResponse.from(noticeWithEnglish(), true);
+
+        assertNull(response.getTitleEn());
+        assertNull(response.getContentEn());
+        assertNull(response.getEnIsManual());
+    }
+
+    @Test
+    void 관리자_응답은_영문_필드를_포함한다() {
+        NoticeResponse response = NoticeResponse.from(noticeWithEnglish());
+
+        assertEquals("Title", response.getTitleEn());
+        assertEquals("Content", response.getContentEn());
+        assertTrue(response.getEnIsManual() != null && !response.getEnIsManual());
     }
 }

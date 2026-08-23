@@ -6,6 +6,7 @@ import com.danzzan.domain.notice.dto.request.UpdateNoticeRequest;
 import com.danzzan.domain.notice.dto.response.NoticeResponse;
 import com.danzzan.domain.notice.entity.Notice;
 import com.danzzan.domain.notice.repository.NoticeRepository;
+import com.danzzan.infra.translation.FieldTranslationDecision;
 import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,7 +34,7 @@ public class NoticeService {
 
     @Transactional(readOnly = true)
     public Page<NoticeResponse> getNotices(String keyword, Pageable pageable) {
-        Page<Notice> page = StringUtils.hasText(keyword)
+        Page<Notice> page = FieldTranslationDecision.isSupplied(keyword)
                 ? noticeRepository.findByTitleContainingAndIsActiveTrue(keyword.trim(), pageable)
                 : noticeRepository.findByIsActiveTrue(pageable);
         return page.map(NoticeResponse::from);
@@ -74,15 +75,16 @@ public class NoticeService {
                         request.getContent() == null ? "" : request.getContent()
                 )
         );
-        notice.applyTranslation(translated.get(0), translated.get(1));
 
-        boolean hasManualEnglish = isSupplied(request.getTitleEn()) || isSupplied(request.getContentEn());
+        // 생성 시에는 한국어가 늘 "새로 생겼다"고 보고(항상 변경), 저장된 영문은 늘 없다.
+        notice.setTitleEn(FieldTranslationDecision.decideEnglish(
+                true, request.getTitleEn(), notice.getTitleEn(), translated.get(0)));
+        notice.setContentEn(FieldTranslationDecision.decideEnglish(
+                true, request.getContentEn(), notice.getContentEn(), translated.get(1)));
 
-        // 수동 입력 중 빈 값은 방금 채운 자동번역 결과를 그대로 남긴다.
-        if (hasManualEnglish) {
-            String titleEn = manualOrAuto(request.getTitleEn(), notice.getTitleEn());
-            String contentEn = manualOrAuto(request.getContentEn(), notice.getContentEn());
-            notice.applyManualTranslation(titleEn, contentEn);
+        if (FieldTranslationDecision.isSupplied(request.getTitleEn())
+                || FieldTranslationDecision.isSupplied(request.getContentEn())) {
+            notice.setEnIsManual(true);
         }
 
         return NoticeResponse.from(noticeRepository.save(notice));
@@ -120,19 +122,9 @@ public class NoticeService {
         boolean contentKoreanChanged = !Objects.equals(previousContent, request.getContent());
         boolean koreanChanged = titleKoreanChanged || contentKoreanChanged;
 
-        // 요청이 이긴다: 이번 요청에서 해당 영문 칸을 비워뒀다(=자동번역을 원한다)는 뜻이고,
-        // 그 언어의 한국어가 실제로 바뀌었다면, 엔티티에 남아있는 예전 enIsManual/영문 값은
-        // 낡은 정보이므로 지운다. 지워야 applyTranslation의 필드별 가드(“null이면 채운다”)가
-        // 새로 번역한 값을 채워 넣을 수 있다. 한국어가 바뀌지 않았다면 지우지 않는다 — 그러면
-        // 관련 없는 필드 수정만으로도 매번 DeepL 재번역이 발생하게 된다.
-        if (!isSupplied(request.getTitleEn()) && titleKoreanChanged) {
-            notice.setTitleEn(null);
-        }
-        if (!isSupplied(request.getContentEn()) && contentKoreanChanged) {
-            notice.setContentEn(null);
-        }
-
         // 한국어가 바뀐 경우에 한해 자동 재번역한다 (koreanChanged 가드 유지).
+        String autoTitleEn = null;
+        String autoContentEn = null;
         if (koreanChanged) {
             List<String> retranslated = translationService.translateAll(
                     List.of(
@@ -140,34 +132,26 @@ public class NoticeService {
                             request.getContent() == null ? "" : request.getContent()
                     )
             );
-            notice.applyTranslation(retranslated.get(0), retranslated.get(1));
+            autoTitleEn = retranslated.get(0);
+            autoContentEn = retranslated.get(1);
         }
 
-        boolean hasManualEnglish = isSupplied(request.getTitleEn()) || isSupplied(request.getContentEn());
+        // 지우기 → 자동 채움 → 수동 값 덮어쓰기, 이 세 단계의 순서가 곧 정답이다.
+        // (FieldTranslationDecision 참고: 필드별 한국어 변경 여부로 지울지 정하고,
+        // 지운 뒤에도 비어 있을 때만 자동번역으로 채우고, 관리자가 직접 쓴 값이 최종적으로 이긴다.)
+        notice.setTitleEn(FieldTranslationDecision.decideEnglish(
+                titleKoreanChanged, request.getTitleEn(), notice.getTitleEn(), autoTitleEn));
+        notice.setContentEn(FieldTranslationDecision.decideEnglish(
+                contentKoreanChanged, request.getContentEn(), notice.getContentEn(), autoContentEn));
 
-        // 수동 입력이 최우선이다: 한국어 변경 여부와 무관하게 관리자가 직접 쓴 영문을 반영한다.
-        // 수동 입력 중 빈 값은 (방금 자동번역했거나 기존에 남아있던) 현재 값을 그대로 남긴다.
-        if (hasManualEnglish) {
-            String titleEn = manualOrAuto(request.getTitleEn(), notice.getTitleEn());
-            String contentEn = manualOrAuto(request.getContentEn(), notice.getContentEn());
-            notice.applyManualTranslation(titleEn, contentEn);
+        // 수동 플래그는 한 번 켜지면 유지된다: 이번 요청에 수동 입력이 하나라도 있으면 켜고,
+        // 없으면 (되돌리지 않고) 기존 값을 그대로 둔다.
+        if (FieldTranslationDecision.isSupplied(request.getTitleEn())
+                || FieldTranslationDecision.isSupplied(request.getContentEn())) {
+            notice.setEnIsManual(true);
         }
 
         return NoticeResponse.from(noticeRepository.save(notice));
-    }
-
-    /**
-     * 관리자가 해당 칸에 값을 채웠는지 여부. 비어 있으면 "자동번역해 달라"는 뜻이다.
-     */
-    private static boolean isSupplied(String value) {
-        return value != null && !value.isBlank();
-    }
-
-    /**
-     * 관리자가 직접 입력한 값이 있으면 그 값을, 없으면 자동으로 채워진 값을 사용한다.
-     */
-    private static String manualOrAuto(String manual, String auto) {
-        return isSupplied(manual) ? manual : auto;
     }
 
     @Transactional
@@ -208,12 +192,6 @@ public class NoticeService {
         }
         String trimmed = s.trim();
         return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static final class StringUtils {
-        static boolean hasText(String s) {
-            return s != null && !s.isBlank();
-        }
     }
 
     private Boolean mapStatusToIsActive(String status) {

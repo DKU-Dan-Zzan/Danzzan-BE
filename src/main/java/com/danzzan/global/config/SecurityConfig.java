@@ -35,6 +35,16 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
     private String allowedOriginPatterns;
 
+    /**
+     * 가을 축제는 티켓팅을 하지 않는다. 프론트에서 화면을 막아도 API는 그대로 열려 있어
+     * URL로 직접 호출하면 응답하므로, 여기서 함께 차단한다.
+     *
+     * 코드를 지우지 않고 플래그로 끄는 이유는 내년 봄에 되살릴 때 이 값만 true로
+     * 바꾸면 되게 하기 위해서다.
+     */
+    @Value("${app.ticketing.api-enabled:false}")
+    private boolean ticketingApiEnabled;
+
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
 
     @Bean
@@ -46,8 +56,16 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .authorizeHttpRequests(auth -> {
+                    // OPTIONS 는 CORS 프리플라이트라 차단보다 먼저 허용해야 한다.
+                    auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+
+                    if (!ticketingApiEnabled) {
+                        // /auth/** 는 관리자 로그인 경로이므로 건드리지 않는다.
+                        auth.requestMatchers("/tickets/**", "/user/**").denyAll();
+                    }
+
+                    auth
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers(
                                 "/user/login",
@@ -77,8 +95,8 @@ public class SecurityConfig {
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
                         .requestMatchers("/api/admin/**", "/admin/map/**", "/admin/timetable/**").hasRole("ADMIN")
                         .requestMatchers("/error").permitAll()
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated();
+                })
                 .addFilterBefore(ticketingJwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->

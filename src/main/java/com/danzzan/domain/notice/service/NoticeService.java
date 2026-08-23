@@ -6,17 +6,21 @@ import com.danzzan.domain.notice.dto.request.UpdateNoticeRequest;
 import com.danzzan.domain.notice.dto.response.NoticeResponse;
 import com.danzzan.domain.notice.entity.Notice;
 import com.danzzan.domain.notice.repository.NoticeRepository;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class NoticeService {
 
     private final NoticeRepository noticeRepository;
+    private final TranslationService translationService;
 
     @Transactional(readOnly = true)
     public Page<NoticeResponse> getActiveNotices(String keyword, String category, Pageable pageable) {
@@ -62,6 +66,15 @@ public class NoticeService {
                 request.getImages(),
                 false
         );
+
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        request.getTitle() == null ? "" : request.getTitle(),
+                        request.getContent() == null ? "" : request.getContent()
+                )
+        );
+        notice.applyTranslation(translated.get(0), translated.get(1));
+
         return NoticeResponse.from(noticeRepository.save(notice));
     }
 
@@ -69,6 +82,9 @@ public class NoticeService {
     public NoticeResponse update(Long id, UpdateNoticeRequest request) {
         Notice notice = noticeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("공지를 찾을 수 없습니다. id=" + id));
+        String previousTitle = notice.getTitle();
+        String previousContent = notice.getContent();
+
         notice.setTitle(request.getTitle());
         notice.setContent(request.getContent());
         notice.setAuthor(request.getAuthor());
@@ -89,6 +105,21 @@ public class NoticeService {
         } else {
             notice.setThumbnailImageUrl(thumbnail);
         }
+
+        boolean koreanChanged =
+                !java.util.Objects.equals(previousTitle, request.getTitle())
+                        || !java.util.Objects.equals(previousContent, request.getContent());
+
+        if (koreanChanged) {
+            List<String> retranslated = translationService.translateAll(
+                    List.of(
+                            request.getTitle() == null ? "" : request.getTitle(),
+                            request.getContent() == null ? "" : request.getContent()
+                    )
+            );
+            notice.applyTranslation(retranslated.get(0), retranslated.get(1));
+        }
+
         return NoticeResponse.from(noticeRepository.save(notice));
     }
 

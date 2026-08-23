@@ -5,6 +5,7 @@ import com.danzzan.domain.notice.dto.response.EmergencyNoticeResponse;
 import com.danzzan.domain.notice.entity.EmergencyNotice;
 import com.danzzan.domain.notice.repository.EmergencyNoticeRepository;
 import com.danzzan.domain.notice.service.EmergencyNoticeService;
+import com.danzzan.infra.translation.TranslationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,6 +33,9 @@ class EmergencyNoticeServiceTest {
 
     @Mock
     private EmergencyNoticeRepository emergencyNoticeRepository;
+
+    @Mock
+    private TranslationService translationService;
 
     @InjectMocks
     private EmergencyNoticeService emergencyNoticeService;
@@ -74,6 +78,8 @@ class EmergencyNoticeServiceTest {
         when(emergencyNoticeRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
         when(emergencyNoticeRepository.save(any(EmergencyNotice.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(translationService.translate(any()))
+                .thenReturn("Outdoor booths are closing due to rain");
 
         UpdateEmergencyRequest request = new UpdateEmergencyRequest();
         request.setMessage("우천으로 야외 부스가 중단됩니다");
@@ -83,5 +89,39 @@ class EmergencyNoticeServiceTest {
 
         assertEquals("우천으로 야외 부스가 중단됩니다", response.getMessage());
         verify(emergencyNoticeRepository).save(any(EmergencyNotice.class));
+    }
+
+    @Test
+    void 긴급공지_저장시_영문도_함께_저장한다() {
+        when(emergencyNoticeRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
+        when(emergencyNoticeRepository.save(any(EmergencyNotice.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(translationService.translate("우천으로 야외 부스가 중단됩니다"))
+                .thenReturn("Outdoor booths are closing due to rain");
+
+        UpdateEmergencyRequest request = new UpdateEmergencyRequest();
+        request.setMessage("우천으로 야외 부스가 중단됩니다");
+        request.setIsActive(true);
+
+        EmergencyNoticeResponse response = emergencyNoticeService.update(request);
+
+        assertEquals("Outdoor booths are closing due to rain", response.getMessageEn());
+    }
+
+    @Test
+    void 관리자가_영문을_직접_쓰면_자동번역을_호출하지_않는다() {
+        when(emergencyNoticeRepository.findFirstByOrderByIdAsc()).thenReturn(Optional.empty());
+        when(emergencyNoticeRepository.save(any(EmergencyNotice.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateEmergencyRequest request = new UpdateEmergencyRequest();
+        request.setMessage("메인 스테이지 앞 혼잡");
+        request.setMessageEn("Crowding in front of the Main Stage");
+        request.setIsActive(true);
+
+        EmergencyNoticeResponse response = emergencyNoticeService.update(request);
+
+        assertEquals("Crowding in front of the Main Stage", response.getMessageEn());
+        assertEquals(Boolean.TRUE, response.getEnIsManual());
     }
 }

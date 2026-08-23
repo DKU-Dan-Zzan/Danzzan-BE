@@ -30,3 +30,7 @@ ALTER TABLE artist
 ALTER TABLE performance
     ADD COLUMN stage_en VARCHAR(255) NULL,
     ADD COLUMN en_is_manual BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE emergency_notice
+    ADD COLUMN message_en VARCHAR(500) NULL,
+    ADD COLUMN en_is_manual BOOLEAN NOT NULL DEFAULT FALSE;

@@ -3,6 +3,7 @@ package com.danzzan.domain.admin.service;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.repository.CollegeRepository;
 import com.danzzan.domain.boothmap.repository.PubRepository;
+import com.danzzan.domain.notice.repository.EmergencyNoticeRepository;
 import com.danzzan.domain.notice.service.NoticeTranslationBackfillService;
 import com.danzzan.domain.timetable.repository.ArtistRepository;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
@@ -29,6 +30,7 @@ public class TranslationBackfillService {
     private final CollegeRepository collegeRepository;
     private final ArtistRepository artistRepository;
     private final PerformanceRepository performanceRepository;
+    private final EmergencyNoticeRepository emergencyNoticeRepository;
     private final TranslationService translationService;
 
     @Scheduled(fixedDelayString = "${translation.backfill.fixed-delay-ms:300000}")
@@ -99,6 +101,16 @@ public class TranslationBackfillService {
             boolean stageWasBlank = performance.getStageEn() == null;
             performance.applyTranslation(translationService.translate(performance.getStage()));
             if (stageWasBlank && performance.getStageEn() != null) {
+                filled++;
+            }
+        }
+
+        // 긴급공지는 홈 최상단에 뜨고 우천 중단 같은 내용이 올라간다. 번역이 비어
+        // 있으면 외국인이 그 경고를 놓치므로 보정 대상에 포함한다.
+        for (var emergency : emergencyNoticeRepository.findNeedingTranslation()) {
+            String translated = translationService.translate(emergency.getMessage());
+            if (translated != null) {
+                emergency.setMessageEn(translated);
                 filled++;
             }
         }

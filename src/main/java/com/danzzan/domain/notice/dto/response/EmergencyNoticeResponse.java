@@ -12,6 +12,8 @@ public class EmergencyNoticeResponse {
 
     private Long id;
     private String message;
+    private String messageEn;
+    private Boolean enIsManual;
     private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -20,6 +22,8 @@ public class EmergencyNoticeResponse {
         EmergencyNoticeResponse res = new EmergencyNoticeResponse();
         res.id = entity.getId();
         res.message = entity.getMessage();
+        res.messageEn = entity.getMessageEn();
+        res.enIsManual = entity.isEnIsManual();
         res.isActive = entity.getIsActive();
         res.createdAt = entity.getCreatedAt();
         res.updatedAt = entity.getUpdatedAt();

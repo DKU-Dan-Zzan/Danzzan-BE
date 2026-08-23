@@ -5,6 +5,7 @@ import com.danzzan.domain.boothmap.model.entity.BoothType;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.repository.CollegeRepository;
 import com.danzzan.domain.boothmap.repository.PubRepository;
+import com.danzzan.domain.notice.repository.EmergencyNoticeRepository;
 import com.danzzan.domain.notice.service.NoticeTranslationBackfillService;
 import com.danzzan.domain.timetable.repository.ArtistRepository;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
@@ -47,6 +48,9 @@ class TranslationBackfillServiceTest {
 
     @Mock
     private TranslationService translationService;
+
+    @Mock
+    private EmergencyNoticeRepository emergencyNoticeRepository;
 
     @InjectMocks
     private TranslationBackfillService backfillService;

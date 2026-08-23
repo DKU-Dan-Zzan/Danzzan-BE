@@ -4,6 +4,8 @@ import com.danzzan.domain.notice.dto.request.UpdateEmergencyRequest;
 import com.danzzan.domain.notice.dto.response.EmergencyNoticeResponse;
 import com.danzzan.domain.notice.entity.EmergencyNotice;
 import com.danzzan.domain.notice.repository.EmergencyNoticeRepository;
+import com.danzzan.infra.translation.FieldTranslationDecision;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class EmergencyNoticeService {
 
     private final EmergencyNoticeRepository emergencyNoticeRepository;
+    private final TranslationService translationService;
 
     /**
      * 조회는 절대 저장하지 않는다.
@@ -35,12 +38,26 @@ public class EmergencyNoticeService {
     public EmergencyNoticeResponse update(UpdateEmergencyRequest request) {
         EmergencyNotice entity = emergencyNoticeRepository.findFirstByOrderByIdAsc()
                 .orElseGet(EmergencyNoticeService::emptyEmergencyNotice);
+        String previousMessage = entity.getMessage();
         if (request.getMessage() != null) {
             entity.setMessage(request.getMessage());
         }
         if (request.getIsActive() != null) {
             entity.setIsActive(request.getIsActive());
         }
+
+        // 긴급공지는 우천 중단이나 혼잡 경고처럼 외국인이 놓치면 곤란한 내용이 올라온다.
+        // 한국어가 실제로 바뀐 경우에만 재번역하고, 관리자가 직접 쓴 영문은 지킨다.
+        boolean koreanChanged = !java.util.Objects.equals(previousMessage, entity.getMessage());
+        String autoEn = koreanChanged
+                ? translationService.translate(entity.getMessage())
+                : null;
+        entity.setMessageEn(FieldTranslationDecision.decideEnglish(
+                koreanChanged, request.getMessageEn(), entity.getMessageEn(), autoEn));
+        if (FieldTranslationDecision.isSupplied(request.getMessageEn())) {
+            entity.setEnIsManual(true);
+        }
+
         return EmergencyNoticeResponse.from(emergencyNoticeRepository.save(entity));
     }
 

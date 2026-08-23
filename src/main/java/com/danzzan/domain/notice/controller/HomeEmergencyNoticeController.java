@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -54,8 +55,10 @@ public class HomeEmergencyNoticeController {
                     description = "활성화된 긴급공지가 없는 경우 (본문 없음)"
             )
     })
-    public ResponseEntity<HomeEmergencyNoticeDto> getActiveEmergencyNotice() {
-        HomeEmergencyNoticeDto activeEmergencyNotice = homeEmergencyNoticeQueryService.getActiveEmergencyNotice();
+    public ResponseEntity<HomeEmergencyNoticeDto> getActiveEmergencyNotice(
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang) {
+        HomeEmergencyNoticeDto activeEmergencyNotice =
+                homeEmergencyNoticeQueryService.getActiveEmergencyNotice("en".equalsIgnoreCase(lang));
 
         if (activeEmergencyNotice == null) {
             return ResponseEntity.noContent().build();

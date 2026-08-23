@@ -17,4 +17,6 @@ public interface BoothRepository extends JpaRepository<Booth, Long> {
         where bo.operationDate = :operationDate
     """)
     List<Booth> findAllByOperationDate(@Param("operationDate") LocalDate operationDate);
+
+    List<Booth> findTop50ByNameEnIsNullOrDescriptionEnIsNull();
 }

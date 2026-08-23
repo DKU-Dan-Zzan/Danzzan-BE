@@ -42,4 +42,6 @@ public interface PubRepository extends JpaRepository<Pub, Long> {
     AND displayDay.pubOperation.id = :pubOperationId
     """)
     Optional<Pub> findVisibleByIdAndPubOperationIdWithCollege(Long pubId, Long pubOperationId);
+
+    List<Pub> findTop50ByNameEnIsNullOrIntroEnIsNullOrDescriptionEnIsNullOrDepartmentEnIsNull();
 }

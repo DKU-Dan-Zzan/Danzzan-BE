@@ -25,4 +25,6 @@ public interface PerformanceRepository extends JpaRepository<Performance, Intege
     java.util.Optional<Performance> findByIdWithArtist(@Param("id") Integer id);
 
     boolean existsByArtistId(Integer artistId);
+
+    List<Performance> findTop50ByStageEnIsNull();
 }

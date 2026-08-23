@@ -5,7 +5,6 @@ import com.danzzan.domain.notice.repository.NoticeRepository;
 import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +22,6 @@ public class NoticeTranslationBackfillService {
      * 영문이 비어 있는 공지를 주기적으로 채운다.
      * 이미 값이 있는 필드는 건드리지 않으므로 사람이 쓴 번역이 덮어써지지 않는다.
      */
-    @Scheduled(fixedDelayString = "${translation.backfill.fixed-delay-ms:300000}")
     @Transactional
     public int backfill() {
         List<Notice> targets = noticeRepository.findTop50ByTitleEnIsNullOrContentEnIsNull();

@@ -1128,7 +1128,7 @@ class NoticeTranslationTest {
     }
 
     @Test
-    void 자동번역은_수동플래그가_켜진_공지를_덮어쓰지_않는다() {
+    void 자동번역은_사람이_쓴_영문을_덮어쓰지_않는다() {
         Notice notice = sampleNotice();
         notice.applyManualTranslation("Manual Title", "Manual Content");
 
@@ -1136,6 +1136,18 @@ class NoticeTranslationTest {
 
         assertEquals("Manual Title", notice.getTitleEn());
         assertEquals("Manual Content", notice.getContentEn());
+    }
+
+    @Test
+    void 수동플래그가_켜져있어도_비어있는_필드는_자동번역이_채운다() {
+        Notice notice = sampleNotice();
+        // 관리자가 영문 제목만 채우고 본문은 비워둔 상황
+        notice.applyManualTranslation("Manual Title", null);
+
+        notice.applyTranslation("Machine Title", "Machine Content");
+
+        assertEquals("Manual Title", notice.getTitleEn());
+        assertEquals("Machine Content", notice.getContentEn());
     }
 
     @Test
@@ -1179,17 +1191,19 @@ Expected: 컴파일 실패. `cannot find symbol: method getTitleEn()`
 ```java
     /**
      * 기계번역 결과를 반영한다.
-     * 사람이 손댄 번역(enIsManual = true)은 덮어쓰지 않는다.
-     * null 값은 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
+     *
+     * 보호는 엔티티가 아니라 <b>필드</b> 단위다.
+     * 수동 플래그가 켜져 있어도 비어 있는 필드는 채운다. 사람이 실제로 쓴 값
+     * (null이 아닌 값)만 지켜주면 되기 때문이다. 엔티티 단위로 막으면
+     * 관리자가 영문 제목만 채우고 본문을 비워둔 순간 본문이 영원히 비게 된다.
+     *
+     * null 인자는 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
      */
     public void applyTranslation(String titleEn, String contentEn) {
-        if (this.enIsManual) {
-            return;
-        }
-        if (titleEn != null) {
+        if (titleEn != null && (!this.enIsManual || this.titleEn == null)) {
             this.titleEn = titleEn;
         }
-        if (contentEn != null) {
+        if (contentEn != null && (!this.enIsManual || this.contentEn == null)) {
             this.contentEn = contentEn;
         }
     }
@@ -1624,13 +1638,10 @@ Task 5·6의 `Notice` 구현이 참조 구현이다. 아래 표의 필드로 같
 
 ```java
     public void applyTranslation(String nameEn, String descriptionEn) {
-        if (this.enIsManual) {
-            return;
-        }
-        if (nameEn != null) {
+        if (nameEn != null && (!this.enIsManual || this.nameEn == null)) {
             this.nameEn = nameEn;
         }
-        if (descriptionEn != null) {
+        if (descriptionEn != null && (!this.enIsManual || this.descriptionEn == null)) {
             this.descriptionEn = descriptionEn;
         }
     }
@@ -1668,19 +1679,16 @@ Task 5·6의 `Notice` 구현이 참조 구현이다. 아래 표의 필드로 같
 ```java
     public void applyTranslation(String nameEn, String introEn,
                                  String descriptionEn, String departmentEn) {
-        if (this.enIsManual) {
-            return;
-        }
-        if (nameEn != null) {
+        if (nameEn != null && (!this.enIsManual || this.nameEn == null)) {
             this.nameEn = nameEn;
         }
-        if (introEn != null) {
+        if (introEn != null && (!this.enIsManual || this.introEn == null)) {
             this.introEn = introEn;
         }
-        if (descriptionEn != null) {
+        if (descriptionEn != null && (!this.enIsManual || this.descriptionEn == null)) {
             this.descriptionEn = descriptionEn;
         }
-        if (departmentEn != null) {
+        if (departmentEn != null && (!this.enIsManual || this.departmentEn == null)) {
             this.departmentEn = departmentEn;
         }
     }
@@ -1707,10 +1715,7 @@ Task 5·6의 `Notice` 구현이 참조 구현이다. 아래 표의 필드로 같
     private boolean enIsManual = false;
 
     public void applyTranslation(String nameEn) {
-        if (this.enIsManual) {
-            return;
-        }
-        if (nameEn != null) {
+        if (nameEn != null && (!this.enIsManual || this.nameEn == null)) {
             this.nameEn = nameEn;
         }
     }
@@ -1734,13 +1739,10 @@ Task 5·6의 `Notice` 구현이 참조 구현이다. 아래 표의 필드로 같
     private boolean enIsManual = false;
 
     public void applyTranslation(String nameEn, String descriptionEn) {
-        if (this.enIsManual) {
-            return;
-        }
-        if (nameEn != null) {
+        if (nameEn != null && (!this.enIsManual || this.nameEn == null)) {
             this.nameEn = nameEn;
         }
-        if (descriptionEn != null) {
+        if (descriptionEn != null && (!this.enIsManual || this.descriptionEn == null)) {
             this.descriptionEn = descriptionEn;
         }
     }
@@ -1762,10 +1764,7 @@ Task 5·6의 `Notice` 구현이 참조 구현이다. 아래 표의 필드로 같
     private boolean enIsManual = false;
 
     public void applyTranslation(String stageEn) {
-        if (this.enIsManual) {
-            return;
-        }
-        if (stageEn != null) {
+        if (stageEn != null && (!this.enIsManual || this.stageEn == null)) {
             this.stageEn = stageEn;
         }
     }
@@ -1898,31 +1897,55 @@ setter 호출이 모두 끝난 뒤:
 (`AdminMapController#updateCollegeLocation`). 따라서 생성 시점 번역 연결 대상이 아니며,
 Task 10의 일회성 보정으로만 채운다.
 
-- [ ] **Step 7: 각 응답 DTO에 `from(entity, boolean english)` 오버로드를 추가한다**
+- [ ] **Step 7: 서비스가 DTO를 만들 때 언어를 골라 담는다**
 
-`NoticeResponse`와 동일한 형태다. 영문이 비어 있으면 한국어로 폴백한다.
-`Booth`용 예시이며, 다른 DTO는 필드명만 바꾼다:
+부스맵·타임테이블 응답 DTO는 `NoticeResponse`와 구조가 다르다.
+`BoothSummaryResponse`, `PubSummaryResponse`, `PubDetailResponse`, `TimetableResponseDto`는
+모두 `@Getter @AllArgsConstructor`이고 정적 팩토리도 setter도 없다. 서비스가
+`new BoothSummaryResponse(...)`로 직접 만든다. 따라서 `from(entity, boolean)` 오버로드를
+붙일 자리가 없다. **DTO는 건드리지 말고 서비스의 생성 지점에서 값을 고른다.**
+
+고르는 규칙이 필드마다 반복되므로 작은 유틸을 하나 둔다.
+
+`src/main/java/com/danzzan/infra/translation/LocalizedText.java`:
 
 ```java
-    /**
-     * 언어에 따라 값을 골라 담는다. 필드명은 바뀌지 않는다.
-     * 영문이 비어 있으면 한국어로 폴백한다.
-     */
-    public static BoothResponse from(Booth booth, boolean english) {
-        BoothResponse response = from(booth);
-        if (english) {
-            if (booth.getNameEn() != null && !booth.getNameEn().isBlank()) {
-                response.setName(booth.getNameEn());
-            }
-            if (booth.getDescriptionEn() != null && !booth.getDescriptionEn().isBlank()) {
-                response.setDescription(booth.getDescriptionEn());
-            }
-        }
-        return response;
+package com.danzzan.infra.translation;
+
+/**
+ * 표시 언어에 맞는 문자열을 고른다.
+ * 영문이 비어 있으면 한국어로 폴백한다. 사용자에게 빈 값이 보여서는 안 된다.
+ */
+public final class LocalizedText {
+
+    private LocalizedText() {
     }
+
+    public static String pick(boolean english, String korean, String translated) {
+        if (english && translated != null && !translated.isBlank()) {
+            return translated;
+        }
+        return korean;
+    }
+}
 ```
 
-기존 `from(entity)`는 지우지 않는다. 관리자 경로가 계속 사용한다.
+서비스에서는 이렇게 쓴다:
+
+```java
+        new BoothSummaryResponse(
+                booth.getId(),
+                LocalizedText.pick(english, booth.getName(), booth.getNameEn()),
+                LocalizedText.pick(english, booth.getDescription(), booth.getDescriptionEn()),
+                ...
+        );
+```
+
+`PubSummaryResponse.collegeName`처럼 **다른 엔티티에서 온 필드도 번역 대상이다.**
+`College`의 `nameEn`을 써서 같은 방식으로 고른다.
+
+`NoticeResponse`는 이미 Task 6에서 `from(notice, english)` 오버로드를 갖고 있다.
+그 방식은 그대로 두고, 여기서 통일하려 들지 않는다. 두 DTO 계열의 구조가 실제로 다르다.
 
 - [ ] **Step 8: 각 조회 컨트롤러에 lang 파라미터를 추가한다**
 

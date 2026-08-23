@@ -144,6 +144,11 @@ octomo:
   message-exists-path: /octomo/v1/public/message/exists
   api-key: ${OCTOMO_API_KEY:}
 
+deepl:
+  api-key: ${DEEPL_API_KEY:}
+  api-url: ${DEEPL_API_URL:}
+  glossary-name: ${DEEPL_GLOSSARY_NAME:danzzan-festival-ko-en}
+
 nhn:
   object-storage:
     endpoint: ${NHN_OBJECT_STORAGE_ENDPOINT:https://kr1-api-object-storage.nhncloudservice.com}

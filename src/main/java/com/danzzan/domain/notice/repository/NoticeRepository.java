@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 public interface NoticeRepository extends JpaRepository<Notice, Long> {
 
     Page<Notice> findByTitleContainingAndIsActiveTrue(String keyword, Pageable pageable);
@@ -56,4 +58,6 @@ public interface NoticeRepository extends JpaRepository<Notice, Long> {
     java.util.Optional<Notice> findActiveById(@Param("id") Long id);
 
     java.util.List<Notice> findByIsEmergencyTrue();
+
+    List<Notice> findTop50ByTitleEnIsNullOrContentEnIsNull();
 }

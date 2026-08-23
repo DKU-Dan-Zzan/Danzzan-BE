@@ -55,6 +55,7 @@ out/
 !scripts/add_naver_id_column.sql
 !scripts/add_advertisement_link_url.sql
 !scripts/cleanup_advertisement_columns.sql
+!scripts/add_translation_columns.sql
 *.sqlite
 *.sqlite3
 *.dump

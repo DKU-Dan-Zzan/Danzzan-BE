@@ -70,6 +70,15 @@ public class Notice {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    @Column(name = "title_en")
+    private String titleEn;
+
+    @Column(name = "content_en", columnDefinition = "TEXT")
+    private String contentEn;
+
+    @Column(name = "en_is_manual", nullable = false)
+    private boolean enIsManual = false;
+
     @PrePersist
     void createdAt() {
         this.createdAt = LocalDateTime.now();
@@ -118,5 +127,31 @@ public class Notice {
 
         notice.setIsEmergency(isEmergency != null && isEmergency);
         return notice;
+    }
+
+    /**
+     * 기계번역 결과를 반영한다.
+     * 사람이 손댄 번역(enIsManual = true)은 덮어쓰지 않는다.
+     * null 값은 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
+     */
+    public void applyTranslation(String titleEn, String contentEn) {
+        if (this.enIsManual) {
+            return;
+        }
+        if (titleEn != null) {
+            this.titleEn = titleEn;
+        }
+        if (contentEn != null) {
+            this.contentEn = contentEn;
+        }
+    }
+
+    /**
+     * 관리자가 직접 입력한 번역을 반영하고 수동 플래그를 켠다.
+     */
+    public void applyManualTranslation(String titleEn, String contentEn) {
+        this.titleEn = titleEn;
+        this.contentEn = contentEn;
+        this.enIsManual = true;
     }
 }

@@ -59,7 +59,7 @@ class TranslationBackfillServiceTest {
     void 부스는_이미_채워진_이름은_빈_문자열로_번역을_요청하고_빈_설명만_한국어_원문을_보낸다() {
         Booth booth = untranslatedBooth();
         booth.applyTranslation("Experience Booth", null);
-        when(boothRepository.findTop50ByNameEnIsNullOrDescriptionEnIsNull())
+        when(boothRepository.findNeedingTranslation(any()))
                 .thenReturn(List.of(booth));
         when(translationService.translateAll(any()))
                 .thenReturn(List.of("Experience Booth", "Booth Description"));
@@ -74,7 +74,7 @@ class TranslationBackfillServiceTest {
     @Test
     void 번역이_모두_실패하면_backfillAll은_0을_반환한다() {
         Booth booth = untranslatedBooth();
-        when(boothRepository.findTop50ByNameEnIsNullOrDescriptionEnIsNull())
+        when(boothRepository.findNeedingTranslation(any()))
                 .thenReturn(List.of(booth));
         when(translationService.translateAll(any()))
                 .thenReturn(Arrays.asList(null, null));

@@ -9,6 +9,7 @@ import com.danzzan.domain.timetable.repository.PerformanceRepository;
 import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,8 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class TranslationBackfillService {
+
+    private static final int BATCH_SIZE = 50;
 
     private final NoticeTranslationBackfillService noticeBackfillService;
     private final BoothRepository boothRepository;
@@ -33,7 +36,7 @@ public class TranslationBackfillService {
     public int backfillAll() {
         int filled = noticeBackfillService.backfill();
 
-        for (var booth : boothRepository.findTop50ByNameEnIsNullOrDescriptionEnIsNull()) {
+        for (var booth : boothRepository.findNeedingTranslation(PageRequest.of(0, BATCH_SIZE))) {
             boolean nameWasBlank = booth.getNameEn() == null;
             boolean descriptionWasBlank = booth.getDescriptionEn() == null;
 
@@ -48,8 +51,7 @@ public class TranslationBackfillService {
             }
         }
 
-        for (var pub : pubRepository
-                .findTop50ByNameEnIsNullOrIntroEnIsNullOrDescriptionEnIsNullOrDepartmentEnIsNull()) {
+        for (var pub : pubRepository.findNeedingTranslation(PageRequest.of(0, BATCH_SIZE))) {
             boolean nameWasBlank = pub.getNameEn() == null;
             boolean introWasBlank = pub.getIntroEn() == null;
             boolean descriptionWasBlank = pub.getDescriptionEn() == null;
@@ -78,7 +80,7 @@ public class TranslationBackfillService {
             }
         }
 
-        for (var artist : artistRepository.findTop50ByNameEnIsNullOrDescriptionEnIsNull()) {
+        for (var artist : artistRepository.findNeedingTranslation(PageRequest.of(0, BATCH_SIZE))) {
             boolean nameWasBlank = artist.getNameEn() == null;
             boolean descriptionWasBlank = artist.getDescriptionEn() == null;
 
@@ -93,7 +95,7 @@ public class TranslationBackfillService {
             }
         }
 
-        for (var performance : performanceRepository.findTop50ByStageEnIsNull()) {
+        for (var performance : performanceRepository.findNeedingTranslation(PageRequest.of(0, BATCH_SIZE))) {
             boolean stageWasBlank = performance.getStageEn() == null;
             performance.applyTranslation(translationService.translate(performance.getStage()));
             if (stageWasBlank && performance.getStageEn() != null) {

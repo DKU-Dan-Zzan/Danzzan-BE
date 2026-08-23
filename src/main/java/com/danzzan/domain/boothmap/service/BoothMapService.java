@@ -12,6 +12,7 @@ import com.danzzan.domain.boothmap.model.entity.College;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
 import com.danzzan.domain.boothmap.repository.CollegeRepository;
+import com.danzzan.infra.translation.LocalizedText;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +32,7 @@ public class BoothMapService {
     private final BoothRepository boothRepository;
     private final BoothOperationRepository boothOperationRepository;
 
-    public BoothMapResponse getBoothMap(LocalDate operationDate) {
+    public BoothMapResponse getBoothMap(LocalDate operationDate, boolean english) {
         List<College> colleges = collegeRepository.findAll();
 
         List<BoothOperation> boothOperations = (operationDate == null)
@@ -50,7 +51,7 @@ public class BoothMapService {
         List<CollegeMapItemResponse> collegeDtos = colleges.stream()
                 .map(college -> new CollegeMapItemResponse(
                         college.getId(),
-                        college.getName(),
+                        LocalizedText.pick(english, college.getName(), college.getNameEn()),
                         college.getLocationX(),
                         college.getLocationY()
                 ))
@@ -62,7 +63,7 @@ public class BoothMapService {
                     BoothOperation boothOperation = boothOperationMap.get(booth.getId());
                     return new BoothMapItemResponse(
                             booth.getId(),
-                            booth.getName(),
+                            LocalizedText.pick(english, booth.getName(), booth.getNameEn()),
                             booth.getType(),
                             BoothSubType.resolve(booth),
                             booth.getLocationX(),

@@ -10,6 +10,7 @@ import com.danzzan.domain.timetable.repository.ArtistRepository;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
 import com.danzzan.infra.s3.S3PresignService;
 import com.danzzan.infra.s3.S3PresignedPutResult;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,7 @@ public class AdminArtistService {
     private final ArtistRepository artistRepository;
     private final PerformanceRepository performanceRepository;
     private final S3PresignService s3PresignService;
+    private final TranslationService translationService;
 
     @Transactional(readOnly = true)
     public List<AdminArtistResponse> getArtists() {
@@ -42,6 +44,15 @@ public class AdminArtistService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아티스트 이름을 입력해 주세요.");
         }
         Artist artist = Artist.create(name, trimToNull(request.getDescription()), trimToNull(request.getImageUrl()));
+
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        artist.getName() == null ? "" : artist.getName(),
+                        artist.getDescription() == null ? "" : artist.getDescription()
+                )
+        );
+        artist.applyTranslation(translated.get(0), translated.get(1));
+
         Artist saved = artistRepository.save(artist);
         return AdminArtistResponse.from(saved);
     }
@@ -55,11 +66,29 @@ public class AdminArtistService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아티스트 이름을 입력해 주세요.");
         }
         String description = request.getDescription();
+
+        String previousName = artist.getName();
+        String previousDescription = artist.getDescription();
+
         artist.updateProfile(trimmedName, description);
 
         if (request.getImageUrl() != null) {
             String trimmed = request.getImageUrl().trim();
             artist.changeImageUrl(trimmed.isEmpty() ? null : trimmed);
+        }
+
+        boolean koreanChanged =
+                !java.util.Objects.equals(previousName, artist.getName())
+                        || !java.util.Objects.equals(previousDescription, artist.getDescription());
+
+        if (koreanChanged) {
+            List<String> retranslated = translationService.translateAll(
+                    List.of(
+                            artist.getName() == null ? "" : artist.getName(),
+                            artist.getDescription() == null ? "" : artist.getDescription()
+                    )
+            );
+            artist.applyTranslation(retranslated.get(0), retranslated.get(1));
         }
 
         return AdminArtistResponse.from(artist);

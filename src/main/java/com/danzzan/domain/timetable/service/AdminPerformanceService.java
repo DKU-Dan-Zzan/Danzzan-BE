@@ -8,6 +8,7 @@ import com.danzzan.domain.timetable.model.entity.Artist;
 import com.danzzan.domain.timetable.model.entity.Performance;
 import com.danzzan.domain.timetable.repository.ArtistRepository;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class AdminPerformanceService {
 
     private final PerformanceRepository performanceRepository;
     private final ArtistRepository artistRepository;
+    private final TranslationService translationService;
 
     @Transactional(readOnly = true)
     public AdminPerformanceListResponse getPerformancesByDate(LocalDate date) {
@@ -46,6 +48,10 @@ public class AdminPerformanceService {
                 artist,
                 trimToNull(request.getStage())
         );
+
+        String translatedStage = translationService.translate(performance.getStage());
+        performance.applyTranslation(translatedStage);
+
         Performance saved = performanceRepository.save(performance);
         return AdminPerformanceResponse.from(saved);
     }
@@ -70,6 +76,8 @@ public class AdminPerformanceService {
                 ? trimToNull(request.getStage())
                 : performance.getStage();
 
+        String previousStage = performance.getStage();
+
         performance.update(
                 request.getPerformanceDate(),
                 request.getStartTime(),
@@ -77,6 +85,12 @@ public class AdminPerformanceService {
                 artist,
                 stage
         );
+
+        if (!java.util.Objects.equals(previousStage, performance.getStage())) {
+            String translatedStage = translationService.translate(performance.getStage());
+            performance.applyTranslation(translatedStage);
+        }
+
         return AdminPerformanceResponse.from(performance);
     }
 

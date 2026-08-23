@@ -32,6 +32,7 @@ import com.danzzan.infra.s3.S3PresignService;
 import com.danzzan.infra.s3.S3PresignedPutResult;
 import com.danzzan.infra.s3.S3UploadResult;
 import com.danzzan.infra.s3.S3Uploader;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +62,7 @@ public class AdminBoothManagementService {
     private final PubOperationRepository pubOperationRepository;
     private final S3PresignService s3PresignService;
     private final S3Uploader s3Uploader;
+    private final TranslationService translationService;
 
     public AdminBoothManagementResponse getBoothManagement(LocalDate operationDate) {
         List<Booth> booths = boothRepository.findAll();
@@ -160,6 +162,17 @@ public class AdminBoothManagementService {
                 normalizeNullableText(request.getInstagram())
         );
         pub.replaceDisplayDays(displayOperations);
+
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        pub.getName() == null ? "" : pub.getName(),
+                        pub.getIntro() == null ? "" : pub.getIntro(),
+                        pub.getDescription() == null ? "" : pub.getDescription(),
+                        pub.getDepartment() == null ? "" : pub.getDepartment()
+                )
+        );
+        pub.applyTranslation(translated.get(0), translated.get(1), translated.get(2), translated.get(3));
+
         return pubRepository.save(pub).getId();
     }
 
@@ -173,18 +186,28 @@ public class AdminBoothManagementService {
         }
         validateSupportedOperationDates(distinctOperationDates);
 
-        Booth booth = boothRepository.save(new Booth(
+        Booth booth = new Booth(
                 normalizeRequiredText(request.getName(), ""),
                 request.getType(),
                 request.getType() == BoothType.FOOD_TRUCK ? normalizeNullableText(request.getDescription()) : null,
                 null,
                 null,
                 null
-        ));
+        );
+
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        booth.getName() == null ? "" : booth.getName(),
+                        booth.getDescription() == null ? "" : booth.getDescription()
+                )
+        );
+        booth.applyTranslation(translated.get(0), translated.get(1));
+
+        Booth savedBooth = boothRepository.save(booth);
 
         List<BoothOperation> operations = distinctOperationDates.stream()
                 .map(operationDate -> new BoothOperation(
-                        booth,
+                        savedBooth,
                         operationDate,
                         request.getOperationStatus(),
                         request.getStartTime(),
@@ -193,7 +216,7 @@ public class AdminBoothManagementService {
                 .toList();
         boothOperationRepository.saveAll(operations);
 
-        return booth.getId();
+        return savedBooth.getId();
     }
 
     public List<AdminPubImageResponse> getPubImages(Long pubId) {
@@ -237,11 +260,28 @@ public class AdminBoothManagementService {
         }
         validateSupportedOperationDates(requestedOperationDates);
 
+        String previousName = booth.getName();
+        String previousDescription = booth.getDescription();
+
         String nextName = normalizeRequiredText(request.getName(), booth.getName());
         String nextDescription = booth.getType() == BoothType.FOOD_TRUCK
                 ? normalizeNullableText(request.getDescription())
                 : booth.getDescription();
         booth.updateAdminInfo(nextName, nextDescription);
+
+        boolean koreanChanged =
+                !java.util.Objects.equals(previousName, booth.getName())
+                        || !java.util.Objects.equals(previousDescription, booth.getDescription());
+
+        if (koreanChanged) {
+            List<String> retranslated = translationService.translateAll(
+                    List.of(
+                            booth.getName() == null ? "" : booth.getName(),
+                            booth.getDescription() == null ? "" : booth.getDescription()
+                    )
+            );
+            booth.applyTranslation(retranslated.get(0), retranslated.get(1));
+        }
 
         List<BoothOperation> existingOperations = boothOperationRepository.findAllByBoothIdInOrderByOperationDateAsc(List.of(boothId));
         Map<LocalDate, BoothOperation> existingOperationByDate = existingOperations.stream()
@@ -284,6 +324,11 @@ public class AdminBoothManagementService {
                 .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??"));
         List<PubOperation> displayOperations = resolveDisplayOperations(request.getDisplayOperationIds());
 
+        String previousName = pub.getName();
+        String previousIntro = pub.getIntro();
+        String previousDescription = pub.getDescription();
+        String previousDepartment = pub.getDepartment();
+
         pub.updateAdminInfo(
                 normalizeRequiredText(request.getName(), pub.getName()),
                 normalizeNullableText(request.getIntro()),
@@ -291,6 +336,24 @@ public class AdminBoothManagementService {
                 normalizeNullableText(request.getInstagram())
         );
         pub.replaceDisplayDays(displayOperations);
+
+        boolean koreanChanged =
+                !java.util.Objects.equals(previousName, pub.getName())
+                        || !java.util.Objects.equals(previousIntro, pub.getIntro())
+                        || !java.util.Objects.equals(previousDescription, pub.getDescription())
+                        || !java.util.Objects.equals(previousDepartment, pub.getDepartment());
+
+        if (koreanChanged) {
+            List<String> retranslated = translationService.translateAll(
+                    List.of(
+                            pub.getName() == null ? "" : pub.getName(),
+                            pub.getIntro() == null ? "" : pub.getIntro(),
+                            pub.getDescription() == null ? "" : pub.getDescription(),
+                            pub.getDepartment() == null ? "" : pub.getDepartment()
+                    )
+            );
+            pub.applyTranslation(retranslated.get(0), retranslated.get(1), retranslated.get(2), retranslated.get(3));
+        }
     }
 
     @Transactional

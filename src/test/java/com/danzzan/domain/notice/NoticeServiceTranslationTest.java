@@ -1,6 +1,7 @@
 package com.danzzan.domain.notice;
 
 import com.danzzan.domain.notice.dto.request.CreateNoticeRequest;
+import com.danzzan.domain.notice.dto.request.UpdateNoticeRequest;
 import com.danzzan.domain.notice.entity.Notice;
 import com.danzzan.domain.notice.repository.NoticeRepository;
 import com.danzzan.domain.notice.service.NoticeService;
@@ -14,10 +15,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -74,5 +77,59 @@ class NoticeServiceTranslationTest {
 
         assertEquals("우천 안내", captor.getValue().getTitle());
         assertNull(captor.getValue().getTitleEn());
+    }
+
+    private Notice existingNotice() {
+        return Notice.create(
+                "우천 안내",
+                "야외 부스 운영이 중단될 수 있습니다.",
+                "총학생회",
+                "GENERAL",
+                false,
+                null,
+                List.of(),
+                false
+        );
+    }
+
+    private UpdateNoticeRequest updateRequest(String title, String content) {
+        UpdateNoticeRequest request = new UpdateNoticeRequest();
+        request.setTitle(title);
+        request.setContent(content);
+        request.setAuthor("총학생회");
+        request.setCategory("GENERAL");
+        request.setIsPinned(false);
+        request.setImages(List.of());
+        return request;
+    }
+
+    @Test
+    void 한국어가_바뀌면_재번역한다() {
+        Notice notice = existingNotice();
+        when(noticeRepository.findById(1L)).thenReturn(Optional.of(notice));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Sunny notice", "Outdoor booths will resume."));
+        when(noticeRepository.save(any(Notice.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        noticeService.update(1L, updateRequest("맑음 안내", "야외 부스 운영이 재개됩니다."));
+
+        verify(translationService).translateAll(any());
+        ArgumentCaptor<Notice> captor = ArgumentCaptor.forClass(Notice.class);
+        verify(noticeRepository).save(captor.capture());
+        assertEquals("Sunny notice", captor.getValue().getTitleEn());
+        assertEquals("Outdoor booths will resume.", captor.getValue().getContentEn());
+    }
+
+    @Test
+    void 한국어가_바뀌지_않으면_재번역하지_않는다() {
+        Notice notice = existingNotice();
+        when(noticeRepository.findById(1L)).thenReturn(Optional.of(notice));
+        when(noticeRepository.save(any(Notice.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        noticeService.update(1L, updateRequest("우천 안내", "야외 부스 운영이 중단될 수 있습니다."));
+
+        verify(translationService, never()).translateAll(any());
     }
 }

@@ -7,6 +7,7 @@ import com.danzzan.domain.boothmap.model.entity.BoothOperationStatus;
 import com.danzzan.domain.boothmap.repository.BoothOperationRepository;
 import com.danzzan.domain.boothmap.repository.BoothRepository;
 import com.danzzan.domain.boothmap.util.ThumbnailUrlResolver;
+import com.danzzan.infra.translation.LocalizedText;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +22,7 @@ public class BoothService {
     private final BoothRepository boothRepository;
     private final BoothOperationRepository boothOperationRepository;
 
-    public BoothSummaryResponse getBoothSummary(Long boothId, LocalDate operationDate) {
+    public BoothSummaryResponse getBoothSummary(Long boothId, LocalDate operationDate, boolean english) {
         Booth booth = boothRepository.findById(boothId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 부스를 찾을 수 없습니다. id=" + boothId));
         BoothOperation boothOperation = (operationDate == null)
@@ -30,8 +31,8 @@ public class BoothService {
 
         return new BoothSummaryResponse(
                 booth.getId(),
-                booth.getName(),
-                booth.getDescription(),
+                LocalizedText.pick(english, booth.getName(), booth.getNameEn()),
+                LocalizedText.pick(english, booth.getDescription(), booth.getDescriptionEn()),
                 booth.getImageUrl(),
                 ThumbnailUrlResolver.toThumbnailUrl(booth.getImageUrl()),
                 boothOperation != null ? boothOperation.getOperationStatus() : BoothOperationStatus.UNKNOWN,

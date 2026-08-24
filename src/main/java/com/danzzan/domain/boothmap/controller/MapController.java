@@ -83,9 +83,11 @@ public class MapController {
     public BoothMapResponse getBoothMap(
             @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "표시 언어 (ko|en)", example = "en")
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang
     ) {
-        return boothMapService.getBoothMap(date);
+        return boothMapService.getBoothMap(date, "en".equalsIgnoreCase(lang));
     }
 
     @GetMapping("/booths/{boothId}")
@@ -97,9 +99,11 @@ public class MapController {
             @NotNull @PathVariable Long boothId,
             @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "표시 언어 (ko|en)", example = "en")
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang
     ) {
-        return boothService.getBoothSummary(boothId, date);
+        return boothService.getBoothSummary(boothId, date, "en".equalsIgnoreCase(lang));
     }
 
     @GetMapping("/pubs")
@@ -120,9 +124,11 @@ public class MapController {
     public List<PubSummaryResponse> getPubs(
             @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "표시 언어 (ko|en)", example = "en")
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang
     ) {
-        return pubService.getPubs(date);
+        return pubService.getPubs(date, "en".equalsIgnoreCase(lang));
     }
 
     @GetMapping("/pubs/{pubId}")
@@ -134,8 +140,10 @@ public class MapController {
             @NotNull @PathVariable Long pubId,
             @Parameter(description = "조회할 축제 날짜", example = "2026-05-20")
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "표시 언어 (ko|en)", example = "en")
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang
     ) {
-        return pubService.getPubDetail(pubId, date);
+        return pubService.getPubDetail(pubId, date, "en".equalsIgnoreCase(lang));
     }
 }

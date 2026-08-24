@@ -27,6 +27,12 @@ public class EmergencyNotice {
     @Column(nullable = false)
     private Boolean isActive = false;
 
+    @Column(name = "message_en", columnDefinition = "VARCHAR(500)")
+    private String messageEn;
+
+    @Column(name = "en_is_manual", nullable = false)
+    private boolean enIsManual = false;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
     @Column(name = "updated_at")

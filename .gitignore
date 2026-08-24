@@ -8,6 +8,7 @@ build/
 
 ### application.yml ###
 src/main/resources/application-dev.yml
+src/main/resources/application-local.yml
 *.pem
 
 ### Docker / env ###
@@ -54,6 +55,8 @@ out/
 !scripts/add_naver_id_column.sql
 !scripts/add_advertisement_link_url.sql
 !scripts/cleanup_advertisement_columns.sql
+!scripts/add_translation_columns.sql
+!scripts/seed_local_fall_festival.sql
 *.sqlite
 *.sqlite3
 *.dump
@@ -71,3 +74,4 @@ k6-test/tokens*.json
 /docs/ticketing-db-integrity-issue-1.md
 /docs/member-withdrawal-schema.md
 /docs/member-withdrawal-account-e2e-scenarios.md
+.superpowers/

@@ -1,6 +1,7 @@
 package com.danzzan.domain.notice.dto.response;
 
 import com.danzzan.domain.notice.entity.Notice;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -35,6 +36,18 @@ public class NoticeResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    /**
+     * 관리자가 직접 입력했거나 기계번역으로 채워진 영문 제목/본문.
+     * 관리자 응답(from(Notice))에서만 채워지며,
+     * 공개 API(from(Notice, boolean))에서는 null로 비워 응답 JSON에서 아예 제외된다.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String titleEn;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String contentEn;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean enIsManual;
+
     public static NoticeResponse from(Notice notice) {
         NoticeResponse res = new NoticeResponse();
         res.id = notice.getId();
@@ -53,6 +66,30 @@ public class NoticeResponse {
         }
         res.createdAt = notice.getCreatedAt();
         res.updatedAt = notice.getUpdatedAt();
+        res.titleEn = notice.getTitleEn();
+        res.contentEn = notice.getContentEn();
+        res.enIsManual = notice.isEnIsManual();
+        return res;
+    }
+
+    /**
+     * 언어에 따라 값을 골라 담는다. 필드명은 바뀌지 않는다.
+     * 영문이 비어 있으면 한국어로 폴백한다.
+     * 공개 API 응답이므로 관리자 전용 영문 필드(titleEn/contentEn/enIsManual)는 노출하지 않는다.
+     */
+    public static NoticeResponse from(Notice notice, boolean english) {
+        NoticeResponse res = from(notice);
+        if (english) {
+            if (notice.getTitleEn() != null && !notice.getTitleEn().isBlank()) {
+                res.title = notice.getTitleEn();
+            }
+            if (notice.getContentEn() != null && !notice.getContentEn().isBlank()) {
+                res.content = notice.getContentEn();
+            }
+        }
+        res.titleEn = null;
+        res.contentEn = null;
+        res.enIsManual = null;
         return res;
     }
 }

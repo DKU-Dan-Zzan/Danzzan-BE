@@ -10,6 +10,8 @@ import com.danzzan.domain.timetable.repository.ArtistRepository;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
 import com.danzzan.infra.s3.S3PresignService;
 import com.danzzan.infra.s3.S3PresignedPutResult;
+import com.danzzan.infra.translation.FieldTranslationDecision;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -26,6 +28,7 @@ public class AdminArtistService {
     private final ArtistRepository artistRepository;
     private final PerformanceRepository performanceRepository;
     private final S3PresignService s3PresignService;
+    private final TranslationService translationService;
 
     @Transactional(readOnly = true)
     public List<AdminArtistResponse> getArtists() {
@@ -42,6 +45,26 @@ public class AdminArtistService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아티스트 이름을 입력해 주세요.");
         }
         Artist artist = Artist.create(name, trimToNull(request.getDescription()), trimToNull(request.getImageUrl()));
+
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        artist.getName() == null ? "" : artist.getName(),
+                        artist.getDescription() == null ? "" : artist.getDescription()
+                )
+        );
+
+        // 생성 시에는 한국어가 늘 "새로 생겼다"고 보고(항상 변경), 저장된 영문은 늘 없다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                true, request.getNameEn(), artist.getNameEn(), translated.get(0));
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                true, request.getDescriptionEn(), artist.getDescriptionEn(), translated.get(1));
+
+        if (hasManualArtistInput(request.getNameEn(), request.getDescriptionEn())) {
+            artist.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            artist.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
+        }
+
         Artist saved = artistRepository.save(artist);
         return AdminArtistResponse.from(saved);
     }
@@ -55,11 +78,45 @@ public class AdminArtistService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "아티스트 이름을 입력해 주세요.");
         }
         String description = request.getDescription();
+
+        String previousName = artist.getName();
+        String previousDescription = artist.getDescription();
+
         artist.updateProfile(trimmedName, description);
 
         if (request.getImageUrl() != null) {
             String trimmed = request.getImageUrl().trim();
             artist.changeImageUrl(trimmed.isEmpty() ? null : trimmed);
+        }
+
+        boolean nameKoreanChanged = !java.util.Objects.equals(previousName, artist.getName());
+        boolean descriptionKoreanChanged = !java.util.Objects.equals(previousDescription, artist.getDescription());
+        boolean koreanChanged = nameKoreanChanged || descriptionKoreanChanged;
+
+        // 한국어가 바뀐 경우에 한해 자동 재번역한다 (koreanChanged 가드 유지).
+        String autoNameEn = null;
+        String autoDescriptionEn = null;
+        if (koreanChanged) {
+            List<String> retranslated = translationService.translateAll(
+                    List.of(
+                            artist.getName() == null ? "" : artist.getName(),
+                            artist.getDescription() == null ? "" : artist.getDescription()
+                    )
+            );
+            autoNameEn = retranslated.get(0);
+            autoDescriptionEn = retranslated.get(1);
+        }
+
+        // 지우기 → 자동 채움 → 수동 값 덮어쓰기, 이 세 단계의 순서가 곧 정답이다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                nameKoreanChanged, request.getNameEn(), artist.getNameEn(), autoNameEn);
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                descriptionKoreanChanged, request.getDescriptionEn(), artist.getDescriptionEn(), autoDescriptionEn);
+
+        if (hasManualArtistInput(request.getNameEn(), request.getDescriptionEn())) {
+            artist.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            artist.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
         }
 
         return AdminArtistResponse.from(artist);
@@ -106,5 +163,9 @@ public class AdminArtistService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean hasManualArtistInput(String nameEn, String descriptionEn) {
+        return FieldTranslationDecision.isSupplied(nameEn) || FieldTranslationDecision.isSupplied(descriptionEn);
     }
 }

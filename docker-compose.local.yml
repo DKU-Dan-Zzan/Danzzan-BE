@@ -1,0 +1,50 @@
+# 가을 축제 로컬 전체 스택.
+# 실행: docker compose -f docker-compose.local.yml up -d --build
+
+services:
+  fe:
+    build:
+      context: ../Danzzan-FE
+      dockerfile: Dockerfile
+    container_name: danzzan-fe
+    ports:
+      - "5173:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  app:
+    extends:
+      file: ./docker-compose.yml
+      service: app
+    environment:
+      # docker-compose.yml의 기본 SPRING_PROFILES_ACTIVE=dev는 BE를 로컬(bootRun)에서
+      # 실행할 때(127.0.0.1로 mysql/redis/kafka에 접속)를 위한 프로필이라 컨테이너 간
+      # 네트워킹에서는 즉시 Connection refused가 난다. prod 프로필만 DB_URL/REDIS_HOST/
+      # KAFKA_BOOTSTRAP_SERVERS 등 컨테이너 환경변수를 실제로 사용하므로 여기서 덮어쓴다.
+      SPRING_PROFILES_ACTIVE: prod
+
+  mysql:
+    extends:
+      file: ./docker-compose.yml
+      service: mysql
+
+  redis:
+    extends:
+      file: ./docker-compose.yml
+      service: redis
+
+  kafka:
+    extends:
+      file: ./docker-compose.yml
+      service: kafka
+
+  kafka-init:
+    extends:
+      file: ./docker-compose.yml
+      service: kafka-init
+
+volumes:
+  mysql_data:
+  redis_data:
+  kafka_data:

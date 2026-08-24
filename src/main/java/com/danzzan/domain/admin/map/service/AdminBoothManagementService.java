@@ -32,6 +32,8 @@ import com.danzzan.infra.s3.S3PresignService;
 import com.danzzan.infra.s3.S3PresignedPutResult;
 import com.danzzan.infra.s3.S3UploadResult;
 import com.danzzan.infra.s3.S3Uploader;
+import com.danzzan.infra.translation.FieldTranslationDecision;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +63,7 @@ public class AdminBoothManagementService {
     private final PubOperationRepository pubOperationRepository;
     private final S3PresignService s3PresignService;
     private final S3Uploader s3Uploader;
+    private final TranslationService translationService;
 
     public AdminBoothManagementResponse getBoothManagement(LocalDate operationDate) {
         List<Booth> booths = boothRepository.findAll();
@@ -107,7 +110,10 @@ public class AdminBoothManagementService {
                             boothOperations.stream()
                                     .map(BoothOperation::getOperationDate)
                                     .map(LocalDate::toString)
-                                    .toList()
+                                    .toList(),
+                            booth.getNameEn(),
+                            booth.getDescriptionEn(),
+                            booth.isEnIsManual()
                     );
                 })
                 .toList();
@@ -129,7 +135,12 @@ public class AdminBoothManagementService {
                                 .map(PubOperation::getId)
                                 .distinct()
                                 .sorted()
-                                .toList()
+                                .toList(),
+                        pub.getNameEn(),
+                        pub.getIntroEn(),
+                        pub.getDescriptionEn(),
+                        pub.getDepartmentEn(),
+                        pub.isEnIsManual()
                 ))
                 .toList();
 
@@ -160,6 +171,32 @@ public class AdminBoothManagementService {
                 normalizeNullableText(request.getInstagram())
         );
         pub.replaceDisplayDays(displayOperations);
+
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        pub.getName() == null ? "" : pub.getName(),
+                        pub.getIntro() == null ? "" : pub.getIntro(),
+                        pub.getDescription() == null ? "" : pub.getDescription(),
+                        pub.getDepartment() == null ? "" : pub.getDepartment()
+                )
+        );
+
+        // 생성 시에는 한국어가 늘 "새로 생겼다"고 보고(항상 변경), 저장된 영문은 늘 없다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                true, request.getNameEn(), pub.getNameEn(), translated.get(0));
+        String decidedIntroEn = FieldTranslationDecision.decideEnglish(
+                true, request.getIntroEn(), pub.getIntroEn(), translated.get(1));
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                true, request.getDescriptionEn(), pub.getDescriptionEn(), translated.get(2));
+        String decidedDepartmentEn = FieldTranslationDecision.decideEnglish(
+                true, request.getDepartmentEn(), pub.getDepartmentEn(), translated.get(3));
+
+        if (hasManualPubInput(request.getNameEn(), request.getIntroEn(), request.getDescriptionEn(), request.getDepartmentEn())) {
+            pub.applyManualTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        } else {
+            pub.applyDecidedTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        }
+
         return pubRepository.save(pub).getId();
     }
 
@@ -173,18 +210,39 @@ public class AdminBoothManagementService {
         }
         validateSupportedOperationDates(distinctOperationDates);
 
-        Booth booth = boothRepository.save(new Booth(
+        Booth booth = new Booth(
                 normalizeRequiredText(request.getName(), ""),
                 request.getType(),
                 request.getType() == BoothType.FOOD_TRUCK ? normalizeNullableText(request.getDescription()) : null,
                 null,
                 null,
                 null
-        ));
+        );
+
+        List<String> translated = translationService.translateAll(
+                List.of(
+                        booth.getName() == null ? "" : booth.getName(),
+                        booth.getDescription() == null ? "" : booth.getDescription()
+                )
+        );
+
+        // 생성 시에는 한국어가 늘 "새로 생겼다"고 보고(항상 변경), 저장된 영문은 늘 없다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                true, request.getNameEn(), booth.getNameEn(), translated.get(0));
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                true, request.getDescriptionEn(), booth.getDescriptionEn(), translated.get(1));
+
+        if (hasManualBoothInput(request.getNameEn(), request.getDescriptionEn())) {
+            booth.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            booth.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
+        }
+
+        Booth savedBooth = boothRepository.save(booth);
 
         List<BoothOperation> operations = distinctOperationDates.stream()
                 .map(operationDate -> new BoothOperation(
-                        booth,
+                        savedBooth,
                         operationDate,
                         request.getOperationStatus(),
                         request.getStartTime(),
@@ -193,7 +251,7 @@ public class AdminBoothManagementService {
                 .toList();
         boothOperationRepository.saveAll(operations);
 
-        return booth.getId();
+        return savedBooth.getId();
     }
 
     public List<AdminPubImageResponse> getPubImages(Long pubId) {
@@ -237,11 +295,44 @@ public class AdminBoothManagementService {
         }
         validateSupportedOperationDates(requestedOperationDates);
 
+        String previousName = booth.getName();
+        String previousDescription = booth.getDescription();
+
         String nextName = normalizeRequiredText(request.getName(), booth.getName());
         String nextDescription = booth.getType() == BoothType.FOOD_TRUCK
                 ? normalizeNullableText(request.getDescription())
                 : booth.getDescription();
         booth.updateAdminInfo(nextName, nextDescription);
+
+        boolean nameKoreanChanged = !java.util.Objects.equals(previousName, booth.getName());
+        boolean descriptionKoreanChanged = !java.util.Objects.equals(previousDescription, booth.getDescription());
+        boolean koreanChanged = nameKoreanChanged || descriptionKoreanChanged;
+
+        // 한국어가 바뀐 경우에 한해 자동 재번역한다 (koreanChanged 가드 유지).
+        String autoNameEn = null;
+        String autoDescriptionEn = null;
+        if (koreanChanged) {
+            List<String> retranslated = translationService.translateAll(
+                    List.of(
+                            booth.getName() == null ? "" : booth.getName(),
+                            booth.getDescription() == null ? "" : booth.getDescription()
+                    )
+            );
+            autoNameEn = retranslated.get(0);
+            autoDescriptionEn = retranslated.get(1);
+        }
+
+        // 지우기 → 자동 채움 → 수동 값 덮어쓰기, 이 세 단계의 순서가 곧 정답이다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                nameKoreanChanged, request.getNameEn(), booth.getNameEn(), autoNameEn);
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                descriptionKoreanChanged, request.getDescriptionEn(), booth.getDescriptionEn(), autoDescriptionEn);
+
+        if (hasManualBoothInput(request.getNameEn(), request.getDescriptionEn())) {
+            booth.applyManualTranslation(decidedNameEn, decidedDescriptionEn);
+        } else {
+            booth.applyDecidedTranslation(decidedNameEn, decidedDescriptionEn);
+        }
 
         List<BoothOperation> existingOperations = boothOperationRepository.findAllByBoothIdInOrderByOperationDateAsc(List.of(boothId));
         Map<LocalDate, BoothOperation> existingOperationByDate = existingOperations.stream()
@@ -284,6 +375,11 @@ public class AdminBoothManagementService {
                 .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 二쇱젏?낅땲??"));
         List<PubOperation> displayOperations = resolveDisplayOperations(request.getDisplayOperationIds());
 
+        String previousName = pub.getName();
+        String previousIntro = pub.getIntro();
+        String previousDescription = pub.getDescription();
+        String previousDepartment = pub.getDepartment();
+
         pub.updateAdminInfo(
                 normalizeRequiredText(request.getName(), pub.getName()),
                 normalizeNullableText(request.getIntro()),
@@ -291,6 +387,51 @@ public class AdminBoothManagementService {
                 normalizeNullableText(request.getInstagram())
         );
         pub.replaceDisplayDays(displayOperations);
+
+        // department는 UpdateAdminPubRequest에 한국어 필드 자체가 없어(수정 불가) updateAdminInfo가
+        // 건드리지 않으므로 이 값은 구조적으로 항상 false다. 그래도 다른 필드와 동일한 형태로 계산해
+        // 남겨둔다 (아래 리포트에 이유를 적음).
+        boolean nameKoreanChanged = !java.util.Objects.equals(previousName, pub.getName());
+        boolean introKoreanChanged = !java.util.Objects.equals(previousIntro, pub.getIntro());
+        boolean descriptionKoreanChanged = !java.util.Objects.equals(previousDescription, pub.getDescription());
+        boolean departmentKoreanChanged = !java.util.Objects.equals(previousDepartment, pub.getDepartment());
+        boolean koreanChanged = nameKoreanChanged || introKoreanChanged || descriptionKoreanChanged || departmentKoreanChanged;
+
+        // 한국어가 바뀐 경우에 한해 자동 재번역한다 (koreanChanged 가드 유지).
+        String autoNameEn = null;
+        String autoIntroEn = null;
+        String autoDescriptionEn = null;
+        String autoDepartmentEn = null;
+        if (koreanChanged) {
+            List<String> retranslated = translationService.translateAll(
+                    List.of(
+                            pub.getName() == null ? "" : pub.getName(),
+                            pub.getIntro() == null ? "" : pub.getIntro(),
+                            pub.getDescription() == null ? "" : pub.getDescription(),
+                            pub.getDepartment() == null ? "" : pub.getDepartment()
+                    )
+            );
+            autoNameEn = retranslated.get(0);
+            autoIntroEn = retranslated.get(1);
+            autoDescriptionEn = retranslated.get(2);
+            autoDepartmentEn = retranslated.get(3);
+        }
+
+        // 지우기 → 자동 채움 → 수동 값 덮어쓰기, 이 세 단계의 순서가 곧 정답이다.
+        String decidedNameEn = FieldTranslationDecision.decideEnglish(
+                nameKoreanChanged, request.getNameEn(), pub.getNameEn(), autoNameEn);
+        String decidedIntroEn = FieldTranslationDecision.decideEnglish(
+                introKoreanChanged, request.getIntroEn(), pub.getIntroEn(), autoIntroEn);
+        String decidedDescriptionEn = FieldTranslationDecision.decideEnglish(
+                descriptionKoreanChanged, request.getDescriptionEn(), pub.getDescriptionEn(), autoDescriptionEn);
+        String decidedDepartmentEn = FieldTranslationDecision.decideEnglish(
+                departmentKoreanChanged, request.getDepartmentEn(), pub.getDepartmentEn(), autoDepartmentEn);
+
+        if (hasManualPubInput(request.getNameEn(), request.getIntroEn(), request.getDescriptionEn(), request.getDepartmentEn())) {
+            pub.applyManualTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        } else {
+            pub.applyDecidedTranslation(decidedNameEn, decidedIntroEn, decidedDescriptionEn, decidedDepartmentEn);
+        }
     }
 
     @Transactional
@@ -487,6 +628,17 @@ public class AdminBoothManagementService {
         return distinctIds.stream()
                 .map(operationById::get)
                 .toList();
+    }
+
+    private boolean hasManualBoothInput(String nameEn, String descriptionEn) {
+        return FieldTranslationDecision.isSupplied(nameEn) || FieldTranslationDecision.isSupplied(descriptionEn);
+    }
+
+    private boolean hasManualPubInput(String nameEn, String introEn, String descriptionEn, String departmentEn) {
+        return FieldTranslationDecision.isSupplied(nameEn)
+                || FieldTranslationDecision.isSupplied(introEn)
+                || FieldTranslationDecision.isSupplied(descriptionEn)
+                || FieldTranslationDecision.isSupplied(departmentEn);
     }
 
     private void ensurePubExists(Long pubId) {

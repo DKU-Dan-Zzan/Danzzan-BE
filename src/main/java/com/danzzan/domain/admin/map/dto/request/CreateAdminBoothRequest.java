@@ -22,6 +22,16 @@ public class CreateAdminBoothRequest {
 
     private String description;
 
+    /**
+     * 관리자가 직접 입력한 영문 이름. 비워두면 자동번역 결과가 채워진다.
+     */
+    private String nameEn;
+
+    /**
+     * 관리자가 직접 입력한 영문 설명. 비워두면 자동번역 결과가 채워진다.
+     */
+    private String descriptionEn;
+
     @NotNull(message = "operationStatus는 필수입니다.")
     private BoothOperationStatus operationStatus;
 

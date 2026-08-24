@@ -25,7 +25,11 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        // 이 테스트들은 티켓팅 기능 자체를 검증한다. 가을 축제 기본값은 꺼짐이므로
+        // 여기서는 명시적으로 켜서, 기능이 살아있음을 계속 보장한다.
+        "app.ticketing.api-enabled=true"
+})
 @AutoConfigureMockMvc
 @org.springframework.test.context.TestPropertySource(properties = {
         "spring.datasource.url=jdbc:h2:mem:signup-flow;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",

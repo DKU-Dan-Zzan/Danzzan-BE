@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AdminBoothManagementBoothResponseJsonTest {
@@ -24,7 +26,11 @@ class AdminBoothManagementBoothResponseJsonTest {
                 true,
                 BoothOperationStatus.OPEN,
                 "10:00",
-                "16:00"
+                "16:00",
+                List.of("2026-05-12"),
+                "Test",
+                null,
+                false
         );
 
         JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(response));

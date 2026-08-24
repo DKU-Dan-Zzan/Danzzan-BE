@@ -30,4 +30,6 @@ public class CreatePerformanceRequest {
     private LocalTime endTime;
 
     private String stage;
+
+    private String stageEn;
 }

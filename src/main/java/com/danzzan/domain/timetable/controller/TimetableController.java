@@ -74,9 +74,11 @@ public class TimetableController {
             )
             @RequestParam("date")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate date
+            LocalDate date,
+            @Parameter(description = "표시 언어 (ko|en)", example = "en")
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang
     ) {
-        return timetableService.getPerformances(date);
+        return timetableService.getPerformances(date, "en".equalsIgnoreCase(lang));
     }
 
     @GetMapping("/content-images")

@@ -8,6 +8,8 @@ import com.danzzan.domain.timetable.model.entity.Artist;
 import com.danzzan.domain.timetable.model.entity.Performance;
 import com.danzzan.domain.timetable.repository.ArtistRepository;
 import com.danzzan.domain.timetable.repository.PerformanceRepository;
+import com.danzzan.infra.translation.FieldTranslationDecision;
+import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ public class AdminPerformanceService {
 
     private final PerformanceRepository performanceRepository;
     private final ArtistRepository artistRepository;
+    private final TranslationService translationService;
 
     @Transactional(readOnly = true)
     public AdminPerformanceListResponse getPerformancesByDate(LocalDate date) {
@@ -46,6 +49,19 @@ public class AdminPerformanceService {
                 artist,
                 trimToNull(request.getStage())
         );
+
+        String translatedStage = translationService.translate(performance.getStage());
+
+        // 생성 시에는 한국어가 늘 "새로 생겼다"고 보고(항상 변경), 저장된 영문은 늘 없다.
+        String decidedStageEn = FieldTranslationDecision.decideEnglish(
+                true, request.getStageEn(), performance.getStageEn(), translatedStage);
+
+        if (FieldTranslationDecision.isSupplied(request.getStageEn())) {
+            performance.applyManualTranslation(decidedStageEn);
+        } else {
+            performance.applyDecidedTranslation(decidedStageEn);
+        }
+
         Performance saved = performanceRepository.save(performance);
         return AdminPerformanceResponse.from(saved);
     }
@@ -70,6 +86,8 @@ public class AdminPerformanceService {
                 ? trimToNull(request.getStage())
                 : performance.getStage();
 
+        String previousStage = performance.getStage();
+
         performance.update(
                 request.getPerformanceDate(),
                 request.getStartTime(),
@@ -77,6 +95,25 @@ public class AdminPerformanceService {
                 artist,
                 stage
         );
+
+        boolean stageKoreanChanged = !java.util.Objects.equals(previousStage, performance.getStage());
+
+        // 한국어가 바뀐 경우에 한해 자동 재번역한다 (koreanChanged 가드 유지).
+        String autoStageEn = null;
+        if (stageKoreanChanged) {
+            autoStageEn = translationService.translate(performance.getStage());
+        }
+
+        // 지우기 → 자동 채움 → 수동 값 덮어쓰기, 이 세 단계의 순서가 곧 정답이다.
+        String decidedStageEn = FieldTranslationDecision.decideEnglish(
+                stageKoreanChanged, request.getStageEn(), performance.getStageEn(), autoStageEn);
+
+        if (FieldTranslationDecision.isSupplied(request.getStageEn())) {
+            performance.applyManualTranslation(decidedStageEn);
+        } else {
+            performance.applyDecidedTranslation(decidedStageEn);
+        }
+
         return AdminPerformanceResponse.from(performance);
     }
 

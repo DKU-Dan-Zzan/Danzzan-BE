@@ -65,6 +65,9 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,https://danfesta2026.yaaksok.com}
     allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
   ticketing:
+    # 가을 축제는 티켓팅을 하지 않는다. false 이면 /tickets/**, /user/** 가 차단된다.
+    # 내년 봄에 되살리려면 true 로 바꾸면 된다. 관리자 로그인(/auth/**)은 영향 없다.
+    api-enabled: ${TICKETING_API_ENABLED:false}
     async:
       reserve:
         enabled: ${TICKETING_ASYNC_RESERVE_ENABLED:false}
@@ -143,6 +146,11 @@ octomo:
   base-url: https://api.octoverse.kr
   message-exists-path: /octomo/v1/public/message/exists
   api-key: ${OCTOMO_API_KEY:}
+
+deepl:
+  api-key: ${DEEPL_API_KEY:}
+  api-url: ${DEEPL_API_URL:}
+  glossary-name: ${DEEPL_GLOSSARY_NAME:danzzan-festival-ko-en}
 
 nhn:
   object-storage:

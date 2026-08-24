@@ -26,15 +26,21 @@ public class NoticeController {
     public ResponseEntity<Page<NoticeResponse>> getNotices(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String category,
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return ResponseEntity.ok(noticeService.getActiveNotices(keyword, category, pageable));
+        boolean english = "en".equalsIgnoreCase(lang);
+        return ResponseEntity.ok(noticeService.getActiveNotices(keyword, category, english, pageable));
     }
 
     /** 공지사항 상세 */
     @GetMapping("/{id}")
-    public ResponseEntity<NoticeResponse> getNotice(@PathVariable Long id) {
-        return ResponseEntity.ok(noticeService.getNotice(id));
+    public ResponseEntity<NoticeResponse> getNotice(
+            @PathVariable Long id,
+            @RequestParam(name = "lang", required = false, defaultValue = "ko") String lang
+    ) {
+        boolean english = "en".equalsIgnoreCase(lang);
+        return ResponseEntity.ok(noticeService.getNotice(id, english));
     }
 }
 

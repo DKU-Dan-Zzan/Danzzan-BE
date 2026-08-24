@@ -29,4 +29,6 @@ public class UpdatePerformanceRequest {
     private LocalTime endTime;
 
     private String stage;
+
+    private String stageEn;
 }

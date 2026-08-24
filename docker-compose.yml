@@ -52,6 +52,8 @@ services:
       OCTOMO_API_KEY: ${OCTOMO_API_KEY:-}
       OCTOMO_RECEIVE_NUMBER: ${OCTOMO_RECEIVE_NUMBER:-16663538}
       CODE_ENCRYPTION_SECRET: ${CODE_ENCRYPTION_SECRET:-}
+      DEEPL_API_KEY: ${DEEPL_API_KEY:-}
+      DEEPL_API_URL: ${DEEPL_API_URL:-https://api-free.deepl.com/v2}
     restart: unless-stopped
 
   mysql:

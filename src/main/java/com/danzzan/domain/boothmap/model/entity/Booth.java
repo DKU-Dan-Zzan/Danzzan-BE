@@ -36,6 +36,15 @@ public class Booth {
     @Column(name = "location_y")
     private Double locationY;
 
+    @Column(name = "name_en")
+    private String nameEn;
+
+    @Column(name = "description_en")
+    private String descriptionEn;
+
+    @Column(name = "en_is_manual", nullable = false)
+    private boolean enIsManual = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, nullable = false)
     private LocalDateTime createdAt;
@@ -78,5 +87,36 @@ public class Booth {
         if ((locationX == null) != (locationY == null)) {
             throw new IllegalArgumentException("부스 좌표는 모두 비어 있거나 모두 존재해야 합니다.");
         }
+    }
+
+    /**
+     * 기계번역 결과를 반영한다. 보호는 필드 단위다.
+     * null 인자는 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
+     */
+    public void applyTranslation(String nameEn, String descriptionEn) {
+        if (nameEn != null && (!this.enIsManual || this.nameEn == null)) {
+            this.nameEn = nameEn;
+        }
+        if (descriptionEn != null && (!this.enIsManual || this.descriptionEn == null)) {
+            this.descriptionEn = descriptionEn;
+        }
+    }
+
+    /**
+     * 관리자가 직접 입력한 번역을 반영하고 수동 플래그를 켠다.
+     */
+    public void applyManualTranslation(String nameEn, String descriptionEn) {
+        this.nameEn = nameEn;
+        this.descriptionEn = descriptionEn;
+        this.enIsManual = true;
+    }
+
+    /**
+     * decideEnglish가 계산한 최종 영문 값을 그대로 반영한다.
+     * null은 "번역하지 못했다"가 아니라 "비우라"는 뜻이므로 그대로 비운다.
+     */
+    public void applyDecidedTranslation(String nameEn, String descriptionEn) {
+        this.nameEn = nameEn;
+        this.descriptionEn = descriptionEn;
     }
 }

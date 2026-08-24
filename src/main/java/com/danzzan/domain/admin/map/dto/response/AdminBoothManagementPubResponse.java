@@ -19,4 +19,9 @@ public class AdminBoothManagementPubResponse {
     private String instagram;
     private boolean operationInfoExists;
     private List<Long> displayOperationIds;
+    private String nameEn;
+    private String introEn;
+    private String descriptionEn;
+    private String departmentEn;
+    private boolean enIsManual;
 }

@@ -21,4 +21,7 @@ public class AdminBoothManagementBoothResponse {
     private String startTime;
     private String endTime;
     private List<String> operationDates;
+    private String nameEn;
+    private String descriptionEn;
+    private boolean enIsManual;
 }

@@ -18,6 +18,8 @@ public class AdminPerformanceResponse {
     private String startTime;
     private String endTime;
     private String stage;
+    private String stageEn;
+    private boolean enIsManual;
 
     private Integer artistId;
     private String artistName;
@@ -31,6 +33,8 @@ public class AdminPerformanceResponse {
                 performance.getStartTime().format(TIME_FORMATTER),
                 performance.getEndTime().format(TIME_FORMATTER),
                 performance.getStage(),
+                performance.getStageEn(),
+                performance.isEnIsManual(),
                 performance.getArtist().getId(),
                 performance.getArtist().getName(),
                 performance.getArtist().getImageUrl(),

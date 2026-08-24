@@ -70,6 +70,15 @@ public class Notice {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    @Column(name = "title_en")
+    private String titleEn;
+
+    @Column(name = "content_en", columnDefinition = "TEXT")
+    private String contentEn;
+
+    @Column(name = "en_is_manual", nullable = false)
+    private boolean enIsManual = false;
+
     @PrePersist
     void createdAt() {
         this.createdAt = LocalDateTime.now();
@@ -118,5 +127,33 @@ public class Notice {
 
         notice.setIsEmergency(isEmergency != null && isEmergency);
         return notice;
+    }
+
+    /**
+     * 기계번역 결과를 반영한다.
+     *
+     * 보호는 엔티티가 아니라 <b>필드</b> 단위다.
+     * 수동 플래그가 켜져 있어도 비어 있는 필드는 채운다. 사람이 실제로 쓴 값
+     * (null이 아닌 값)만 지켜주면 되기 때문이다. 엔티티 단위로 막으면
+     * 관리자가 영문 제목만 채우고 본문을 비워둔 순간 본문이 영원히 비게 된다.
+     *
+     * null 인자는 "번역하지 못했다"는 뜻이므로 기존 값을 지우지 않는다.
+     */
+    public void applyTranslation(String titleEn, String contentEn) {
+        if (titleEn != null && (!this.enIsManual || this.titleEn == null)) {
+            this.titleEn = titleEn;
+        }
+        if (contentEn != null && (!this.enIsManual || this.contentEn == null)) {
+            this.contentEn = contentEn;
+        }
+    }
+
+    /**
+     * 관리자가 직접 입력한 번역을 반영하고 수동 플래그를 켠다.
+     */
+    public void applyManualTranslation(String titleEn, String contentEn) {
+        this.titleEn = titleEn;
+        this.contentEn = contentEn;
+        this.enIsManual = true;
     }
 }

@@ -8,6 +8,7 @@ import com.danzzan.domain.timetable.repository.PerformanceRepository;
 import com.danzzan.domain.timetable.model.dto.ContentImageDto;
 import com.danzzan.domain.timetable.repository.ContentImageRepository;
 
+import com.danzzan.infra.translation.LocalizedText;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +24,7 @@ public class TimetableService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
-    public TimetableResponseDto getPerformances(LocalDate date) {
+    public TimetableResponseDto getPerformances(LocalDate date, boolean english) {
         List<Performance> performances = performanceRepository.findByDateWithArtist(date);
 
         List<TimetablePerformanceDto> performanceDtos = performances.stream()
@@ -31,11 +32,11 @@ public class TimetableService {
                 performance.getId(),
                 performance.getStartTime().format(TIME_FORMATTER),
                 performance.getEndTime().format(TIME_FORMATTER),
-                performance.getStage(),
+                LocalizedText.pick(english, performance.getStage(), performance.getStageEn()),
                 performance.getArtist().getId(),
-                performance.getArtist().getName(),
+                LocalizedText.pick(english, performance.getArtist().getName(), performance.getArtist().getNameEn()),
                 performance.getArtist().getImageUrl(),
-                performance.getArtist().getDescription()
+                LocalizedText.pick(english, performance.getArtist().getDescription(), performance.getArtist().getDescriptionEn())
             ))
             .toList();
 

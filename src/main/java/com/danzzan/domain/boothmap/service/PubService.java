@@ -9,6 +9,7 @@ import com.danzzan.domain.boothmap.repository.PubImageRepository;
 import com.danzzan.domain.boothmap.repository.PubOperationRepository;
 import com.danzzan.domain.boothmap.repository.PubRepository;
 import com.danzzan.domain.boothmap.util.ThumbnailUrlResolver;
+import com.danzzan.infra.translation.LocalizedText;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +26,7 @@ public class PubService {
     private final PubImageRepository pubImageRepository;
     private final PubOperationRepository pubOperationRepository;
 
-    public List<PubSummaryResponse> getPubs(LocalDate operationDate) {
+    public List<PubSummaryResponse> getPubs(LocalDate operationDate, boolean english) {
         PubOperation pubOperation = resolvePubOperation(operationDate);
         List<Pub> pubs = pubRepository.findAllVisibleByPubOperationIdWithCollegeAndImages(pubOperation.getId());
 
@@ -42,11 +43,11 @@ public class PubService {
 
                     return new PubSummaryResponse(
                             pub.getId(),
-                            pub.getName(),
-                            pub.getIntro(),
-                            pub.getDepartment(),
+                            LocalizedText.pick(english, pub.getName(), pub.getNameEn()),
+                            LocalizedText.pick(english, pub.getIntro(), pub.getIntroEn()),
+                            LocalizedText.pick(english, pub.getDepartment(), pub.getDepartmentEn()),
                             pub.getCollege().getId(),
-                            pub.getCollege().getName(),
+                            LocalizedText.pick(english, pub.getCollege().getName(), pub.getCollege().getNameEn()),
                             mainImageUrl,
                             ThumbnailUrlResolver.toThumbnailUrl(mainImageUrl),
                             startTime,
@@ -56,7 +57,7 @@ public class PubService {
                 .toList();
     }
 
-    public PubDetailResponse getPubDetail(Long pubId, LocalDate operationDate) {
+    public PubDetailResponse getPubDetail(Long pubId, LocalDate operationDate, boolean english) {
         PubOperation pubOperation = resolvePubOperation(operationDate);
         Pub pub = pubRepository.findByIdWithCollege(pubId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 주점을 찾을 수 없습니다. id=" + pubId));
@@ -71,11 +72,11 @@ public class PubService {
 
         return new PubDetailResponse(
                 pub.getId(),
-                pub.getName(),
-                pub.getIntro(),
-                pub.getDescription(),
-                pub.getDepartment(),
-                pub.getCollege().getName(),
+                LocalizedText.pick(english, pub.getName(), pub.getNameEn()),
+                LocalizedText.pick(english, pub.getIntro(), pub.getIntroEn()),
+                LocalizedText.pick(english, pub.getDescription(), pub.getDescriptionEn()),
+                LocalizedText.pick(english, pub.getDepartment(), pub.getDepartmentEn()),
+                LocalizedText.pick(english, pub.getCollege().getName(), pub.getCollege().getNameEn()),
                 pub.getInstagram(),
                 imageUrls,
                 thumbnailImageUrls,

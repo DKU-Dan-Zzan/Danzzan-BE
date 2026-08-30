@@ -22,6 +22,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +53,9 @@ class TranslationBackfillServiceTest {
     @Mock
     private EmergencyNoticeRepository emergencyNoticeRepository;
 
+    @Mock
+    private TranslationBackfillWriter writer;
+
     @InjectMocks
     private TranslationBackfillService backfillService;
 
@@ -73,6 +77,31 @@ class TranslationBackfillServiceTest {
         ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
         verify(translationService).translateAll(captor.capture());
         assertEquals(List.of("", "부스 설명"), captor.getValue());
+    }
+
+    /**
+     * 이 테스트가 이 클래스의 존재 이유다.
+     *
+     * <p>예전에는 backfillAll() 전체가 하나의 트랜잭션이라, 한 행이 저장에
+     * 실패하면 같은 회차에 번역한 행이 전부 함께 롤백됐다. 5분 뒤 같은 행을
+     * 다시 번역하니 DeepL 요금만 나가고 저장은 영원히 되지 않았다. 실제로
+     * booth.description_en 의 길이 초과로 이 일이 136회 반복되며 무료 쿼터
+     * 100만 자가 소진됐다.</p>
+     */
+    @Test
+    void 한_행의_저장이_실패해도_나머지_행은_계속_저장한다() {
+        when(boothRepository.findNeedingTranslation(any()))
+                .thenReturn(List.of(untranslatedBooth(), untranslatedBooth()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Experience Booth", "Booth Description"));
+        when(writer.applyBooth(any(), any(), any()))
+                .thenThrow(new RuntimeException("Data too long for column 'description_en'"))
+                .thenReturn(1);
+
+        assertEquals(1, backfillService.backfillAll());
+
+        // 첫 행이 실패해도 둘째 행의 번역까지 진행돼야 한다.
+        verify(translationService, times(2)).translateAll(any());
     }
 
     @Test

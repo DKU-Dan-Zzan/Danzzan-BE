@@ -70,7 +70,7 @@ public class Notice {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    @Column(name = "title_en")
+    @Column(name = "title_en", length = 512)
     private String titleEn;
 
     @Column(name = "content_en", columnDefinition = "TEXT")

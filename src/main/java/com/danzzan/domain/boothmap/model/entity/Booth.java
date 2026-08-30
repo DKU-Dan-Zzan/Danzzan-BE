@@ -36,10 +36,10 @@ public class Booth {
     @Column(name = "location_y")
     private Double locationY;
 
-    @Column(name = "name_en")
+    @Column(name = "name_en", length = 512)
     private String nameEn;
 
-    @Column(name = "description_en")
+    @Column(name = "description_en", columnDefinition = "TEXT")
     private String descriptionEn;
 
     @Column(name = "en_is_manual", nullable = false)

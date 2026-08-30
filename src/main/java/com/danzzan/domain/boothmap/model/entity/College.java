@@ -26,7 +26,7 @@ public class College {
     @Column(name = "location_y", nullable = false)
     private Double locationY;
 
-    @Column(name = "name_en")
+    @Column(name = "name_en", length = 512)
     private String nameEn;
 
     @Column(name = "en_is_manual", nullable = false)

@@ -53,16 +53,16 @@ public class Pub {
     )
     private List<PubDisplayDay> displayDays = new ArrayList<>();
 
-    @Column(name = "name_en")
+    @Column(name = "name_en", length = 512)
     private String nameEn;
 
-    @Column(name = "intro_en")
+    @Column(name = "intro_en", length = 1000)
     private String introEn;
 
     @Column(name = "description_en", columnDefinition = "TEXT")
     private String descriptionEn;
 
-    @Column(name = "department_en")
+    @Column(name = "department_en", length = 512)
     private String departmentEn;
 
     @Column(name = "en_is_manual", nullable = false)

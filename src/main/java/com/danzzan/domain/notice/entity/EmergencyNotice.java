@@ -27,7 +27,7 @@ public class EmergencyNotice {
     @Column(nullable = false)
     private Boolean isActive = false;
 
-    @Column(name = "message_en", columnDefinition = "VARCHAR(500)")
+    @Column(name = "message_en", columnDefinition = "TEXT")
     private String messageEn;
 
     @Column(name = "en_is_manual", nullable = false)

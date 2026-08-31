@@ -35,7 +35,7 @@ public class Performance {
     @Column(name = "stage")
     private String stage;
 
-    @Column(name = "stage_en")
+    @Column(name = "stage_en", length = 512)
     private String stageEn;
 
     @Column(name = "en_is_manual", nullable = false)

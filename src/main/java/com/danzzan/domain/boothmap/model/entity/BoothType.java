@@ -4,5 +4,6 @@ public enum BoothType {
     EXPERIENCE,
     FOOD_TRUCK,
     EVENT,
-    FACILITY
+    FACILITY,
+    REST_AREA
 }

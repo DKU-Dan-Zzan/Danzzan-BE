@@ -12,7 +12,9 @@ import com.danzzan.domain.festival.entity.FestivalTicketingRound;
 import com.danzzan.domain.festival.exception.InvalidFestivalSettingException;
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.repository.FestivalTicketingRoundRepository;
+import com.danzzan.domain.ticket.repository.TicketQueueEntryRepository;
 import com.danzzan.domain.ticket.repository.UserTicketRepository;
+import com.danzzan.domain.ticket.service.TicketInitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,8 @@ public class FestivalSettingService {
     private final FestivalTicketingRoundRepository festivalTicketingRoundRepository;
     private final FestivalEventRepository festivalEventRepository;
     private final UserTicketRepository userTicketRepository;
+    private final TicketQueueEntryRepository ticketQueueEntryRepository;
+    private final TicketInitService ticketInitService;
     private final TicketingAccessPolicy ticketingAccessPolicy;
 
     /**
@@ -126,14 +129,9 @@ public class FestivalSettingService {
             result.add(updateRound(request.getFestivalName(), existing, incoming, index));
         }
 
-        // 화면에서 빠진 회차는 지운다. 단 이미 티켓팅이 시작된 회차는 지울 수 없다.
+        // 화면에서 빠진 회차는 지운다.
         for (FestivalTicketingRound removed : saved.values()) {
-            if (isLocked(removed)) {
-                throw new InvalidFestivalSettingException(
-                        "이미 티켓팅이 시작된 회차는 삭제할 수 없습니다. 티켓팅을 끄려면 티켓팅 여부를 OFF 로 저장해 주세요.");
-            }
-            deleteEventOf(removed);
-            festivalTicketingRoundRepository.delete(removed);
+            deleteRound(removed, request.getConfirmedTicketCancelRoundIds());
         }
 
         return toResponses(result);
@@ -196,8 +194,10 @@ public class FestivalSettingService {
     }
 
     /**
-     * 손대면 안 되는 회차인지 본다. 티켓팅이 이미 열렸거나(오픈/마감) 티켓이 한 장이라도
-     * 나갔으면 잠근다.
+     * 내용을 고칠 수 없는 회차인지 본다. 티켓팅이 이미 열렸거나(오픈·마감) 티켓이 한 장이라도
+     * 나갔으면 잠근다. 수량이나 시각을 바꾸면 이미 응모한 사람들의 전제가 흔들린다.
+     *
+     * 삭제는 잠금과 별개다. 티켓이 나간 회차도 확인을 받으면 지울 수 있다.
      */
     private boolean isLocked(FestivalTicketingRound round) {
         Optional<FestivalEvent> event = findEventOf(round);
@@ -210,14 +210,44 @@ public class FestivalSettingService {
         return userTicketRepository.countByEventId(event.get().getId()) > 0;
     }
 
+    private long issuedTicketCount(FestivalTicketingRound round) {
+        return findEventOf(round)
+                .map(event -> userTicketRepository.countByEventId(event.getId()))
+                .orElse(0L);
+    }
+
     private Optional<FestivalEvent> findEventOf(FestivalTicketingRound round) {
         return round.getEventId() == null
                 ? Optional.empty()
                 : festivalEventRepository.findById(round.getEventId());
     }
 
-    private void deleteEventOf(FestivalTicketingRound round) {
-        findEventOf(round).ifPresent(festivalEventRepository::delete);
+    /**
+     * 회차를 지운다. 티켓이 나간 회차는 관리자가 "발급된 티켓도 함께 취소" 를 확인한
+     * 경우에만 지우고, 그때는 대기열과 티켓, Redis 재고까지 함께 정리한다.
+     *
+     * 티켓만 남기고 이벤트를 지우면 학생의 "내 티켓" 이 무엇을 가리키는지 알 수 없게 된다.
+     */
+    private void deleteRound(FestivalTicketingRound round, List<Long> confirmedRoundIds) {
+        Optional<FestivalEvent> event = findEventOf(round);
+        long issuedTickets = event.map(it -> userTicketRepository.countByEventId(it.getId())).orElse(0L);
+
+        if (issuedTickets > 0 && !confirmedRoundIds.contains(round.getId())) {
+            throw new InvalidFestivalSettingException(
+                    "이미 " + issuedTickets + "장의 티켓이 발급된 회차입니다. "
+                            + "발급된 티켓까지 함께 취소하려면 삭제를 한 번 더 확인해 주세요.");
+        }
+
+        event.ifPresent(it -> {
+            String eventId = String.valueOf(it.getId());
+            ticketQueueEntryRepository.deleteAllByEventId(it.getId());
+            userTicketRepository.deleteAllByEventId(it.getId());
+            festivalEventRepository.delete(it);
+            // 키를 남겨 두면 나중에 같은 id 의 이벤트가 예전 재고·대기열을 물려받는다.
+            ticketInitService.purgeEvent(eventId);
+        });
+
+        festivalTicketingRoundRepository.delete(round);
     }
 
     private String eventTitle(String festivalName, int index) {
@@ -226,12 +256,8 @@ public class FestivalSettingService {
     }
 
     private List<TicketingRoundResponse> toResponses(List<FestivalTicketingRound> rounds) {
-        Map<Long, Boolean> lockedCache = new HashMap<>();
         return rounds.stream()
-                .map(round -> TicketingRoundResponse.from(
-                        round,
-                        lockedCache.computeIfAbsent(round.getId(), id -> isLocked(round))
-                ))
+                .map(round -> TicketingRoundResponse.from(round, isLocked(round), issuedTicketCount(round)))
                 .toList();
     }
 

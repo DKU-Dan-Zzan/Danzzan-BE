@@ -13,7 +13,9 @@ import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.repository.FestivalTicketingRoundRepository;
 import com.danzzan.domain.festival.service.FestivalSettingService;
 import com.danzzan.domain.festival.service.TicketingAccessPolicy;
+import com.danzzan.domain.ticket.repository.TicketQueueEntryRepository;
 import com.danzzan.domain.ticket.repository.UserTicketRepository;
+import com.danzzan.domain.ticket.service.TicketInitService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -54,6 +56,12 @@ class FestivalSettingServiceTest {
 
     @Mock
     private UserTicketRepository userTicketRepository;
+
+    @Mock
+    private TicketQueueEntryRepository ticketQueueEntryRepository;
+
+    @Mock
+    private TicketInitService ticketInitService;
 
     @Mock
     private TicketingAccessPolicy ticketingAccessPolicy;
@@ -159,7 +167,7 @@ class FestivalSettingServiceTest {
     }
 
     @Test
-    void 이미_티켓이_나간_회차는_지울_수_없다() {
+    void 티켓이_나간_회차는_확인_없이는_지울_수_없다() {
         UpdateFestivalSettingRequest request = request(
                 LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true, List.of()
         );
@@ -172,6 +180,51 @@ class FestivalSettingServiceTest {
 
         assertThrows(InvalidFestivalSettingException.class, () -> festivalSettingService.updateSettings(request));
         verify(festivalTicketingRoundRepository, never()).delete(any());
+        verify(userTicketRepository, never()).deleteAllByEventId(10L);
+    }
+
+    @Test
+    void 확인한_회차는_티켓과_대기열까지_지운다() {
+        // 관리자가 "발급된 티켓도 함께 취소" 를 확인한 경우다.
+        UpdateFestivalSettingRequest request = request(
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true, List.of()
+        );
+        request.setConfirmedTicketCancelRoundIds(List.of(1L));
+        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
+        FestivalTicketingRound issued = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 1000,
+                LocalDate.of(2026, 9, 9), 0, 10L);
+        FestivalEvent event = event(10L, TicketingStatus.OPEN);
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(issued));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event));
+        when(userTicketRepository.countByEventId(10L)).thenReturn(3L);
+
+        festivalSettingService.updateSettings(request);
+
+        verify(ticketQueueEntryRepository).deleteAllByEventId(10L);
+        verify(userTicketRepository).deleteAllByEventId(10L);
+        verify(festivalEventRepository).delete(event);
+        verify(festivalTicketingRoundRepository).delete(issued);
+        // 키를 남기면 같은 id 의 다음 이벤트가 예전 재고를 물려받는다.
+        verify(ticketInitService).purgeEvent("10");
+    }
+
+    @Test
+    void 티켓이_없으면_오픈된_회차도_확인_없이_지운다() {
+        UpdateFestivalSettingRequest request = request(
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true, List.of()
+        );
+        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
+        FestivalTicketingRound open = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 1000,
+                LocalDate.of(2026, 9, 9), 0, 10L);
+        FestivalEvent event = event(10L, TicketingStatus.OPEN);
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(open));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event));
+        when(userTicketRepository.countByEventId(10L)).thenReturn(0L);
+
+        festivalSettingService.updateSettings(request);
+
+        verify(festivalTicketingRoundRepository).delete(open);
+        verify(festivalEventRepository).delete(event);
     }
 
     @Test

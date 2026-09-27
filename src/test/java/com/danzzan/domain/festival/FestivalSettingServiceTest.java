@@ -9,6 +9,7 @@ import com.danzzan.domain.festival.exception.InvalidFestivalSettingException;
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.repository.FestivalTicketingRoundRepository;
 import com.danzzan.domain.festival.service.FestivalSettingService;
+import com.danzzan.domain.festival.service.TicketingAccessPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -41,6 +42,9 @@ class FestivalSettingServiceTest {
 
     @Mock
     private FestivalTicketingRoundRepository festivalTicketingRoundRepository;
+
+    @Mock
+    private TicketingAccessPolicy ticketingAccessPolicy;
 
     @InjectMocks
     private FestivalSettingService festivalSettingService;

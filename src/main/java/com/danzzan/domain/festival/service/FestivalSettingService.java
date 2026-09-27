@@ -28,6 +28,7 @@ public class FestivalSettingService {
 
     private final FestivalSettingRepository festivalSettingRepository;
     private final FestivalTicketingRoundRepository festivalTicketingRoundRepository;
+    private final TicketingAccessPolicy ticketingAccessPolicy;
 
     /**
      * 저장된 설정이 없으면 빈 설정을 내려준다. 프론트는 운영 날짜가 비어 있으면
@@ -73,6 +74,9 @@ public class FestivalSettingService {
                 request.isTicketingEnabled() ? request.getTicketingRounds() : List.of()
         );
         festivalTicketingRoundRepository.saveAll(rounds);
+
+        // 티켓팅 스위치를 방금 바꿨을 수 있으므로 캐시를 비워 즉시 반영한다.
+        ticketingAccessPolicy.invalidate();
 
         return FestivalSettingResponse.of(setting, operationDates, rounds);
     }

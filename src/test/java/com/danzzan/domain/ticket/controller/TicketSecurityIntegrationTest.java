@@ -1,5 +1,6 @@
 package com.danzzan.domain.ticket.controller;
 
+import com.danzzan.domain.festival.service.TicketingAccessPolicy;
 import com.danzzan.domain.ticket.dto.ResponseTicketEventListDto;
 import com.danzzan.domain.ticket.service.ClaimService;
 import com.danzzan.domain.ticket.service.QueueService;
@@ -35,8 +36,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "jwt.secret=test-secret-key-for-jwt-at-least-32-characters-long",
         "octomo.api-key=test-octomo-api-key",
-        // 이 테스트들은 티켓팅 기능 자체를 검증한다. 가을 축제 기본값은 꺼짐이므로
-        // 여기서는 명시적으로 켜서, 기능이 살아있음을 계속 보장한다.
+        // 이 테스트들은 티켓팅 기능 자체를 검증한다. 티켓팅을 켠 축제라고 두고,
+        // 보안 규칙(무엇이 열리고 무엇이 막히는지)만 본다.
         "app.ticketing.api-enabled=true"
 })
 @AutoConfigureMockMvc
@@ -44,6 +45,10 @@ class TicketSecurityIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // 티켓팅 개폐는 관리자 축제 설정이 정한다. 여기서는 켠 상태로 두고 보안 규칙만 본다.
+    @MockitoBean
+    private TicketingAccessPolicy ticketingAccessPolicy;
 
     @MockitoBean
     private TicketService ticketService;
@@ -59,6 +64,11 @@ class TicketSecurityIntegrationTest {
 
     @MockitoBean
     private QueueService queueService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void 티켓팅을_켠_축제로_둔다() {
+        when(ticketingAccessPolicy.isTicketingEnabled()).thenReturn(true);
+    }
 
     @Test
     void getMyTickets_비인증_요청은_403과_빈본문을_반환한다() throws Exception {

@@ -15,6 +15,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class TicketingRoundRequest {
 
+    /** 이미 저장된 회차를 고칠 때만 채운다. 비어 있으면 새 회차로 본다. */
+    private Long id;
+
     @NotNull(message = "티켓팅 날짜와 시간을 입력해 주세요.")
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime ticketingAt;

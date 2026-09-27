@@ -1,5 +1,8 @@
 package com.danzzan.domain.festival;
 
+import com.danzzan.domain.event.model.entity.FestivalEvent;
+import com.danzzan.domain.event.model.entity.TicketingStatus;
+import com.danzzan.domain.event.repository.FestivalEventRepository;
 import com.danzzan.domain.festival.dto.request.TicketingRoundRequest;
 import com.danzzan.domain.festival.dto.request.UpdateFestivalSettingRequest;
 import com.danzzan.domain.festival.dto.response.FestivalSettingResponse;
@@ -10,11 +13,14 @@ import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.repository.FestivalTicketingRoundRepository;
 import com.danzzan.domain.festival.service.FestivalSettingService;
 import com.danzzan.domain.festival.service.TicketingAccessPolicy;
+import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,6 +48,12 @@ class FestivalSettingServiceTest {
 
     @Mock
     private FestivalTicketingRoundRepository festivalTicketingRoundRepository;
+
+    @Mock
+    private FestivalEventRepository festivalEventRepository;
+
+    @Mock
+    private UserTicketRepository userTicketRepository;
 
     @Mock
     private TicketingAccessPolicy ticketingAccessPolicy;
@@ -101,58 +113,99 @@ class FestivalSettingServiceTest {
     }
 
     @Test
-    void 티켓팅이_꺼져_있으면_회차를_저장하지_않는다() {
+    void 티켓팅을_꺼도_저장된_회차를_지우지_않는다() {
+        // 끄는 것은 "회차를 지운다"가 아니라 "지금은 열지 않는다"이다.
+        // 지우면 이미 티켓을 받은 사람의 근거가 사라진다.
         UpdateFestivalSettingRequest request = request(
-                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), false,
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), false, List.of()
+        );
+        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
+        FestivalTicketingRound saved = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 1000,
+                LocalDate.of(2026, 9, 9), 0, 10L);
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(saved));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event(10L, TicketingStatus.READY)));
+        when(userTicketRepository.countByEventId(10L)).thenReturn(0L);
+
+        FestivalSettingResponse response = festivalSettingService.updateSettings(request);
+
+        assertEquals(1, response.ticketingRounds().size());
+        verify(festivalTicketingRoundRepository, never()).delete(any());
+    }
+
+    @Test
+    void 새_회차를_저장하면_티켓팅_이벤트도_함께_만든다() {
+        // 대기열·티켓 발급은 festival_events 를 본다. 이벤트를 만들지 않으면
+        // 설정에 적기만 하고 실제로는 아무 일도 일어나지 않는다.
+        UpdateFestivalSettingRequest request = request(
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true,
                 List.of(round(LocalDateTime.of(2026, 9, 1, 18, 0), 1000, LocalDate.of(2026, 9, 9)))
         );
         when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
-
-        FestivalSettingResponse response = festivalSettingService.updateSettings(request);
-
-        assertTrue(response.ticketingRounds().isEmpty());
-        verify(festivalTicketingRoundRepository).saveAll(List.of());
-    }
-
-    @Test
-    void 보낸_회차가_저장된_회차를_대신한다() {
-        UpdateFestivalSettingRequest request = request(
-                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true,
-                List.of(
-                        round(LocalDateTime.of(2026, 9, 1, 18, 0), 1000, LocalDate.of(2026, 9, 9)),
-                        round(LocalDateTime.of(2026, 9, 2, 18, 0), 500, LocalDate.of(2026, 9, 10))
-                )
-        );
-        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
-
-        FestivalSettingResponse response = festivalSettingService.updateSettings(request);
-
-        verify(festivalTicketingRoundRepository).deleteAllInBatch();
-        verify(festivalTicketingRoundRepository).saveAll(anyList());
-        assertEquals(2, response.ticketingRounds().size());
-        assertEquals(1000, response.ticketingRounds().get(0).capacity());
-    }
-
-    @Test
-    void 회차는_보낸_순서를_유지한다() {
-        UpdateFestivalSettingRequest request = request(
-                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true,
-                List.of(
-                        round(LocalDateTime.of(2026, 9, 2, 18, 0), 500, LocalDate.of(2026, 9, 10)),
-                        round(LocalDateTime.of(2026, 9, 1, 18, 0), 1000, LocalDate.of(2026, 9, 9))
-                )
-        );
-        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of());
+        when(festivalEventRepository.save(any(FestivalEvent.class))).thenAnswer(call -> call.getArgument(0));
+        when(festivalTicketingRoundRepository.save(any(FestivalTicketingRound.class)))
+                .thenAnswer(call -> call.getArgument(0));
 
         festivalSettingService.updateSettings(request);
 
-        org.mockito.ArgumentCaptor<List<FestivalTicketingRound>> captor =
-                org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(festivalTicketingRoundRepository).saveAll(captor.capture());
-        List<FestivalTicketingRound> saved = captor.getValue();
-        assertEquals(0, saved.get(0).getDisplayOrder());
-        assertEquals(500, saved.get(0).getCapacity());
-        assertEquals(1, saved.get(1).getDisplayOrder());
+        ArgumentCaptor<FestivalEvent> captor = ArgumentCaptor.forClass(FestivalEvent.class);
+        verify(festivalEventRepository).save(captor.capture());
+        FestivalEvent created = captor.getValue();
+        assertEquals(LocalDateTime.of(2026, 9, 1, 18, 0), created.getTicketingStartTime());
+        assertEquals(LocalDate.of(2026, 9, 9), created.getEventDate());
+        assertEquals(1000, created.getTotalCapacity());
+        // 오픈 시각이 되면 기존 스케줄러가 READY 인 이벤트를 자동으로 연다.
+        assertEquals(TicketingStatus.READY, created.getTicketingStatus());
+    }
+
+    @Test
+    void 이미_티켓이_나간_회차는_지울_수_없다() {
+        UpdateFestivalSettingRequest request = request(
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true, List.of()
+        );
+        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
+        FestivalTicketingRound issued = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 1000,
+                LocalDate.of(2026, 9, 9), 0, 10L);
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(issued));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event(10L, TicketingStatus.READY)));
+        when(userTicketRepository.countByEventId(10L)).thenReturn(3L);
+
+        assertThrows(InvalidFestivalSettingException.class, () -> festivalSettingService.updateSettings(request));
+        verify(festivalTicketingRoundRepository, never()).delete(any());
+    }
+
+    @Test
+    void 이미_오픈한_회차는_고칠_수_없다() {
+        UpdateFestivalSettingRequest request = request(
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true,
+                List.of(round(1L, LocalDateTime.of(2026, 9, 2, 18, 0), 2000, LocalDate.of(2026, 9, 10)))
+        );
+        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
+        FestivalTicketingRound open = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 1000,
+                LocalDate.of(2026, 9, 9), 0, 10L);
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(open));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event(10L, TicketingStatus.OPEN)));
+
+        assertThrows(InvalidFestivalSettingException.class, () -> festivalSettingService.updateSettings(request));
+    }
+
+    @Test
+    void 화면에서_뺀_회차는_이벤트와_함께_지운다() {
+        UpdateFestivalSettingRequest request = request(
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true, List.of()
+        );
+        when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
+        FestivalTicketingRound removed = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 1000,
+                LocalDate.of(2026, 9, 9), 0, 10L);
+        FestivalEvent event = event(10L, TicketingStatus.READY);
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(removed));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event));
+        when(userTicketRepository.countByEventId(10L)).thenReturn(0L);
+
+        festivalSettingService.updateSettings(request);
+
+        verify(festivalEventRepository).delete(event);
+        verify(festivalTicketingRoundRepository).delete(removed);
     }
 
     private UpdateFestivalSettingRequest request(
@@ -177,5 +230,32 @@ class FestivalSettingServiceTest {
         round.setCapacity(capacity);
         round.setPerformanceDate(performanceDate);
         return round;
+    }
+
+    private TicketingRoundRequest round(Long id, LocalDateTime ticketingAt, int capacity, LocalDate performanceDate) {
+        TicketingRoundRequest round = round(ticketingAt, capacity, performanceDate);
+        round.setId(id);
+        return round;
+    }
+
+    private FestivalTicketingRound round(
+            Long id, LocalDateTime ticketingAt, int capacity, LocalDate performanceDate, int order, Long eventId
+    ) {
+        FestivalTicketingRound round = FestivalTicketingRound.create(ticketingAt, capacity, performanceDate, order);
+        ReflectionTestUtils.setField(round, "id", id);
+        round.linkEvent(eventId);
+        return round;
+    }
+
+    private FestivalEvent event(Long id, TicketingStatus status) {
+        FestivalEvent event = FestivalEvent.builder()
+                .title("2026 DANFESTA 1회차")
+                .eventDate(LocalDate.of(2026, 9, 9))
+                .ticketingStartTime(LocalDateTime.of(2026, 9, 1, 18, 0))
+                .ticketingStatus(status)
+                .totalCapacity(1000)
+                .build();
+        ReflectionTestUtils.setField(event, "id", id);
+        return event;
     }
 }

@@ -1,7 +1,6 @@
 package com.danzzan.domain.festival.dto.response;
 
 import com.danzzan.domain.festival.entity.FestivalSetting;
-import com.danzzan.domain.festival.entity.FestivalTicketingRound;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -25,7 +24,7 @@ public record FestivalSettingResponse(
     public static FestivalSettingResponse of(
             FestivalSetting setting,
             List<LocalDate> operationDates,
-            List<FestivalTicketingRound> rounds
+            List<TicketingRoundResponse> rounds
     ) {
         return new FestivalSettingResponse(
                 setting.getSchoolName(),
@@ -34,7 +33,7 @@ public record FestivalSettingResponse(
                 setting.getEndDate(),
                 operationDates,
                 setting.isTicketingEnabled(),
-                rounds.stream().map(TicketingRoundResponse::from).toList()
+                rounds
         );
     }
 }

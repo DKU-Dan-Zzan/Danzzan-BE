@@ -17,9 +17,9 @@ import java.time.LocalDateTime;
  * 티켓팅 회차. 티켓팅을 여는 시각마다 티켓 수량과 입장할 공연 날짜가 다를 수 있어
  * 축제 설정과 별도의 줄로 관리한다.
  *
- * 티켓팅 기능 자체(대기열/발급)는 festival_events 테이블을 쓴다. 지금은 티켓팅이 꺼져
- * 있어 두 테이블을 잇지 않았고, 티켓팅을 되살릴 때 이 회차를 festival_events 로
- * 옮겨 심는 작업이 필요하다.
+ * 티켓팅 기능 자체(대기열/발급/내 티켓)는 festival_events 테이블을 본다. 그래서 회차를
+ * 저장할 때 같은 내용의 이벤트를 만들어 두고, 그 id 를 eventId 에 적어 둔다.
+ * 이 연결이 있어야 회차를 고칠 때 이미 발급된 티켓을 건드리지 않고 이벤트를 따라 고친다.
  */
 @Entity
 @Getter
@@ -46,6 +46,10 @@ public class FestivalTicketingRound {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    /** 이 회차가 만들어 낸 티켓팅 이벤트(festival_events.id). 아직 못 만들었으면 null */
+    @Column(name = "event_id")
+    private Long eventId;
+
     public static FestivalTicketingRound create(
             LocalDateTime ticketingAt,
             int capacity,
@@ -58,5 +62,16 @@ public class FestivalTicketingRound {
         round.performanceDate = performanceDate;
         round.displayOrder = displayOrder;
         return round;
+    }
+
+    public void update(LocalDateTime ticketingAt, int capacity, LocalDate performanceDate, int displayOrder) {
+        this.ticketingAt = ticketingAt;
+        this.capacity = capacity;
+        this.performanceDate = performanceDate;
+        this.displayOrder = displayOrder;
+    }
+
+    public void linkEvent(Long eventId) {
+        this.eventId = eventId;
     }
 }

@@ -90,10 +90,11 @@ public class SecurityConfig {
                                 "/booths/**",
                                 "/tickets/events",
                                 "/api/ads",
-                                "/api/ads/list"
+                                "/api/ads/list",
+                                "/festival/settings"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
-                        .requestMatchers("/api/admin/**", "/admin/map/**", "/admin/timetable/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**", "/admin/map/**", "/admin/timetable/**", "/admin/festival/**").hasRole("ADMIN")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated();
                 })

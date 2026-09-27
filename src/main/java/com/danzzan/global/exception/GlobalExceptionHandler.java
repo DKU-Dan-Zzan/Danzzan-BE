@@ -48,6 +48,15 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(e.getMessage(), 404));
     }
 
+    @ExceptionHandler(com.danzzan.domain.festival.exception.InvalidFestivalSettingException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidFestivalSetting(
+            com.danzzan.domain.festival.exception.InvalidFestivalSettingException e
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(e.getMessage(), 400));
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<?> handleIllegalState(IllegalStateException e, HttpServletRequest request) {
         if (isTicketingApi(request)) {

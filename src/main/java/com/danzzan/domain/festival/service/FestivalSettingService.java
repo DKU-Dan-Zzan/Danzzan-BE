@@ -5,6 +5,7 @@ import com.danzzan.domain.event.model.entity.TicketingStatus;
 import com.danzzan.domain.event.repository.FestivalEventRepository;
 import com.danzzan.domain.festival.dto.request.TicketingRoundRequest;
 import com.danzzan.domain.festival.dto.request.UpdateFestivalSettingRequest;
+import com.danzzan.domain.festival.dto.request.UpdateFestivalTicketingSettingsRequest;
 import com.danzzan.domain.festival.dto.response.FestivalSettingResponse;
 import com.danzzan.domain.festival.dto.response.TicketingRoundResponse;
 import com.danzzan.domain.festival.entity.FestivalSetting;
@@ -97,6 +98,44 @@ public class FestivalSettingService {
         // 티켓팅 스위치를 방금 바꿨을 수 있으므로 캐시를 비워 즉시 반영한다.
         ticketingAccessPolicy.invalidate();
 
+        return FestivalSettingResponse.of(setting, operationDates, rounds);
+    }
+
+    /** Metadata-only update used by the operations permission endpoint. */
+    @Transactional
+    public FestivalSettingResponse updateMetadata(UpdateFestivalSettingRequest request) {
+        List<LocalDate> operationDates = buildOperationDates(request.getStartDate(), request.getEndDate());
+        validateMetadata(request, operationDates);
+        FestivalSetting setting = festivalSettingRepository.findByIdForUpdate(FestivalSetting.SINGLETON_ID)
+                .orElseGet(() -> FestivalSetting.create(request.getSchoolName(), request.getFestivalName(),
+                        request.getStartDate(), request.getEndDate(), false));
+        setting.update(request.getSchoolName(), request.getFestivalName(), request.getStartDate(), request.getEndDate(),
+                setting.isTicketingEnabled());
+        festivalSettingRepository.save(setting);
+        return FestivalSettingResponse.of(setting, operationDates,
+                toResponses(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()));
+    }
+
+    /** Ticketing-only update. Metadata is intentionally read from the persisted singleton. */
+    @Transactional
+    public FestivalSettingResponse updateTicketingSettings(UpdateFestivalTicketingSettingsRequest request) {
+        FestivalSetting setting = festivalSettingRepository.findByIdForUpdate(FestivalSetting.SINGLETON_ID)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT, "축제 기본 정보를 먼저 저장해 주세요."));
+        UpdateFestivalSettingRequest combined = new UpdateFestivalSettingRequest();
+        combined.setSchoolName(setting.getSchoolName());
+        combined.setFestivalName(setting.getFestivalName());
+        combined.setStartDate(setting.getStartDate());
+        combined.setEndDate(setting.getEndDate());
+        combined.setTicketingEnabled(Boolean.TRUE.equals(request.getTicketingEnabled()));
+        combined.setTicketingRounds(request.getTicketingRounds());
+        combined.setConfirmedTicketCancelRoundIds(request.getConfirmedTicketCancelRoundIds());
+        List<LocalDate> operationDates = buildOperationDates(setting.getStartDate(), setting.getEndDate());
+        validate(combined, operationDates);
+        setting.update(setting.getSchoolName(), setting.getFestivalName(), setting.getStartDate(), setting.getEndDate(),
+                Boolean.TRUE.equals(request.getTicketingEnabled()));
+        List<TicketingRoundResponse> rounds = syncTicketingRounds(combined);
+        ticketingAccessPolicy.invalidate();
         return FestivalSettingResponse.of(setting, operationDates, rounds);
     }
 
@@ -262,12 +301,7 @@ public class FestivalSettingService {
     }
 
     private void validate(UpdateFestivalSettingRequest request, List<LocalDate> operationDates) {
-        if (request.getEndDate().isBefore(request.getStartDate())) {
-            throw new InvalidFestivalSettingException("운영 종료일은 시작일보다 빠를 수 없습니다.");
-        }
-        if (operationDates.size() > MAX_OPERATION_DAYS) {
-            throw new InvalidFestivalSettingException("운영 기간은 최대 " + MAX_OPERATION_DAYS + "일까지 설정할 수 있습니다.");
-        }
+        validateMetadata(request, operationDates);
         if (!request.isTicketingEnabled()) {
             return;
         }
@@ -275,6 +309,15 @@ public class FestivalSettingService {
             if (!operationDates.contains(round.getPerformanceDate())) {
                 throw new InvalidFestivalSettingException("공연 날짜는 축제 운영 기간 안에 있어야 합니다.");
             }
+        }
+    }
+
+    private void validateMetadata(UpdateFestivalSettingRequest request, List<LocalDate> operationDates) {
+        if (request.getEndDate().isBefore(request.getStartDate())) {
+            throw new InvalidFestivalSettingException("운영 종료일은 시작일보다 빠를 수 없습니다.");
+        }
+        if (operationDates.size() > MAX_OPERATION_DAYS) {
+            throw new InvalidFestivalSettingException("운영 기간은 최대 " + MAX_OPERATION_DAYS + "일까지 설정할 수 있습니다.");
         }
     }
 

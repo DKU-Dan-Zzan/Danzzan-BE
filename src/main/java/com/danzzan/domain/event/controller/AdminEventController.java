@@ -31,13 +31,13 @@ import org.springframework.http.HttpStatus;
 @RequestMapping("/api/admin")
 @Tag(name = "관리자 공연", description = "관리자용 공연/운영 관련 API")
 @RequiredArgsConstructor
-@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
+@PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
 public class AdminEventController {
 
     private final AdminEventService adminEventService;
     private final EventOpenService eventOpenService;
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
     @GetMapping("/events")
     @Operation(
             summary = "팔찌배부대상 공연일 기준으로 목록 조회",
@@ -89,7 +89,7 @@ public class AdminEventController {
         return ApiResponse.success(adminEventService.listEvents());
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
     @PatchMapping("/events/{eventId}/open")
     @Operation(
             summary = "이벤트 수동 OPEN 전환",
@@ -110,7 +110,7 @@ public class AdminEventController {
         }
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
     @GetMapping("/events/{eventId}/stats")
     @Operation(
             summary = "팔찌 지급 통계 조회",

@@ -16,6 +16,7 @@ import com.danzzan.domain.user.passwordreset.redis.PasswordResetRedisRepository;
 import com.danzzan.domain.user.passwordreset.redis.PasswordResetRequestState;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.domain.user.service.UserInfoService;
+import com.danzzan.global.jwt.JwtRevocationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,6 +59,9 @@ class PasswordResetServiceTest {
     @Mock
     private UserInfoService userInfoService;
 
+    @Mock
+    private JwtRevocationService jwtRevocationService;
+
     private PasswordResetService passwordResetService;
 
     @BeforeEach
@@ -80,7 +84,8 @@ class PasswordResetServiceTest {
                 passwordResetMailService,
                 userRepository,
                 passwordEncoder,
-                userInfoService
+                userInfoService,
+                jwtRevocationService
         );
     }
 
@@ -224,7 +229,7 @@ class PasswordResetServiceTest {
 
         when(passwordResetRedisRepository.consumeVerifiedToken(eq(requestId), eq(hash(requestId, verificationToken))))
                 .thenReturn(PasswordResetConsumeResult.success("32100000", true));
-        when(userRepository.findByStudentId("32100000")).thenReturn(Optional.of(user));
+        when(userRepository.findByStudentIdAndDeletedFalseForUpdate("32100000")).thenReturn(Optional.of(user));
         when(passwordEncoder.encode("NewPass!2026")).thenReturn("encoded-password");
 
         passwordResetService.resetPassword(new RequestPasswordResetDto(
@@ -236,7 +241,8 @@ class PasswordResetServiceTest {
 
         assertThat(user.getPassword()).isEqualTo("encoded-password");
         assertThat(user.getTokenVersion()).isEqualTo(1);
-        verify(userInfoService).invalidateUserInfo(1L);
+        verify(jwtRevocationService).runAfterCommit(eq(1L), eq("password-reset"), any(Runnable.class));
+        verify(userInfoService, never()).invalidateUserInfo(1L);
     }
 
     @Test

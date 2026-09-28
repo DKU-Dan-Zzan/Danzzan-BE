@@ -4,6 +4,7 @@ import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
 import com.danzzan.domain.user.repository.UserRepository;
+import com.danzzan.global.exception.AuthException;
 import com.danzzan.global.jwt.JwtRevocationService;
 import com.danzzan.global.jwt.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletResponse;
@@ -19,6 +20,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,13 +59,12 @@ class AuthServiceTest {
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
         when(jwtTokenProvider.getUserId(refreshToken)).thenReturn(1L);
         when(jwtTokenProvider.getTokenVersion(refreshToken)).thenReturn(0);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.findActiveByIdForUpdate(1L)).thenReturn(Optional.of(admin));
 
         authService.logout(refreshToken, response);
 
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
-        assertThat(userCaptor.getValue().getTokenVersion()).isEqualTo(1);
+        assertThat(admin.getTokenVersion()).isEqualTo(1);
+        verify(jwtRevocationService).publishUserVersionAfterCommit(1L, 1);
     }
 
     @Test
@@ -74,7 +75,7 @@ class AuthServiceTest {
 
         authService.logout(refreshToken, response);
 
-        verify(userRepository, never()).save(any(User.class));
+        verify(userRepository, never()).findActiveByIdForUpdate(any());
     }
 
     @Test
@@ -85,11 +86,11 @@ class AuthServiceTest {
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
         when(jwtTokenProvider.getUserId(refreshToken)).thenReturn(2L);
         when(jwtTokenProvider.getTokenVersion(refreshToken)).thenReturn(0);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(user));
+        when(userRepository.findActiveByIdForUpdate(2L)).thenReturn(Optional.of(user));
 
         authService.logout(refreshToken, response);
 
-        verify(userRepository, never()).save(any(User.class));
+        assertThat(user.getTokenVersion()).isZero();
     }
 
     @Test
@@ -101,11 +102,31 @@ class AuthServiceTest {
         when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
         when(jwtTokenProvider.getUserId(refreshToken)).thenReturn(1L);
         when(jwtTokenProvider.getTokenVersion(refreshToken)).thenReturn(0);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(admin));
+        when(userRepository.findActiveByIdForUpdate(1L)).thenReturn(Optional.of(admin));
 
         authService.logout(refreshToken, response);
 
-        verify(userRepository, never()).save(any(User.class));
+        assertThat(admin.getTokenVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void loginAllowsActiveManager() {
+        User manager = managerUser();
+        manager.changeManagerPermissions(java.util.List.of(com.danzzan.domain.user.model.entity.ManagerPermission.OPERATIONS));
+        when(userRepository.findByStudentIdAndDeletedFalse("32100003")).thenReturn(Optional.of(manager));
+        when(passwordEncoder.matches("password", "encoded-password")).thenReturn(true);
+
+        authService.login("32100003", "password", response);
+
+        verify(jwtTokenProvider).createAccessToken(3L, "32100003", "ROLE_MANAGER", 0, java.util.List.of("OPERATIONS"));
+    }
+
+    @Test
+    void loginRejectsDeletedManager() {
+        when(userRepository.findByStudentIdAndDeletedFalse("32100003")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.login("32100003", "password", response))
+                .isInstanceOf(AuthException.class);
     }
 
     private User adminUser() {
@@ -133,6 +154,20 @@ class AuthServiceTest {
                 .role(UserRole.ROLE_USER)
                 .build();
         ReflectionTestUtils.setField(user, "id", 2L);
+        return user;
+    }
+
+    private User managerUser() {
+        User user = User.builder()
+                .studentId("32100003")
+                .password("encoded-password")
+                .name("운영자")
+                .college("공과대학")
+                .major("컴퓨터공학과")
+                .academicStatus(AcademicStatus.ENROLLED)
+                .role(UserRole.ROLE_MANAGER)
+                .build();
+        ReflectionTestUtils.setField(user, "id", 3L);
         return user;
     }
 }

@@ -31,12 +31,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
 @Tag(name = "관리자 티켓", description = "관리자 티켓 조회/발급 API")
-@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
+@PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
 public class AdminTicketController {
 
     private final AdminTicketService adminTicketService;
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
     @GetMapping("/events/{eventId}/tickets/search")
     @Operation(
             summary = "학생 학번 기준 티켓 조회",
@@ -90,7 +90,7 @@ public class AdminTicketController {
         return ApiResponse.success(adminTicketService.searchTicketByStudentId(eventId, studentId));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
     @PatchMapping("/events/{eventId}/tickets/{ticketId}/issue")
     @Operation(
             summary = "팔찌 지급 처리",
@@ -160,7 +160,7 @@ public class AdminTicketController {
         return ApiResponse.success(adminTicketService.issueTicket(eventId, ticketId, note));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
     @PatchMapping("/events/{eventId}/tickets/{ticketId}/cancel")
     @Operation(
             summary = "팔찌 지급 취소",

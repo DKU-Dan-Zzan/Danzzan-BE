@@ -13,6 +13,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.authorization.AuthorizationDecision;
+import com.danzzan.global.security.UserAdminAuthorizationService;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -37,6 +39,7 @@ public class SecurityConfig {
 
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
     private final TicketingApiGateFilter ticketingApiGateFilter;
+    private final UserAdminAuthorizationService userAdminAuthorizationService;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -84,7 +87,13 @@ public class SecurityConfig {
                                 "/festival/settings"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
-                        .requestMatchers("/api/admin/**", "/admin/map/**", "/admin/timetable/**", "/admin/festival/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/staff/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/events/**", "/admin/festival/ticketing-settings")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                userAdminAuthorizationService.hasTicketingRole(authentication.get())))
+                        .requestMatchers("/api/admin/**", "/admin/map/**", "/admin/timetable/**", "/admin/festival/**")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                userAdminAuthorizationService.hasOperationsRole(authentication.get())))
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated();
                 })

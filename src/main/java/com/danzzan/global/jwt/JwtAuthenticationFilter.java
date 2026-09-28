@@ -82,7 +82,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            if (requiresTokenVersionValidation(request)) {
+            if (requiresOperationalValidation(request)) {
+                int tokenVersion = jwtTokenProvider.getTokenVersion(claims);
+                User activeUser;
+                try {
+                    activeUser = userRepository.findActiveById(userId).orElse(null);
+                } catch (RuntimeException e) {
+                    sendUnauthorized(response, "관리자 인증을 확인할 수 없습니다.");
+                    return;
+                }
+                if (activeUser == null
+                        || activeUser.getTokenVersion() != tokenVersion
+                        || !activeUser.getRole().name().equals(role)) {
+                    sendUnauthorized(response, "토큰 버전 또는 권한이 유효하지 않습니다. 다시 로그인해 주세요.");
+                    return;
+                }
+                // A cache miss is filled only from the current database row.  An older
+                // callback cannot overwrite this value because publication is monotonic.
+                jwtRevocationService.cacheUserVersion(userId, activeUser.getTokenVersion());
+            } else if (requiresTokenVersionValidation(request)) {
                 int tokenVersion = jwtTokenProvider.getTokenVersion(claims);
                 Integer cachedTokenVersion = jwtRevocationService.getCachedUserVersion(userId).orElse(null);
                 if (cachedTokenVersion != null && cachedTokenVersion != tokenVersion) {
@@ -96,6 +114,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (cachedTokenVersion == null && (user == null || user.isDeleted() || user.getTokenVersion() != tokenVersion)) {
                     sendUnauthorized(response, "토큰 버전이 유효하지 않습니다. 다시 로그인해 주세요.");
                     return;
+                }
+                if (cachedTokenVersion == null && user != null) {
+                    jwtRevocationService.cacheUserVersion(userId, user.getTokenVersion());
                 }
             }
 
@@ -131,5 +152,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private boolean requiresTokenVersionValidation(HttpServletRequest request) {
         String path = request.getRequestURI();
         return path == null || !path.startsWith("/tickets/");
+    }
+
+    private boolean requiresOperationalValidation(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path != null && (isPathOrChild(path, "/api/admin")
+                || isPathOrChild(path, "/admin/map")
+                || isPathOrChild(path, "/admin/timetable")
+                || isPathOrChild(path, "/admin/festival"));
+    }
+
+    private boolean isPathOrChild(String path, String basePath) {
+        return path.equals(basePath) || path.startsWith(basePath + "/");
     }
 }

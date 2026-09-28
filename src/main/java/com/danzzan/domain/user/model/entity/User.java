@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -40,6 +42,12 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
+
+    @Column(name = "manager_operations", nullable = false)
+    private boolean managerOperations;
+
+    @Column(name = "manager_ticketing", nullable = false)
+    private boolean managerTicketing;
 
     @Column(name = "phone_number", unique = true, length = 32)
     private String phoneNumber;
@@ -97,6 +105,30 @@ public class User {
 
     public void changeRole(UserRole role) {
         this.role = role;
+        if (role != UserRole.ROLE_MANAGER) {
+            this.managerOperations = false;
+            this.managerTicketing = false;
+        }
+    }
+
+    public void changeManagerPermissions(List<ManagerPermission> permissions) {
+        EnumSet<ManagerPermission> values = permissions == null || permissions.isEmpty()
+                ? EnumSet.noneOf(ManagerPermission.class)
+                : EnumSet.copyOf(permissions);
+        this.managerOperations = values.contains(ManagerPermission.OPERATIONS);
+        this.managerTicketing = values.contains(ManagerPermission.TICKETING);
+    }
+
+    public List<ManagerPermission> getManagerPermissions() {
+        if (role == UserRole.ROLE_ADMIN) return List.of(ManagerPermission.OPERATIONS, ManagerPermission.TICKETING);
+        if (role != UserRole.ROLE_MANAGER) return List.of();
+        return java.util.stream.Stream.of(ManagerPermission.values()).filter(this::hasManagerPermission).toList();
+    }
+
+    public boolean hasManagerPermission(ManagerPermission permission) {
+        if (role == UserRole.ROLE_ADMIN) return true;
+        if (role != UserRole.ROLE_MANAGER) return false;
+        return permission == ManagerPermission.OPERATIONS ? managerOperations : managerTicketing;
     }
 
     public void bumpTokenVersion() {

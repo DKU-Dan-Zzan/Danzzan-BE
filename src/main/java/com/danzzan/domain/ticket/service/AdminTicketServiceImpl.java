@@ -15,6 +15,7 @@ import com.danzzan.domain.ticket.repository.UserTicketRepository;
 import com.danzzan.domain.user.model.UserInfo;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
+import com.danzzan.domain.user.model.entity.ManagerPermission;
 import com.danzzan.domain.user.repository.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -138,10 +139,10 @@ public class AdminTicketServiceImpl implements AdminTicketService {
             throw new AdminAuthenticationException();
         }
 
-        User admin = userRepository.findById(userId)
+        User admin = userRepository.findActiveById(userId)
                 .orElseThrow(AdminAuthenticationException::new);
 
-        if (admin.getRole() != UserRole.ROLE_ADMIN) {
+        if (!admin.hasManagerPermission(ManagerPermission.TICKETING)) {
             throw new AdminForbiddenException();
         }
 

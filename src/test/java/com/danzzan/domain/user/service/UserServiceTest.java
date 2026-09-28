@@ -17,6 +17,7 @@ import com.danzzan.domain.user.model.entity.AcademicStatus;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
 import com.danzzan.domain.user.repository.UserRepository;
+import com.danzzan.global.exception.AuthException;
 import com.danzzan.global.jwt.JwtRevocationService;
 import com.danzzan.global.jwt.JwtTokenProvider;
 import io.jsonwebtoken.Claims;
@@ -34,10 +35,15 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -98,7 +104,7 @@ class UserServiceTest {
 
         when(userRepository.findByStudentIdAndDeletedFalse("32100000")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password", "pw")).thenReturn(true);
-        when(jwtTokenProvider.createAccessToken(1L, "32100000", "ROLE_USER", 2)).thenReturn("access-token");
+        when(jwtTokenProvider.createAccessToken(1L, "32100000", "ROLE_USER", 2, java.util.List.of())).thenReturn("access-token");
         when(jwtTokenProvider.createRefreshToken(1L, 2)).thenReturn("refresh-token");
 
         ResponseLoginDto response = userService.login(new RequestLoginDto("32100000", "password"));
@@ -115,12 +121,12 @@ class UserServiceTest {
         ReflectionTestUtils.setField(user, "tokenVersion", 3);
         Claims claims = mock(Claims.class);
 
-        when(jwtTokenProvider.validateToken("refresh-token")).thenReturn(true);
         when(jwtTokenProvider.getClaimsFromExpiredToken("expired-access-token")).thenReturn(claims);
+        when(jwtTokenProvider.getValidClaims("refresh-token")).thenReturn(claims);
         when(claims.getSubject()).thenReturn("1");
         when(userRepository.findActiveById(1L)).thenReturn(Optional.of(user));
-        when(jwtTokenProvider.getTokenVersion("refresh-token")).thenReturn(3);
-        when(jwtTokenProvider.createAccessToken(1L, "32100000", "ROLE_USER", 3)).thenReturn("new-access-token");
+        when(jwtTokenProvider.getTokenVersion(claims)).thenReturn(3);
+        when(jwtTokenProvider.createAccessToken(1L, "32100000", "ROLE_USER", 3, java.util.List.of())).thenReturn("new-access-token");
         when(jwtTokenProvider.createRefreshToken(1L, 3)).thenReturn("new-refresh-token");
 
         ResponseRefreshTokenDto response = userService.refreshToken("expired-access-token", "refresh-token");
@@ -129,6 +135,24 @@ class UserServiceTest {
         assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
         verify(jwtRevocationService).clearWithdrawnUser(1L);
         verify(jwtRevocationService).cacheUserVersion(1L, 3);
+    }
+
+    @Test
+    void refreshToken_서로다른토큰주체는_DB조회나캐시변경없이_401이다() {
+        Claims accessClaims = mock(Claims.class);
+        Claims refreshClaims = mock(Claims.class);
+        when(jwtTokenProvider.getClaimsFromExpiredToken("expired-access-token")).thenReturn(accessClaims);
+        when(jwtTokenProvider.getValidClaims("refresh-token")).thenReturn(refreshClaims);
+        when(accessClaims.getSubject()).thenReturn("1");
+        when(refreshClaims.getSubject()).thenReturn("2");
+
+        assertThatThrownBy(() -> userService.refreshToken("expired-access-token", "refresh-token"))
+                .isInstanceOf(AuthException.class)
+                .extracting(error -> ((AuthException) error).getStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.UNAUTHORIZED);
+
+        verify(userRepository, never()).findActiveById(anyLong());
+        verifyNoInteractions(jwtRevocationService);
     }
 
     @Test
@@ -168,10 +192,23 @@ class UserServiceTest {
         assertThat(user.getPhoneVerifiedAt()).isNull();
         assertThat(user.getTokenVersion()).isEqualTo(1);
         verify(queueStateService).leaveQueue("10", "1");
-        verify(userInfoService).invalidateUserInfo(1L);
-        verify(jwtRevocationService).blacklistAccessToken("access-token");
-        verify(jwtRevocationService).markWithdrawnUser(1L);
-        verify(jwtRevocationService).cacheUserVersion(1L, 1);
+        verify(jwtRevocationService).runAfterCommit(eq(1L), eq("withdraw"), any(Runnable.class));
+        verifyNoInteractions(userInfoService);
+    }
+
+    @Test
+    void withdraw_최고관리자는_다른최고관리자에게_강등된후에만_가능하다() {
+        User admin = user(1L, "32100000", "01012345678");
+        admin.changeRole(UserRole.ROLE_ADMIN);
+        when(userRepository.findActiveByIdForUpdate(1L)).thenReturn(Optional.of(admin));
+
+        assertThatThrownBy(() -> userService.withdraw(1L, "access-token"))
+                .isInstanceOf(AuthException.class)
+                .extracting(error -> ((AuthException) error).getStatus())
+                .isEqualTo(org.springframework.http.HttpStatus.CONFLICT);
+
+        verifyNoInteractions(userTicketRepository, ticketIssueRequestRepository, festivalEventRepository,
+                queueStateService, ticketIssueRequestStatusCacheService, userInfoService, jwtRevocationService, passwordEncoder);
     }
 
     private User user(Long id, String studentId, String phoneNumber) {

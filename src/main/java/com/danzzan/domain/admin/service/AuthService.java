@@ -2,6 +2,7 @@ package com.danzzan.domain.admin.service;
 
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
+import com.danzzan.domain.user.model.entity.ManagerPermission;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.global.exception.AuthException;
 import com.danzzan.global.jwt.JwtRevocationService;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,19 +30,20 @@ public class AuthService {
     private long refreshTokenExpiration;
 
     public String[] login(String studentNumber, String password, HttpServletResponse response) {
-        User admin = userRepository.findByStudentId(studentNumber)
+        User admin = userRepository.findByStudentIdAndDeletedFalse(studentNumber)
                 .orElseThrow(() -> new AuthException(HttpStatus.UNAUTHORIZED, "관리자를 찾을 수 없습니다."));
 
         if (!passwordEncoder.matches(password, admin.getPassword())) {
             throw new AuthException(HttpStatus.UNAUTHORIZED, "비밀번호가 일치하지 않습니다.");
         }
-        validateAdminRole(admin);
+        validateOperationsRole(admin);
 
         String accessToken = jwtTokenProvider.createAccessToken(
                 admin.getId(),
                 admin.getStudentId(),
                 admin.getRole().name(),
-                admin.getTokenVersion()
+                admin.getTokenVersion(),
+                admin.getManagerPermissions().stream().map(ManagerPermission::name).toList()
         );
         String refreshToken = jwtTokenProvider.createRefreshToken(admin.getId(), admin.getTokenVersion());
 
@@ -69,9 +72,9 @@ public class AuthService {
         Long userId = jwtTokenProvider.getUserId(refreshToken);
         int tokenVersion = jwtTokenProvider.getTokenVersion(refreshToken);
 
-        User admin = userRepository.findById(userId)
+        User admin = userRepository.findActiveById(userId)
                 .orElseThrow(() -> new AuthException(HttpStatus.UNAUTHORIZED, "관리자 인증에 실패했습니다."));
-        validateAdminRole(admin);
+        validateOperationsRole(admin);
         if (admin.getTokenVersion() != tokenVersion) {
             throw new AuthException(HttpStatus.UNAUTHORIZED, "만료된 세션입니다. 다시 로그인해주세요.");
         }
@@ -80,22 +83,23 @@ public class AuthService {
                 admin.getId(),
                 admin.getStudentId(),
                 admin.getRole().name(),
-                admin.getTokenVersion()
+                admin.getTokenVersion(),
+                admin.getManagerPermissions().stream().map(ManagerPermission::name).toList()
         );
     }
 
+    @Transactional
     public void logout(String refreshToken, HttpServletResponse response) {
         if (refreshToken != null && !refreshToken.isBlank() && jwtTokenProvider.validateToken(refreshToken)) {
             Long userId = jwtTokenProvider.getUserId(refreshToken);
             int tokenVersion = jwtTokenProvider.getTokenVersion(refreshToken);
 
-            userRepository.findById(userId)
-                    .filter(user -> user.getRole() == UserRole.ROLE_ADMIN)
+            userRepository.findActiveByIdForUpdate(userId)
+                    .filter(this::hasOperationsRole)
                     .filter(user -> user.getTokenVersion() == tokenVersion)
                     .ifPresent(user -> {
                         user.bumpTokenVersion();
-                        userRepository.save(user);
-                        jwtRevocationService.cacheUserVersion(userId, user.getTokenVersion());
+                        jwtRevocationService.publishUserVersionAfterCommit(userId, user.getTokenVersion());
                     });
         }
 
@@ -109,9 +113,13 @@ public class AuthService {
         response.addHeader("Set-Cookie", clearCookie.toString());
     }
 
-    private void validateAdminRole(User user) {
-        if (user.getRole() != UserRole.ROLE_ADMIN) {
+    private void validateOperationsRole(User user) {
+        if (!hasOperationsRole(user)) {
             throw new AuthException(HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다.");
         }
+    }
+
+    private boolean hasOperationsRole(User user) {
+        return user.getRole() == UserRole.ROLE_ADMIN || (user.getRole() == UserRole.ROLE_MANAGER && !user.getManagerPermissions().isEmpty());
     }
 }

@@ -65,9 +65,11 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,https://danfesta2026.yaaksok.com}
     allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
   ticketing:
-    # 가을 축제는 티켓팅을 하지 않는다. false 이면 /tickets/**, /user/** 가 차단된다.
-    # 내년 봄에 되살리려면 true 로 바꾸면 된다. 관리자 로그인(/auth/**)은 영향 없다.
-    api-enabled: ${TICKETING_API_ENABLED:false}
+    # 티켓팅 사용 여부는 평소 관리자 축제 설정(festival_setting)에서 켜고 끈다.
+    # 아래 값은 그 위에 있는 비상 차단 스위치다. false 로 배포하면 설정과 무관하게
+    # /tickets/** 가 막힌다. 로그인·내 정보(/user/**)와 관리자 로그인(/auth/**)은
+    # 이 값의 영향을 받지 않는다.
+    api-enabled: ${TICKETING_API_ENABLED:true}
     async:
       reserve:
         enabled: ${TICKETING_ASYNC_RESERVE_ENABLED:false}

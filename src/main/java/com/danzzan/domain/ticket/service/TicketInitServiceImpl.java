@@ -27,8 +27,25 @@ public class TicketInitServiceImpl implements TicketInitService {
 
     @Override
     public AdminTicketInitResponseDTO initStock(String eventId, Long stock) {
-        String stockKey = TicketRedisKeys.stockKey(eventId);
-        String eventPrefix = eventPrefixFromStockKey(stockKey);
+        clearEventKeys(eventId);
+        redisTemplate.opsForValue().set(TicketRedisKeys.stockKey(eventId), String.valueOf(stock));
+
+        return AdminTicketInitResponseDTO.builder()
+                .eventId(eventId)
+                .stock(stock)
+                .build();
+    }
+
+    @Override
+    public void purgeEvent(String eventId) {
+        clearEventKeys(eventId);
+        redisTemplate.delete(TicketRedisKeys.stockKey(eventId));
+        redisTemplate.delete(TicketRedisKeys.eventStatusKey(eventId));
+    }
+
+    /** 재고 키를 뺀 나머지 이벤트 키를 모두 지운다. */
+    private void clearEventKeys(String eventId) {
+        String eventPrefix = eventPrefixFromStockKey(TicketRedisKeys.stockKey(eventId));
 
         // Lua claim 관련 키
         unlinkByPattern(eventPrefix + ":user:*");
@@ -46,13 +63,6 @@ public class TicketInitServiceImpl implements TicketInitService {
         redisTemplate.delete(TicketRedisKeys.readyKey(eventId));
         redisTemplate.delete(TicketRedisKeys.activeKey(eventId));
         redisTemplate.delete(TicketRedisKeys.closedCleanupKey(eventId));
-
-        redisTemplate.opsForValue().set(stockKey, String.valueOf(stock));
-
-        return AdminTicketInitResponseDTO.builder()
-                .eventId(eventId)
-                .stock(stock)
-                .build();
     }
 
     private String eventPrefixFromStockKey(String stockKey) {

@@ -182,6 +182,10 @@ public class TicketService {
         if (status == TicketingStatus.CLOSED) {
             // CLOSED는 stock 키 유무와 무관하게 항상 0
             remaining = 0;
+        } else if (status == TicketingStatus.READY) {
+            // 아직 오픈 전이라 빠져나간 티켓이 없다. 재고 키는 오픈 시점에 새로 세팅되므로
+            // 오픈 전에는 보지 않는다. (같은 id 를 다시 쓴 이벤트가 예전 값을 물려받는 것도 막는다)
+            remaining = event.getTotalCapacity();
         } else if (stockStr != null) {
             try {
                 remaining = Math.max(0, Integer.parseInt(stockStr));
@@ -189,8 +193,8 @@ public class TicketService {
                 remaining = 0;
             }
         } else {
-            // stock 키 없음: OPEN이면 예매 불가 상태(0), READY이면 아직 오픈 전(totalCapacity 예고)
-            remaining = status == TicketingStatus.OPEN ? 0 : event.getTotalCapacity();
+            // stock 키 없음: OPEN 이면 예매 불가 상태(0)
+            remaining = 0;
         }
 
         // BE status → FE status 변환

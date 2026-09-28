@@ -56,6 +56,7 @@ out/
 !scripts/add_advertisement_link_url.sql
 !scripts/cleanup_advertisement_columns.sql
 !scripts/add_translation_columns.sql
+!scripts/add_festival_setting.sql
 !scripts/widen_translation_columns.sql
 !scripts/seed_local_fall_festival.sql
 *.sqlite

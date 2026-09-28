@@ -42,4 +42,21 @@ public class FestivalEvent {
         this.totalCapacity = totalCapacity;
     }
 
+    /**
+     * 관리자 축제 설정에서 회차를 고쳤을 때 이벤트를 따라 고친다.
+     *
+     * 오픈 전(READY)일 때만 부른다. 이미 열렸거나 마감된 이벤트를 고치면 대기열과
+     * 발급된 티켓의 전제가 흔들린다.
+     */
+    public void updateBeforeOpen(String title, LocalDate eventDate, LocalDateTime ticketingStartTime,
+                                 Integer totalCapacity) {
+        if (this.ticketingStatus != TicketingStatus.READY) {
+            throw new IllegalStateException("이미 오픈했거나 마감한 티켓팅은 수정할 수 없습니다.");
+        }
+        this.title = title;
+        this.eventDate = eventDate;
+        this.ticketingStartTime = ticketingStartTime;
+        this.totalCapacity = totalCapacity;
+    }
+
 }

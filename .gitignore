@@ -57,6 +57,9 @@ out/
 !scripts/cleanup_advertisement_columns.sql
 !scripts/add_translation_columns.sql
 !scripts/add_festival_setting.sql
+!scripts/add_manager_role.sql
+!scripts/add_manager_permissions.sql
+__pycache__/
 !scripts/widen_translation_columns.sql
 !scripts/seed_local_fall_festival.sql
 *.sqlite

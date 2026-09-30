@@ -239,6 +239,7 @@ public class TicketController {
                         acceptedAt
                 );
             } catch (Exception e) {
+                log.error("Async ticket request enqueue failed eventId={} requestId={}", eventId, requestId, e);
                 ticketStatusService.clearProcessing(eventIdStr, userIdStr);
                 claimService.rollback(eventIdStr, userIdStr);
                 throw new ReserveProcessingException();

@@ -5,6 +5,8 @@ import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.HashOperations;
@@ -49,6 +51,27 @@ class TicketStatusServiceImplTest {
         );
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(redisTemplate.opsForHash()).thenReturn(hashOperations);
+    }
+
+    @Test
+    void getMySequence_처리상태와_무관하게_대기열에_저장된_순번을_읽는다() {
+        when(hashOperations.get(TicketRedisKeys.queueUserHashKey("9", "11"), "seq"))
+                .thenReturn("7");
+
+        assertEquals(7L, ticketStatusService.getMySequence("9", "11"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PROCESSING", "SUCCESS", "FAILED", "ALREADY", "SOLD_OUT", ""})
+    void getQueueStatusSnapshot_대기상태가_생략된_응답도_오류없이_처리한다(String status) {
+        when(redisTemplate.execute(eq(queueStatusSnapshotScript), anyList()))
+                .thenReturn(List.of(status, "", "", "", "", "", ""));
+
+        TicketStatusService.QueueStatusSnapshot snapshot = ticketStatusService.getQueueStatusSnapshot("9", "11");
+
+        assertEquals(status.isEmpty() ? TicketRequestStatus.NONE : TicketRequestStatus.valueOf(status), snapshot.status());
+        assertNull(snapshot.readyUntil());
+        assertNull(snapshot.admissionState());
     }
 
     @Test

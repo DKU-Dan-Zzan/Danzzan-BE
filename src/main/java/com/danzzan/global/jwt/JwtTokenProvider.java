@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 
 @Component
 public class JwtTokenProvider {
@@ -32,6 +33,10 @@ public class JwtTokenProvider {
     // Access Token 생성
     // userId, studentId, role을 클레임에 포함
     public String createAccessToken(Long userId, String studentId, String role, int tokenVersion) {
+        return createAccessToken(userId, studentId, role, tokenVersion, List.of());
+    }
+
+    public String createAccessToken(Long userId, String studentId, String role, int tokenVersion, List<String> permissions) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + accessTokenExpiration);
 
@@ -39,6 +44,7 @@ public class JwtTokenProvider {
                 .setSubject(String.valueOf(userId))
                 .claim("studentId", studentId)
                 .claim("role", role)
+                .claim("permissions", permissions == null ? List.of() : List.copyOf(permissions))
                 .claim("tokenVersion", tokenVersion)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
@@ -95,6 +101,12 @@ public class JwtTokenProvider {
     public int getTokenVersion(Claims claims) {
         Integer tokenVersion = claims.get("tokenVersion", Integer.class);
         return tokenVersion == null ? 0 : tokenVersion;
+    }
+
+    public List<String> getPermissions(Claims claims) {
+        Object value = claims.get("permissions");
+        if (!(value instanceof List<?> values)) return List.of();
+        return values.stream().filter(String.class::isInstance).map(String.class::cast).toList();
     }
 
     // 토큰 유효성 검증

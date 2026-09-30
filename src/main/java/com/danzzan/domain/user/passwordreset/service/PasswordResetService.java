@@ -14,6 +14,7 @@ import com.danzzan.domain.user.passwordreset.redis.PasswordResetRedisRepository;
 import com.danzzan.domain.user.passwordreset.redis.PasswordResetRequestState;
 import com.danzzan.domain.user.repository.UserRepository;
 import com.danzzan.domain.user.service.UserInfoService;
+import com.danzzan.global.jwt.JwtRevocationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -46,6 +47,7 @@ public class PasswordResetService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserInfoService userInfoService;
+    private final JwtRevocationService jwtRevocationService;
 
     @Transactional
     public ResponsePasswordResetRequestDto requestReset(RequestPasswordResetRequestDto dto, String clientIp) {
@@ -144,12 +146,17 @@ public class PasswordResetService {
             throw new PasswordResetException(PasswordResetErrorType.USER_NOT_FOUND);
         }
 
-        User user = userRepository.findByStudentId(studentId)
+        User user = userRepository.findByStudentIdAndDeletedFalseForUpdate(studentId)
                 .orElseThrow(() -> new PasswordResetException(PasswordResetErrorType.USER_NOT_FOUND));
 
         user.changePassword(passwordEncoder.encode(rawNewPassword));
         user.bumpTokenVersion();
-        userInfoService.invalidateUserInfo(user.getId());
+        Long userId = user.getId();
+        int tokenVersion = user.getTokenVersion();
+        jwtRevocationService.runAfterCommit(userId, "password-reset", () -> {
+            userInfoService.invalidateUserInfo(userId);
+            jwtRevocationService.cacheUserVersion(userId, tokenVersion);
+        });
     }
 
     private void enforceRequestRateLimit(String studentId, String clientIp) {

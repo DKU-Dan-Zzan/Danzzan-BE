@@ -13,6 +13,7 @@ import com.danzzan.domain.user.exception.AlreadyStudentIdException;
 import com.danzzan.domain.user.exception.CheonanCampusException;
 import com.danzzan.domain.user.exception.UserNotFoundException;
 import com.danzzan.domain.user.exception.WrongPasswordException;
+import com.danzzan.domain.admin.staff.exception.StaffManagementException;
 import com.danzzan.domain.user.phoneverification.exception.PhoneVerificationException;
 import com.danzzan.domain.user.passwordreset.exception.PasswordResetException;
 import com.danzzan.global.exception.AdminAuthenticationException;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.util.List;
 import java.util.Map;
@@ -96,6 +98,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<?> handleTypeMismatch(MethodArgumentTypeMismatchException e, HttpServletRequest request) {
+        if (isStaffApi(request)) {
+            StaffManagementException staffException = "userId".equals(e.getName())
+                    ? StaffManagementException.invalidTargetId()
+                    : "filter".equals(e.getName())
+                    ? StaffManagementException.invalidFilter()
+                    : StaffManagementException.invalidPage();
+            return ResponseEntity.status(staffException.getStatus())
+                    .body(ApiResponse.error(staffException.getCode(), staffException.getMessage()));
+        }
         String param = e.getName();
         String msg = String.format("요청 파라미터 '%s' 형식이 올바르지 않습니다.", param);
 
@@ -107,6 +118,21 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ErrorResponse.of(msg, 400));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<?> handleUnreadableBody(HttpMessageNotReadableException e, HttpServletRequest request) {
+        if (isStaffApi(request)) {
+            StaffManagementException staffException = StaffManagementException.invalidRole();
+            return ResponseEntity.status(staffException.getStatus())
+                    .body(ApiResponse.error(staffException.getCode(), staffException.getMessage()));
+        }
+        return ResponseEntity.badRequest().body(ErrorResponse.of("요청 본문 형식이 올바르지 않습니다.", 400));
+    }
+
+    @ExceptionHandler(StaffManagementException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStaffManagement(StaffManagementException e) {
+        return ResponseEntity.status(e.getStatus()).body(ApiResponse.error(e.getCode(), e.getMessage()));
     }
 
     @ExceptionHandler(AlreadyStudentIdException.class)
@@ -253,5 +279,9 @@ public class GlobalExceptionHandler {
                 || path.startsWith("/tickets")
                 || path.startsWith("/api/admin/events")
                 || path.startsWith("/api/admin/ticket");
+    }
+
+    private boolean isStaffApi(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/api/admin/staff");
     }
 }

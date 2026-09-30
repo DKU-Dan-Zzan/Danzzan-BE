@@ -37,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 축제 설정은 프론트의 날짜 탭이 그대로 따라오는 값이라, 운영 기간 밖의 공연 날짜가
@@ -107,6 +108,27 @@ class FestivalSettingServiceTest {
 
         assertThrows(InvalidFestivalSettingException.class, () -> festivalSettingService.updateSettings(request));
         verify(festivalSettingRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void 운영_정보_저장은_본문의_티켓팅_필드를_무시하고_기존_회차와_스위치를_보존한다() {
+        FestivalSetting setting = FestivalSetting.create("단국대학교", "기존 축제",
+                LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true);
+        FestivalTicketingRound savedRound = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 100,
+                LocalDate.of(2026, 9, 9), 0, 10L);
+        UpdateFestivalSettingRequest request = request(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 2), false, List.of());
+        when(festivalSettingRepository.findByIdForUpdate(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.of(setting));
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(savedRound));
+
+        FestivalSettingResponse response = festivalSettingService.updateMetadata(request);
+
+        assertTrue(response.ticketingEnabled());
+        assertEquals(1, response.ticketingRounds().size());
+        assertEquals("2026 DANFESTA", setting.getFestivalName());
+        verify(festivalSettingRepository).save(setting);
+        verify(festivalEventRepository, never()).save(any());
+        verify(festivalEventRepository, never()).delete(any());
+        verifyNoInteractions(ticketQueueEntryRepository, ticketInitService, ticketingAccessPolicy);
     }
 
     @Test

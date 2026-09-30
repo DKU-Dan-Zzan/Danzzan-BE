@@ -3,6 +3,7 @@ package com.danzzan.global.security;
 import com.danzzan.domain.user.model.UserInfo;
 import com.danzzan.domain.user.model.entity.User;
 import com.danzzan.domain.user.model.entity.UserRole;
+import com.danzzan.domain.user.model.entity.ManagerPermission;
 import com.danzzan.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -19,7 +20,6 @@ public class UserAdminAuthorizationService {
             return false;
         }
 
-        // Admin JWT filter already grants ROLE_ADMIN authority — trust it directly
         boolean hasAdminAuthority = authentication.getAuthorities().stream()
                 .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
         if (hasAdminAuthority) {
@@ -31,8 +31,26 @@ public class UserAdminAuthorizationService {
             return false;
         }
 
-        return userRepository.findById(userId)
+        return userRepository.findActiveById(userId)
                 .map(user -> user.getRole() == UserRole.ROLE_ADMIN)
+                .orElse(false);
+    }
+
+    public boolean hasOperationsRole(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        Long userId = extractUserId(authentication);
+        return userId != null && userRepository.findActiveById(userId)
+                .map(user -> user.hasManagerPermission(ManagerPermission.OPERATIONS))
+                .orElse(false);
+    }
+
+    public boolean hasTicketingRole(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) return false;
+        Long userId = extractUserId(authentication);
+        return userId != null && userRepository.findActiveById(userId)
+                .map(user -> user.hasManagerPermission(ManagerPermission.TICKETING))
                 .orElse(false);
     }
 

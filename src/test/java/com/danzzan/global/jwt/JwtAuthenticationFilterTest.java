@@ -10,6 +10,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -23,6 +25,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
@@ -106,19 +109,82 @@ class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer token");
         MockHttpServletResponse response = new MockHttpServletResponse();
         User user = userWithTokenVersion(3);
+        user.changeRole(UserRole.ROLE_ADMIN);
         Claims claims = mock(Claims.class);
 
         when(jwtTokenProvider.getValidClaims("token")).thenReturn(claims);
         when(jwtTokenProvider.getUserId(claims)).thenReturn(1L);
         when(jwtTokenProvider.getRole(claims)).thenReturn("ROLE_ADMIN");
         when(jwtTokenProvider.getTokenVersion(claims)).thenReturn(3);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findActiveById(1L)).thenReturn(Optional.of(user));
 
         filter.doFilter(request, response, filterChain);
 
         verify(jwtTokenProvider).getTokenVersion(claims);
-        verify(userRepository).findById(1L);
+        verify(userRepository).findActiveById(1L);
         verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void adminRouteAlwaysUsesDatabaseEvenWhenRedisVersionMatches() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/admin/events");
+        request.addHeader("Authorization", "Bearer token");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        Claims claims = mock(Claims.class);
+        User manager = userWithTokenVersion(3);
+        manager.changeRole(UserRole.ROLE_MANAGER);
+
+        when(jwtTokenProvider.getValidClaims("token")).thenReturn(claims);
+        when(jwtTokenProvider.getUserId(claims)).thenReturn(1L);
+        when(jwtTokenProvider.getRole(claims)).thenReturn("ROLE_MANAGER");
+        when(jwtTokenProvider.getTokenVersion(claims)).thenReturn(3);
+        when(userRepository.findActiveById(1L)).thenReturn(Optional.of(manager));
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(userRepository).findActiveById(1L);
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/admin/map", "/admin/map/child"})
+    void mapBaseAndChildRejectStaleManagerTokenAfterDatabaseValidation(String path) throws Exception {
+        MockHttpServletRequest request = authenticatedRequest(path, "ROLE_MANAGER", 3);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        User manager = userWithTokenVersion(4);
+        manager.changeRole(UserRole.ROLE_MANAGER);
+        when(userRepository.findActiveById(1L)).thenReturn(Optional.of(manager));
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verify(userRepository).findActiveById(1L);
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/admin/map", "/admin/map/child"})
+    void mapBaseAndChildFailClosedWhenOperationalDatabaseLookupFails(String path) throws Exception {
+        MockHttpServletRequest request = authenticatedRequest(path, "ROLE_MANAGER", 3);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(userRepository.findActiveById(1L)).thenThrow(new IllegalStateException("database unavailable"));
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verify(userRepository).findActiveById(1L);
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    private MockHttpServletRequest authenticatedRequest(String path, String role, int tokenVersion) {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
+        request.addHeader("Authorization", "Bearer token");
+        Claims claims = mock(Claims.class);
+        when(jwtTokenProvider.getValidClaims("token")).thenReturn(claims);
+        when(jwtTokenProvider.getUserId(claims)).thenReturn(1L);
+        when(jwtTokenProvider.getRole(claims)).thenReturn(role);
+        when(jwtTokenProvider.getTokenVersion(claims)).thenReturn(tokenVersion);
+        return request;
     }
 
     private User userWithTokenVersion(int tokenVersion) {

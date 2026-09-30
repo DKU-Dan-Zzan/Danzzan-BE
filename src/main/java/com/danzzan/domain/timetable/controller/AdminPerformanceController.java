@@ -29,7 +29,7 @@ import java.time.LocalDate;
 @RequiredArgsConstructor
 @Tag(name = "관리자 타임테이블 - 공연", description = "관리자 공연 CRUD API")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
+@PreAuthorize("@userAdminAuthorizationService.hasOperationsRole(authentication)")
 public class AdminPerformanceController {
 
     private final AdminPerformanceService adminPerformanceService;

@@ -1,6 +1,7 @@
 package com.danzzan.domain.festival.controller;
 
 import com.danzzan.domain.festival.dto.request.UpdateFestivalSettingRequest;
+import com.danzzan.domain.festival.dto.request.UpdateFestivalTicketingSettingsRequest;
 import com.danzzan.domain.festival.dto.response.FestivalSettingResponse;
 import com.danzzan.domain.festival.service.FestivalSettingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequiredArgsConstructor
@@ -23,6 +25,7 @@ public class AdminFestivalSettingController {
     private final FestivalSettingService festivalSettingService;
 
     @PutMapping("/settings")
+    @PreAuthorize("@userAdminAuthorizationService.hasOperationsRole(authentication)")
     @Operation(
             summary = "축제 운영 정보 저장",
             description = "축제 이름/운영 날짜/티켓팅 회차를 저장합니다. 보낸 티켓팅 회차가 저장된 회차를 대신합니다."
@@ -30,6 +33,14 @@ public class AdminFestivalSettingController {
     public FestivalSettingResponse updateSettings(
             @RequestBody @Valid UpdateFestivalSettingRequest request
     ) {
-        return festivalSettingService.updateSettings(request);
+        return festivalSettingService.updateMetadata(request);
+    }
+
+    @PutMapping("/ticketing-settings")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
+    public FestivalSettingResponse updateTicketingSettings(
+            @RequestBody @Valid UpdateFestivalTicketingSettingsRequest request
+    ) {
+        return festivalSettingService.updateTicketingSettings(request);
     }
 }

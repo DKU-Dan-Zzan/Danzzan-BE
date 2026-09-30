@@ -33,7 +33,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Tag(name = "관리자 타임테이블 - 아티스트", description = "관리자 아티스트 CRUD 및 이미지 업로드 API")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
+@PreAuthorize("@userAdminAuthorizationService.hasOperationsRole(authentication)")
 public class AdminArtistController {
 
     private final AdminArtistService adminArtistService;

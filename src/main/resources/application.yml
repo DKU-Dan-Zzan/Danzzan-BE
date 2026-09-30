@@ -61,6 +61,8 @@ jwt:
   refresh-token-expiration: 604800000
 
 app:
+  staff-management:
+    enabled: ${STAFF_MANAGEMENT_ENABLED:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,https://danfesta2026.yaaksok.com}
     allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}

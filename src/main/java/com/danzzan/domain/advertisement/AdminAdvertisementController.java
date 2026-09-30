@@ -28,7 +28,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/ads")
 @RequiredArgsConstructor
-@PreAuthorize("@userAdminAuthorizationService.hasAdminRole(authentication)")
+@PreAuthorize("@userAdminAuthorizationService.hasOperationsRole(authentication)")
 public class AdminAdvertisementController {
 
     private final AdminAdvertisementService adminAdvertisementService;

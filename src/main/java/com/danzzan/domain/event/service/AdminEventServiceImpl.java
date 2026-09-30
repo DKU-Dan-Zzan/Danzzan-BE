@@ -45,6 +45,7 @@ public class AdminEventServiceImpl implements AdminEventService {
                         .title(event.getTitle())
                         .dayLabel("DAY " + dayIndex.get(event.getEventDate()))
                         .eventDate(event.getEventDate().toString())
+                        .ticketingStartTime(event.getTicketingStartTime())
                         .ticketingStatus(event.getTicketingStatus())
                         .totalCapacity(event.getTotalCapacity())
                         .build())

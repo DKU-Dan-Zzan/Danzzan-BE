@@ -48,7 +48,7 @@ class EventOpenServiceImplTest {
     void openNow_OPEN전환이_성공하면_초기화후_발급유저를_동기화한다() {
         FestivalEvent event = event(1L, 100, TicketingStatus.READY);
         List<Long> issuedUsers = List.of(7L, 9L);
-        when(eventRepository.findById(1L)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
         when(eventRepository.openIfReady(1L)).thenReturn(1);
         when(userTicketRepository.findUserIdsByEventIdAndStatusIn(
                 eq(1L),
@@ -73,7 +73,7 @@ class EventOpenServiceImplTest {
     @Test
     void openNow_OPEN전환을_못하면_초기화와_동기화를_생략한다() {
         FestivalEvent event = event(1L, 100, TicketingStatus.OPEN);
-        when(eventRepository.findById(1L)).thenReturn(Optional.of(event));
+        when(eventRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(event));
         when(eventRepository.openIfReady(1L)).thenReturn(0);
 
         boolean opened = eventOpenService.openNow(1L);

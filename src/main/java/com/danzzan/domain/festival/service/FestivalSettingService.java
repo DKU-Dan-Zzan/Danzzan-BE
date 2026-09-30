@@ -67,7 +67,7 @@ public class FestivalSettingService {
                         toResponses(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc())
                 ))
                 .orElseGet(() -> new FestivalSettingResponse(
-                        DEFAULT_SCHOOL_NAME, "", null, null, List.of(), false, List.of()
+                        DEFAULT_SCHOOL_NAME, "", null, null, List.of(), false, List.of(), null
                 ));
     }
 
@@ -135,6 +135,9 @@ public class FestivalSettingService {
         setting.update(setting.getSchoolName(), setting.getFestivalName(), setting.getStartDate(), setting.getEndDate(),
                 Boolean.TRUE.equals(request.getTicketingEnabled()));
         List<TicketingRoundResponse> rounds = syncTicketingRounds(combined);
+        if (request.isBackgroundImageSpecified()) {
+            setting.updateTicketingBackgroundImageUrl(request.getTicketingBackgroundImageUrl());
+        }
         ticketingAccessPolicy.invalidate();
         return FestivalSettingResponse.of(setting, operationDates, rounds);
     }
@@ -157,6 +160,12 @@ public class FestivalSettingService {
         List<FestivalTicketingRound> result = new ArrayList<>();
         List<TicketingRoundRequest> requested = request.getTicketingRounds();
 
+        java.util.Set<Long> incomingIds = new java.util.HashSet<>();
+        for (TicketingRoundRequest incoming : requested) {
+            if (incoming.getId() != null && (!saved.containsKey(incoming.getId()) || !incomingIds.add(incoming.getId()))) {
+                throw new InvalidFestivalSettingException("회차 목록이 변경되었습니다. 새로고침 후 다시 저장해 주세요.");
+            }
+        }
         for (int index = 0; index < requested.size(); index++) {
             TicketingRoundRequest incoming = requested.get(index);
             FestivalTicketingRound existing = incoming.getId() == null ? null : saved.remove(incoming.getId());
@@ -198,13 +207,15 @@ public class FestivalSettingService {
             TicketingRoundRequest incoming,
             int index
     ) {
+        // Serialize capacity/date edits with the auto-open transition and Redis stock initialization.
+        if (existing.getEventId() != null) festivalEventRepository.findByIdForUpdate(existing.getEventId());
         boolean changed = !existing.getTicketingAt().equals(incoming.getTicketingAt())
                 || existing.getCapacity() != incoming.getCapacity()
                 || !existing.getPerformanceDate().equals(incoming.getPerformanceDate());
 
-        if (changed && isLocked(existing)) {
-            throw new InvalidFestivalSettingException(
-                    "이미 티켓팅이 시작된 회차는 수정할 수 없습니다.");
+        if (isLocked(existing)) {
+            if (changed) throw new InvalidFestivalSettingException("이미 티켓팅이 시작된 회차는 수정할 수 없습니다.");
+            return existing;
         }
 
         existing.update(incoming.getTicketingAt(), incoming.getCapacity(), incoming.getPerformanceDate(), index);

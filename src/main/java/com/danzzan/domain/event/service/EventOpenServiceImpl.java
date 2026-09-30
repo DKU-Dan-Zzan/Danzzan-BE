@@ -35,7 +35,7 @@ public class EventOpenServiceImpl implements EventOpenService {
     @Override
     @Transactional
     public boolean openNow(Long eventId) {
-        FestivalEvent event = eventRepository.findById(eventId)
+        FestivalEvent event = eventRepository.findByIdForUpdate(eventId)
                 .orElseThrow(EventNotFoundException::new);
 
         // 조건부 업데이트: READY인 경우에만 OPEN으로 전환 (동시 호출 안전)

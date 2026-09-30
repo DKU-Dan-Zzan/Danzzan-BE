@@ -21,6 +21,8 @@ public class EventSummaryDTO {
     private String dayLabel;
     @Schema(description = "공연 날짜 (YYYY-MM-DD)", example = "2026-05-13")
     private String eventDate;
+    @Schema(description = "티켓팅 시작 시각 (한국 시간)")
+    private java.time.LocalDateTime ticketingStartTime;
     @Schema(description = "티켓팅 상태", example = "OPEN")
     private TicketingStatus ticketingStatus;
     @Schema(description = "정원 (festival_events.total_capacity)", example = "5000")

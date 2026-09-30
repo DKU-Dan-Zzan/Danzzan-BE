@@ -23,12 +23,20 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class AdminFestivalSettingController {
 
     private final FestivalSettingService festivalSettingService;
+    private final com.danzzan.domain.festival.service.TicketingBackgroundService ticketingBackgroundService;
+
+    @org.springframework.web.bind.annotation.PostMapping(value = "/ticketing-background", consumes = "multipart/form-data")
+    @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")
+    public com.danzzan.infra.s3.S3UploadResult uploadBackground(
+            @org.springframework.web.bind.annotation.RequestPart("file") org.springframework.web.multipart.MultipartFile file) {
+        return ticketingBackgroundService.upload(file);
+    }
 
     @PutMapping("/settings")
     @PreAuthorize("@userAdminAuthorizationService.hasOperationsRole(authentication)")
     @Operation(
             summary = "축제 운영 정보 저장",
-            description = "축제 이름/운영 날짜/티켓팅 회차를 저장합니다. 보낸 티켓팅 회차가 저장된 회차를 대신합니다."
+            description = "축제 이름과 운영 날짜를 저장합니다. 티켓팅 설정은 별도 API에서 저장합니다."
     )
     public FestivalSettingResponse updateSettings(
             @RequestBody @Valid UpdateFestivalSettingRequest request

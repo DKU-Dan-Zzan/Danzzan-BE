@@ -70,6 +70,12 @@ class FestivalSettingServiceTest {
     @InjectMocks
     private FestivalSettingService festivalSettingService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void lockReturnsTheCurrentEvent() {
+        org.mockito.Mockito.lenient().when(festivalEventRepository.findByIdForUpdate(any()))
+                .thenAnswer(invocation -> festivalEventRepository.findById(invocation.getArgument(0)));
+    }
+
     @Test
     void 저장된_설정이_없으면_빈_설정을_내려준다() {
         when(festivalSettingRepository.findById(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.empty());
@@ -281,6 +287,39 @@ class FestivalSettingServiceTest {
 
         verify(festivalEventRepository).delete(event);
         verify(festivalTicketingRoundRepository).delete(removed);
+    }
+
+    @Test
+    void unchangedOpenRoundSurvivesSettingsSave() {
+        var request = request(LocalDate.of(2026,9,9), LocalDate.of(2026,9,10), true,
+                List.of(round(1L, LocalDateTime.of(2026,9,1,18,0), 1000, LocalDate.of(2026,9,9))));
+        var saved = round(1L, LocalDateTime.of(2026,9,1,18,0),1000,LocalDate.of(2026,9,9),0,10L);
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(saved));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event(10L, TicketingStatus.OPEN)));
+        festivalSettingService.updateSettings(request);
+        verify(festivalEventRepository, never()).save(any());
+    }
+
+    @Test
+    void unknownRoundIdCannotCreateAnotherEvent() {
+        var request = request(LocalDate.of(2026,9,9), LocalDate.of(2026,9,10), true,
+                List.of(round(999L, LocalDateTime.of(2026,9,1,18,0),1000,LocalDate.of(2026,9,9))));
+        assertThrows(InvalidFestivalSettingException.class, () -> festivalSettingService.updateSettings(request));
+        verify(festivalEventRepository, never()).save(any());
+    }
+
+    @Test
+    void backgroundOmissionPreservesAndExplicitNullClearsWithoutDeletingRounds() throws Exception {
+        var setting = FestivalSetting.create("학교", "축제", LocalDate.of(2027,5,1), LocalDate.of(2027,5,2), false);
+        setting.updateTicketingBackgroundImageUrl("https://example.com/old.png");
+        when(festivalSettingRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var request = mapper.readValue("{\"ticketingEnabled\":false,\"ticketingRounds\":[]}", com.danzzan.domain.festival.dto.request.UpdateFestivalTicketingSettingsRequest.class);
+        assertEquals("https://example.com/old.png", festivalSettingService.updateTicketingSettings(request).ticketingBackgroundImageUrl());
+        request = mapper.readValue("{\"ticketingEnabled\":false,\"ticketingRounds\":[],\"ticketingBackgroundImageUrl\":null}", com.danzzan.domain.festival.dto.request.UpdateFestivalTicketingSettingsRequest.class);
+        org.junit.jupiter.api.Assertions.assertNull(festivalSettingService.updateTicketingSettings(request).ticketingBackgroundImageUrl());
+        verifyNoInteractions(ticketQueueEntryRepository, userTicketRepository, festivalEventRepository);
+        verify(festivalTicketingRoundRepository, never()).delete(any());
     }
 
     private UpdateFestivalSettingRequest request(

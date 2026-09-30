@@ -12,6 +12,10 @@ import java.util.List;
 
 public interface FestivalEventRepository extends JpaRepository<FestivalEvent, Long> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM FestivalEvent e WHERE e.id = :id")
+    java.util.Optional<FestivalEvent> findByIdForUpdate(@Param("id") Long id);
+
     List<FestivalEvent> findAllByTicketingStatus(TicketingStatus status);
 
     List<FestivalEvent> findAllByTicketingStatusAndTicketingStartTimeLessThanEqual(

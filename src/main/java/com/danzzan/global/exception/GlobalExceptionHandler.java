@@ -3,6 +3,7 @@ package com.danzzan.global.exception;
 import com.danzzan.domain.event.exception.EventNotFoundException;
 import com.danzzan.domain.ticket.exception.AlreadyReservedException;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
+import com.danzzan.domain.ticket.exception.QueueAdmissionExpiredException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.exception.ReserveProcessingException;
 import com.danzzan.domain.ticket.exception.TicketAlreadyIssuedException;
@@ -216,6 +217,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleTicketNotIssued(TicketNotIssuedException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("NOT_ISSUED", e.getMessage()));
+    }
+
+    @ExceptionHandler(QueueAdmissionExpiredException.class)
+    public ResponseEntity<Map<String, String>> handleQueueAdmissionExpired(QueueAdmissionExpiredException e) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("code", "RESERVE_ADMISSION_EXPIRED", "message", e.getMessage()));
     }
 
     @ExceptionHandler(EventNotOpenException.class)

@@ -8,7 +8,7 @@ import com.danzzan.domain.ticket.dto.TicketRequestResponseDTO;
 import com.danzzan.domain.ticket.dto.TicketStatusResponseDTO;
 import com.danzzan.domain.ticket.model.entity.TicketIssueRequestStatus;
 import com.danzzan.domain.ticket.exception.AlreadyReservedException;
-import com.danzzan.domain.ticket.exception.EventNotOpenException;
+import com.danzzan.domain.ticket.exception.QueueAdmissionExpiredException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.exception.ReserveProcessingException;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
@@ -147,10 +147,10 @@ public class TicketController {
 
         long result = queueStateService.activateIfReady(eventIdStr, userIdStr);
         if (result == 0) {
-            throw new EventNotOpenException("READY 상태가 아닙니다.");
+            throw new QueueAdmissionExpiredException();
         }
         if (result < 0) {
-            throw new EventNotOpenException("입장 허가 시간이 만료되었습니다.");
+            throw new QueueAdmissionExpiredException();
         }
 
         return ResponseEntity.ok(TicketRequestResponseDTO.builder()

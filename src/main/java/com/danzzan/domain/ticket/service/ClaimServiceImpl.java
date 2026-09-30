@@ -1,6 +1,6 @@
 package com.danzzan.domain.ticket.service;
 
-import com.danzzan.domain.ticket.exception.EventNotOpenException;
+import com.danzzan.domain.ticket.exception.QueueAdmissionExpiredException;
 import com.danzzan.domain.ticket.redis.TicketRedisKeys;
 import com.danzzan.domain.ticket.redis.TicketRequestStatus;
 import com.danzzan.domain.ticket.service.model.ClaimResult;
@@ -63,10 +63,10 @@ public class ClaimServiceImpl implements ClaimService {
 
         long code = asLong(rawResult.get(ClaimLuaProtocol.CODE_INDEX), "code");
         if (code == ClaimLuaProtocol.CODE_EXPIRED_ACTIVE) {
-            throw new EventNotOpenException("입장 가능 시간이 만료되었습니다. 다시 대기열에 참여해주세요.");
+            throw new QueueAdmissionExpiredException();
         }
         if (code == ClaimLuaProtocol.CODE_NOT_ACTIVE) {
-            throw new EventNotOpenException("유의사항 화면 진입 후 예매 가능합니다.");
+            throw new QueueAdmissionExpiredException();
         }
 
         Long remaining = asNullableLong(rawResult.get(ClaimLuaProtocol.REMAINING_INDEX), "remaining");

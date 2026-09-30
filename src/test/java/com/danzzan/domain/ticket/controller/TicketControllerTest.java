@@ -4,6 +4,7 @@ import com.danzzan.domain.ticket.dto.ResponseMyTicketDto;
 import com.danzzan.domain.ticket.dto.ResponseReserveTicketDto;
 import com.danzzan.domain.ticket.redis.QueueUserState;
 import com.danzzan.domain.ticket.exception.EventNotOpenException;
+import com.danzzan.domain.ticket.exception.QueueAdmissionExpiredException;
 import com.danzzan.domain.ticket.exception.EventSoldOutException;
 import com.danzzan.domain.ticket.exception.ReserveProcessingException;
 import com.danzzan.domain.ticket.model.entity.TicketIssueRequestStatus;
@@ -177,7 +178,8 @@ class TicketControllerTest {
         when(queueStateService.activateIfReady(eq("10"), eq("1"))).thenReturn(0L);
 
         mockMvc.perform(post("/tickets/10/activate").principal(USER_AUTH))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RESERVE_ADMISSION_EXPIRED"));
     }
 
     @Test
@@ -185,7 +187,8 @@ class TicketControllerTest {
         when(queueStateService.activateIfReady(eq("10"), eq("1"))).thenReturn(-1L);
 
         mockMvc.perform(post("/tickets/10/activate").principal(USER_AUTH))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RESERVE_ADMISSION_EXPIRED"));
     }
 
     // ── POST /reserve ─────────────────────────────────────────────────────────
@@ -237,7 +240,7 @@ class TicketControllerTest {
     @Test
     void reserve_ACTIVE_아니면_400을_반환하고_claim을_호출하지_않는다() throws Exception {
         when(claimService.claim(eq("10"), eq("1")))
-                .thenThrow(new EventNotOpenException("유의사항 화면 진입 후 예매 가능합니다."));
+                .thenThrow(new QueueAdmissionExpiredException());
 
         mockMvc.perform(post("/tickets/10/reserve").principal(USER_AUTH))
                 .andExpect(status().isBadRequest());

@@ -49,8 +49,7 @@ public class TicketingApiGateFilter extends OncePerRequestFilter {
             return false;
         }
         String path = request.getRequestURI();
-        // 예매 중지 후에도 본인이 이미 받은 티켓을 확인할 수 있다.
-        if (HttpMethod.GET.matches(request.getMethod()) && path.equals("/tickets/me")) return false;
+        // OFF 동안에는 내 티켓 조회도 닫는다. 발급 데이터 자체는 삭제하지 않는다.
         return path.equals("/tickets") || path.startsWith("/tickets/");
     }
 }

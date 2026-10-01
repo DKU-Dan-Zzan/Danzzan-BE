@@ -44,7 +44,7 @@ public class TicketService {
 
     // 이벤트 목록 조회 (로그인 불필요)
     public ResponseTicketEventListDto getTicketingEvents() {
-        List<FestivalEvent> events = eventRepository.findAll();
+        List<FestivalEvent> events = eventRepository.findConfiguredEvents();
 
         List<ResponseTicketEventDto> items = events.stream()
                 .map(this::toTicketEventDto)

@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,9 +32,7 @@ public class AdminEventServiceImpl implements AdminEventService {
 
     @Override
     public EventListResponseDTO listEvents() {
-        List<FestivalEvent> events = festivalEventRepository.findAll(
-                Sort.by(Sort.Direction.ASC, "eventDate")
-        );
+        List<FestivalEvent> events = festivalEventRepository.findConfiguredEvents();
 
         Map<LocalDate, Integer> dayIndex = buildDayIndex(events);
 
@@ -102,7 +99,7 @@ public class AdminEventServiceImpl implements AdminEventService {
 
     private Integer extractDayNumber(String title) {
         if (title == null) return null;
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("DAY\\s*(\\d+)", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(title);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("DAY\\s*(\\d+)\\s*$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(title);
         return m.find() ? Integer.parseInt(m.group(1)) : null;
     }
 }

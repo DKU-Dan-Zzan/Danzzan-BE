@@ -59,6 +59,17 @@ class AdminEventServiceImplTest {
         assertThat(response.getIssueRate()).isEqualTo(75.0);
     }
 
+    @Test
+    void listIncludesConfiguredEventsAndRetainsFestivalDayInsteadOfListIndex() {
+        var event = event(10L, 100);
+        event.rename("새 축제 DAY 3");
+        when(festivalEventRepository.findConfiguredEvents()).thenReturn(List.of(event));
+        var response = service.listEvents();
+        assertThat(response.getEvents()).hasSize(1);
+        assertThat(response.getEvents().get(0).getDayLabel()).isEqualTo("DAY 3");
+        assertThat(response.getEvents().get(0).getTitle()).isEqualTo("새 축제 DAY 3");
+    }
+
     private FestivalEvent event(Long id, int totalCapacity) {
         FestivalEvent event = FestivalEvent.builder()
                 .title("dan")

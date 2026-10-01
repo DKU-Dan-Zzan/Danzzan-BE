@@ -51,6 +51,14 @@ public class FestivalSetting {
         this.updatedAt = LocalDateTime.now();
     }
 
+    @Column(name = "ticketing_open_background_image_url", length = 2048)
+    private String ticketingOpenBackgroundImageUrl;
+
+    public void updateTicketingOpenBackgroundImageUrl(String url) {
+        this.ticketingOpenBackgroundImageUrl = url;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 

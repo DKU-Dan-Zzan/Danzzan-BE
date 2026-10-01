@@ -122,7 +122,7 @@ class FestivalSettingServiceTest {
                 LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), true);
         FestivalTicketingRound savedRound = round(1L, LocalDateTime.of(2026, 9, 1, 18, 0), 100,
                 LocalDate.of(2026, 9, 9), 0, 10L);
-        UpdateFestivalSettingRequest request = request(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 2), false, List.of());
+        UpdateFestivalSettingRequest request = request(LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10), false, List.of());
         when(festivalSettingRepository.findByIdForUpdate(FestivalSetting.SINGLETON_ID)).thenReturn(Optional.of(setting));
         when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(savedRound));
 
@@ -320,6 +320,67 @@ class FestivalSettingServiceTest {
         org.junit.jupiter.api.Assertions.assertNull(festivalSettingService.updateTicketingSettings(request).ticketingBackgroundImageUrl());
         verifyNoInteractions(ticketQueueEntryRepository, userTicketRepository, festivalEventRepository);
         verify(festivalTicketingRoundRepository, never()).delete(any());
+    }
+
+    @Test
+    void titlesUsePerformanceDayNotRoundOrder() {
+        var request = request(LocalDate.of(2027,5,1), LocalDate.of(2027,5,3), true,
+                List.of(round(LocalDateTime.of(2027,4,28,18,0), 100, LocalDate.of(2027,5,2)),
+                        round(LocalDateTime.of(2027,4,29,19,0), 200, LocalDate.of(2027,5,3))));
+        when(festivalEventRepository.save(any(FestivalEvent.class))).thenAnswer(call -> call.getArgument(0));
+        when(festivalTicketingRoundRepository.save(any(FestivalTicketingRound.class))).thenAnswer(call -> call.getArgument(0));
+        festivalSettingService.updateSettings(request);
+        var events = ArgumentCaptor.forClass(FestivalEvent.class);
+        verify(festivalEventRepository, org.mockito.Mockito.times(2)).save(events.capture());
+        assertEquals(List.of("2026 DANFESTA DAY 2", "2026 DANFESTA DAY 3"),
+                events.getAllValues().stream().map(FestivalEvent::getTitle).toList());
+    }
+
+    @Test
+    void openBackgroundIsIndependentAndOmissionPreservesIt() throws Exception {
+        var setting = FestivalSetting.create("학교", "축제", LocalDate.of(2027,5,1), LocalDate.of(2027,5,3), true);
+        setting.updateTicketingBackgroundImageUrl("https://example.com/off.png");
+        when(festivalSettingRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var type = com.danzzan.domain.festival.dto.request.UpdateFestivalTicketingSettingsRequest.class;
+        var request = mapper.readValue("{\"ticketingEnabled\":true,\"ticketingRounds\":[],\"ticketingOpenBackgroundImageUrl\":\"https://example.com/on.png\"}", type);
+        var response = mapper.valueToTree(festivalSettingService.updateTicketingSettings(request));
+        assertEquals("https://example.com/on.png", response.path("ticketingOpenBackgroundImageUrl").asText());
+        assertEquals("https://example.com/off.png", response.path("ticketingBackgroundImageUrl").asText());
+        response = mapper.valueToTree(festivalSettingService.updateTicketingSettings(mapper.readValue("{\"ticketingEnabled\":false,\"ticketingRounds\":[]}", type)));
+        assertEquals("https://example.com/on.png", response.path("ticketingOpenBackgroundImageUrl").asText());
+        response = mapper.valueToTree(festivalSettingService.updateTicketingSettings(mapper.readValue("{\"ticketingEnabled\":true,\"ticketingRounds\":[],\"ticketingOpenBackgroundImageUrl\":null}", type)));
+        assertTrue(response.path("ticketingOpenBackgroundImageUrl").isNull());
+        assertEquals("https://example.com/off.png", response.path("ticketingBackgroundImageUrl").asText());
+    }
+
+    @Test
+    void metadataRenameUpdatesAnOpenTicketTitleWithoutChangingStockOrTime() {
+        var setting = FestivalSetting.create("학교", "이전 축제", LocalDate.of(2026,9,8), LocalDate.of(2026,9,10), true);
+        var existing = round(1L, LocalDateTime.of(2026,9,1,18,0),1000,LocalDate.of(2026,9,9),0,10L);
+        var event = event(10L, TicketingStatus.OPEN);
+        when(festivalSettingRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(existing));
+        when(festivalEventRepository.findById(10L)).thenReturn(Optional.of(event));
+        var request = request(LocalDate.of(2026,9,8), LocalDate.of(2026,9,10), true, List.of());
+        request.setFestivalName("새 축제");
+        festivalSettingService.updateMetadata(request);
+        assertEquals("새 축제 DAY 2", event.getTitle());
+        assertEquals(TicketingStatus.OPEN, event.getTicketingStatus());
+        assertEquals(1000, event.getTotalCapacity());
+        assertEquals(LocalDateTime.of(2026,9,1,18,0), event.getTicketingStartTime());
+        verifyNoInteractions(ticketInitService);
+    }
+
+    @Test
+    void metadataCannotExcludeAnExistingPerformanceDate() {
+        var setting = FestivalSetting.create("학교", "축제", LocalDate.of(2026,9,8), LocalDate.of(2026,9,10), true);
+        when(festivalSettingRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
+        when(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc()).thenReturn(List.of(
+                round(1L, LocalDateTime.of(2026,9,1,18,0),1000,LocalDate.of(2026,9,9),0,10L)));
+        assertThrows(InvalidFestivalSettingException.class, () -> festivalSettingService.updateMetadata(
+                request(LocalDate.of(2026,10,1), LocalDate.of(2026,10,3),true,List.of())));
+        assertEquals(LocalDate.of(2026,9,8), setting.getStartDate());
     }
 
     private UpdateFestivalSettingRequest request(

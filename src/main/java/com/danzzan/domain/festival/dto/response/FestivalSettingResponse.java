@@ -19,7 +19,8 @@ public record FestivalSettingResponse(
         List<LocalDate> operationDates,
         boolean ticketingEnabled,
         List<TicketingRoundResponse> ticketingRounds,
-        String ticketingBackgroundImageUrl
+        String ticketingBackgroundImageUrl,
+        String ticketingOpenBackgroundImageUrl
 ) {
 
     public static FestivalSettingResponse of(
@@ -35,7 +36,8 @@ public record FestivalSettingResponse(
                 operationDates,
                 setting.isTicketingEnabled(),
                 rounds,
-                setting.getTicketingBackgroundImageUrl()
+                setting.getTicketingBackgroundImageUrl(),
+                setting.getTicketingOpenBackgroundImageUrl()
         );
     }
 }

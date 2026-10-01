@@ -209,7 +209,8 @@ class AdminRouteSecurityMatrixIntegrationTest {
         }
 
         boolean ticketingOnly() {
-            return path.startsWith("/api/admin/events") || path.equals("/admin/festival/ticketing-settings");
+            return path.startsWith("/api/admin/events") || path.equals("/admin/festival/ticketing-settings")
+                    || path.equals("/admin/festival/ticketing-background");
         }
     }
 }

@@ -16,6 +16,12 @@ public interface FestivalEventRepository extends JpaRepository<FestivalEvent, Lo
     @Query("SELECT e FROM FestivalEvent e WHERE e.id = :id")
     java.util.Optional<FestivalEvent> findByIdForUpdate(@Param("id") Long id);
 
+    /** 관리자 설정에 연결된 회차만 공개/팔찌 배부 목록에 표시한다. */
+    @Query("SELECT e FROM FestivalEvent e WHERE e.id IN " +
+            "(SELECT r.eventId FROM FestivalTicketingRound r) " +
+            "ORDER BY e.eventDate, e.ticketingStartTime, e.id")
+    List<FestivalEvent> findConfiguredEvents();
+
     List<FestivalEvent> findAllByTicketingStatus(TicketingStatus status);
 
     List<FestivalEvent> findAllByTicketingStatusAndTicketingStartTimeLessThanEqual(

@@ -51,11 +51,11 @@ public class FestivalSetting {
         this.updatedAt = LocalDateTime.now();
     }
 
-    @Column(name = "ticketing_open_background_image_url", length = 2048)
-    private String ticketingOpenBackgroundImageUrl;
+    @Column(name = "ticket_card_background_image_url", length = 2048)
+    private String ticketCardBackgroundImageUrl;
 
-    public void updateTicketingOpenBackgroundImageUrl(String url) {
-        this.ticketingOpenBackgroundImageUrl = url;
+    public void updateTicketCardBackgroundImageUrl(String url) {
+        this.ticketCardBackgroundImageUrl = url;
         this.updatedAt = LocalDateTime.now();
     }
 

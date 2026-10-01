@@ -337,20 +337,20 @@ class FestivalSettingServiceTest {
     }
 
     @Test
-    void openBackgroundIsIndependentAndOmissionPreservesIt() throws Exception {
+    void ticketCardBackgroundIsIndependentAndOmissionPreservesIt() throws Exception {
         var setting = FestivalSetting.create("학교", "축제", LocalDate.of(2027,5,1), LocalDate.of(2027,5,3), true);
         setting.updateTicketingBackgroundImageUrl("https://example.com/off.png");
         when(festivalSettingRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
         var mapper = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
         var type = com.danzzan.domain.festival.dto.request.UpdateFestivalTicketingSettingsRequest.class;
-        var request = mapper.readValue("{\"ticketingEnabled\":true,\"ticketingRounds\":[],\"ticketingOpenBackgroundImageUrl\":\"https://example.com/on.png\"}", type);
+        var request = mapper.readValue("{\"ticketingEnabled\":true,\"ticketingRounds\":[],\"ticketCardBackgroundImageUrl\":\"https://example.com/on.png\"}", type);
         var response = mapper.valueToTree(festivalSettingService.updateTicketingSettings(request));
-        assertEquals("https://example.com/on.png", response.path("ticketingOpenBackgroundImageUrl").asText());
+        assertEquals("https://example.com/on.png", response.path("ticketCardBackgroundImageUrl").asText());
         assertEquals("https://example.com/off.png", response.path("ticketingBackgroundImageUrl").asText());
         response = mapper.valueToTree(festivalSettingService.updateTicketingSettings(mapper.readValue("{\"ticketingEnabled\":false,\"ticketingRounds\":[]}", type)));
-        assertEquals("https://example.com/on.png", response.path("ticketingOpenBackgroundImageUrl").asText());
-        response = mapper.valueToTree(festivalSettingService.updateTicketingSettings(mapper.readValue("{\"ticketingEnabled\":true,\"ticketingRounds\":[],\"ticketingOpenBackgroundImageUrl\":null}", type)));
-        assertTrue(response.path("ticketingOpenBackgroundImageUrl").isNull());
+        assertEquals("https://example.com/on.png", response.path("ticketCardBackgroundImageUrl").asText());
+        response = mapper.valueToTree(festivalSettingService.updateTicketingSettings(mapper.readValue("{\"ticketingEnabled\":true,\"ticketingRounds\":[],\"ticketCardBackgroundImageUrl\":null}", type)));
+        assertTrue(response.path("ticketCardBackgroundImageUrl").isNull());
         assertEquals("https://example.com/off.png", response.path("ticketingBackgroundImageUrl").asText());
     }
 

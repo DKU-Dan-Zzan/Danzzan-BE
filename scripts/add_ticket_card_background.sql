@@ -1,9 +1,9 @@
 -- Select the intended database and take a backup before running. MySQL 8.x.
 SET @ddl = IF(
     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE()
-        AND table_name='festival_setting' AND column_name='ticketing_open_background_image_url'),
+        AND table_name='festival_setting' AND column_name='ticket_card_background_image_url'),
     'SELECT 1',
-    'ALTER TABLE festival_setting ADD COLUMN ticketing_open_background_image_url VARCHAR(2048) NULL'
+    'ALTER TABLE festival_setting ADD COLUMN ticket_card_background_image_url VARCHAR(2048) NULL'
 );
 PREPARE migration_stmt FROM @ddl;
 EXECUTE migration_stmt;

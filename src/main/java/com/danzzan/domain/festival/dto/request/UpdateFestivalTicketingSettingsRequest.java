@@ -26,14 +26,14 @@ public class UpdateFestivalTicketingSettingsRequest {
 
     @jakarta.validation.constraints.Size(max = 2048)
     @jakarta.validation.constraints.Pattern(regexp = "https?://[^\\s]+", message = "올바른 이미지 URL을 입력해 주세요.")
-    private String ticketingOpenBackgroundImageUrl;
+    private String ticketCardBackgroundImageUrl;
     @com.fasterxml.jackson.annotation.JsonIgnore
     @lombok.Setter(lombok.AccessLevel.NONE)
-    private boolean openBackgroundImageSpecified;
+    private boolean ticketCardBackgroundImageSpecified;
 
-    public void setTicketingOpenBackgroundImageUrl(String url) {
-        this.ticketingOpenBackgroundImageUrl = url;
-        this.openBackgroundImageSpecified = true;
+    public void setTicketCardBackgroundImageUrl(String url) {
+        this.ticketCardBackgroundImageUrl = url;
+        this.ticketCardBackgroundImageSpecified = true;
     }
 
     @NotNull(message = "티켓팅 사용 여부를 입력해 주세요.")

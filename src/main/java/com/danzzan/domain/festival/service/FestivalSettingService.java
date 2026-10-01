@@ -146,8 +146,8 @@ public class FestivalSettingService {
         setting.update(setting.getSchoolName(), setting.getFestivalName(), setting.getStartDate(), setting.getEndDate(),
                 Boolean.TRUE.equals(request.getTicketingEnabled()));
         List<TicketingRoundResponse> rounds = syncTicketingRounds(combined);
-        if (request.isOpenBackgroundImageSpecified()) {
-            setting.updateTicketingOpenBackgroundImageUrl(request.getTicketingOpenBackgroundImageUrl());
+        if (request.isTicketCardBackgroundImageSpecified()) {
+            setting.updateTicketCardBackgroundImageUrl(request.getTicketCardBackgroundImageUrl());
         }
         if (request.isBackgroundImageSpecified()) {
             setting.updateTicketingBackgroundImageUrl(request.getTicketingBackgroundImageUrl());

@@ -49,6 +49,7 @@ public class TicketingApiGateFilter extends OncePerRequestFilter {
             return false;
         }
         String path = request.getRequestURI();
+        // OFF 동안에는 내 티켓 조회도 닫는다. 발급 데이터 자체는 삭제하지 않는다.
         return path.equals("/tickets") || path.startsWith("/tickets/");
     }
 }

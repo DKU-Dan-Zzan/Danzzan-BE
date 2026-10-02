@@ -42,6 +42,11 @@ public class FestivalEvent {
         this.totalCapacity = totalCapacity;
     }
 
+    /** 축제 이름/일차 표시만 변경한다. 오픈 상태·재고·시각은 유지한다. */
+    public void rename(String title) {
+        this.title = title;
+    }
+
     /**
      * 관리자 축제 설정에서 회차를 고쳤을 때 이벤트를 따라 고친다.
      *

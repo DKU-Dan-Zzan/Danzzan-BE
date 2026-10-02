@@ -81,3 +81,5 @@ k6-test/tokens*.json
 /docs/member-withdrawal-account-e2e-scenarios.md
 .superpowers/
 .omc/
+
+!scripts/add_ticketing_background.sql

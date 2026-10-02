@@ -67,7 +67,7 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
         QueueUserState admissionState =
                 (state == QueueUserState.READY || state == QueueUserState.ACTIVE) ? state : null;
-        Long readyUntil = switch (state) {
+        Long readyUntil = state == null ? null : switch (state) {
             case READY -> readyUntilRaw;
             case ACTIVE -> activeUntilRaw;
             default -> null;
@@ -95,7 +95,8 @@ public class TicketStatusServiceImpl implements TicketStatusService {
 
     @Override
     public Long getMySequence(String eventId, String userId) {
-        return getQueueStatusSnapshot(eventId, userId).mySequence();
+        // PROCESSING/SUCCESS 스냅샷은 입장 정보를 생략하므로 원본 hash에서 읽는다.
+        return getHashLong(TicketRedisKeys.queueUserHashKey(eventId, userId), "seq");
     }
 
     @Override

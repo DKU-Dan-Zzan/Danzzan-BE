@@ -43,6 +43,22 @@ public class FestivalSetting {
     @Column(name = "ticketing_enabled", nullable = false)
     private boolean ticketingEnabled;
 
+    @Column(name = "ticketing_background_image_url", length = 2048)
+    private String ticketingBackgroundImageUrl;
+
+    public void updateTicketingBackgroundImageUrl(String url) {
+        this.ticketingBackgroundImageUrl = url;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @Column(name = "ticket_card_background_image_url", length = 2048)
+    private String ticketCardBackgroundImageUrl;
+
+    public void updateTicketCardBackgroundImageUrl(String url) {
+        this.ticketCardBackgroundImageUrl = url;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 

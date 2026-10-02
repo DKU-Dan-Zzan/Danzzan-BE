@@ -67,7 +67,7 @@ public class FestivalSettingService {
                         toResponses(festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc())
                 ))
                 .orElseGet(() -> new FestivalSettingResponse(
-                        DEFAULT_SCHOOL_NAME, "", null, null, List.of(), false, List.of()
+                        DEFAULT_SCHOOL_NAME, "", null, null, List.of(), false, List.of(), null, null
                 ));
     }
 
@@ -109,6 +109,17 @@ public class FestivalSettingService {
         FestivalSetting setting = festivalSettingRepository.findByIdForUpdate(FestivalSetting.SINGLETON_ID)
                 .orElseGet(() -> FestivalSetting.create(request.getSchoolName(), request.getFestivalName(),
                         request.getStartDate(), request.getEndDate(), false));
+        List<FestivalTicketingRound> rounds = festivalTicketingRoundRepository.findAllByOrderByDisplayOrderAsc();
+        for (FestivalTicketingRound round : rounds) {
+            if (!operationDates.contains(round.getPerformanceDate())) {
+                throw new InvalidFestivalSettingException("기존 티켓팅 공연 날짜가 운영 기간에 포함되어야 합니다. 회차를 먼저 수정하거나 삭제해 주세요.");
+            }
+            // 이름 변경도 자동 오픈과 직렬화하여 오래된 상태로 이벤트를 덮어쓰지 않는다.
+            if (round.getEventId() != null) {
+                festivalEventRepository.findByIdForUpdate(round.getEventId()).ifPresent(event -> event.rename(eventTitle(
+                        request.getFestivalName(), request.getStartDate(), round.getPerformanceDate())));
+            }
+        }
         setting.update(request.getSchoolName(), request.getFestivalName(), request.getStartDate(), request.getEndDate(),
                 setting.isTicketingEnabled());
         festivalSettingRepository.save(setting);
@@ -135,6 +146,12 @@ public class FestivalSettingService {
         setting.update(setting.getSchoolName(), setting.getFestivalName(), setting.getStartDate(), setting.getEndDate(),
                 Boolean.TRUE.equals(request.getTicketingEnabled()));
         List<TicketingRoundResponse> rounds = syncTicketingRounds(combined);
+        if (request.isTicketCardBackgroundImageSpecified()) {
+            setting.updateTicketCardBackgroundImageUrl(request.getTicketCardBackgroundImageUrl());
+        }
+        if (request.isBackgroundImageSpecified()) {
+            setting.updateTicketingBackgroundImageUrl(request.getTicketingBackgroundImageUrl());
+        }
         ticketingAccessPolicy.invalidate();
         return FestivalSettingResponse.of(setting, operationDates, rounds);
     }
@@ -157,15 +174,21 @@ public class FestivalSettingService {
         List<FestivalTicketingRound> result = new ArrayList<>();
         List<TicketingRoundRequest> requested = request.getTicketingRounds();
 
+        java.util.Set<Long> incomingIds = new java.util.HashSet<>();
+        for (TicketingRoundRequest incoming : requested) {
+            if (incoming.getId() != null && (!saved.containsKey(incoming.getId()) || !incomingIds.add(incoming.getId()))) {
+                throw new InvalidFestivalSettingException("회차 목록이 변경되었습니다. 새로고침 후 다시 저장해 주세요.");
+            }
+        }
         for (int index = 0; index < requested.size(); index++) {
             TicketingRoundRequest incoming = requested.get(index);
             FestivalTicketingRound existing = incoming.getId() == null ? null : saved.remove(incoming.getId());
 
             if (existing == null) {
-                result.add(createRound(request.getFestivalName(), incoming, index));
+                result.add(createRound(request.getFestivalName(), request.getStartDate(), incoming, index));
                 continue;
             }
-            result.add(updateRound(request.getFestivalName(), existing, incoming, index));
+            result.add(updateRound(request.getFestivalName(), request.getStartDate(), existing, incoming, index));
         }
 
         // 화면에서 빠진 회차는 지운다.
@@ -176,12 +199,12 @@ public class FestivalSettingService {
         return toResponses(result);
     }
 
-    private FestivalTicketingRound createRound(String festivalName, TicketingRoundRequest incoming, int index) {
+    private FestivalTicketingRound createRound(String festivalName, LocalDate startDate, TicketingRoundRequest incoming, int index) {
         FestivalTicketingRound round = FestivalTicketingRound.create(
                 incoming.getTicketingAt(), incoming.getCapacity(), incoming.getPerformanceDate(), index);
 
         FestivalEvent event = festivalEventRepository.save(FestivalEvent.builder()
-                .title(eventTitle(festivalName, index))
+                .title(eventTitle(festivalName, startDate, incoming.getPerformanceDate()))
                 .eventDate(incoming.getPerformanceDate())
                 .ticketingStartTime(incoming.getTicketingAt())
                 .ticketingStatus(TicketingStatus.READY)
@@ -194,24 +217,28 @@ public class FestivalSettingService {
 
     private FestivalTicketingRound updateRound(
             String festivalName,
+            LocalDate startDate,
             FestivalTicketingRound existing,
             TicketingRoundRequest incoming,
             int index
     ) {
+        // Serialize capacity/date edits with the auto-open transition and Redis stock initialization.
+        if (existing.getEventId() != null) festivalEventRepository.findByIdForUpdate(existing.getEventId());
         boolean changed = !existing.getTicketingAt().equals(incoming.getTicketingAt())
                 || existing.getCapacity() != incoming.getCapacity()
                 || !existing.getPerformanceDate().equals(incoming.getPerformanceDate());
 
-        if (changed && isLocked(existing)) {
-            throw new InvalidFestivalSettingException(
-                    "이미 티켓팅이 시작된 회차는 수정할 수 없습니다.");
+        if (isLocked(existing)) {
+            if (changed) throw new InvalidFestivalSettingException("이미 티켓팅이 시작된 회차는 수정할 수 없습니다.");
+            findEventOf(existing).ifPresent(event -> event.rename(eventTitle(festivalName, startDate, incoming.getPerformanceDate())));
+            return existing;
         }
 
         existing.update(incoming.getTicketingAt(), incoming.getCapacity(), incoming.getPerformanceDate(), index);
 
         findEventOf(existing).ifPresentOrElse(
                 event -> event.updateBeforeOpen(
-                        eventTitle(festivalName, index),
+                        eventTitle(festivalName, startDate, incoming.getPerformanceDate()),
                         incoming.getPerformanceDate(),
                         incoming.getTicketingAt(),
                         incoming.getCapacity()
@@ -219,7 +246,7 @@ public class FestivalSettingService {
                 // 이벤트가 없던 회차(연결 전에 저장된 회차)는 이제 만들어 준다.
                 () -> {
                     FestivalEvent event = festivalEventRepository.save(FestivalEvent.builder()
-                            .title(eventTitle(festivalName, index))
+                            .title(eventTitle(festivalName, startDate, incoming.getPerformanceDate()))
                             .eventDate(incoming.getPerformanceDate())
                             .ticketingStartTime(incoming.getTicketingAt())
                             .ticketingStatus(TicketingStatus.READY)
@@ -289,9 +316,9 @@ public class FestivalSettingService {
         festivalTicketingRoundRepository.delete(round);
     }
 
-    private String eventTitle(String festivalName, int index) {
+    private String eventTitle(String festivalName, LocalDate startDate, LocalDate performanceDate) {
         String name = (festivalName == null || festivalName.isBlank()) ? "축제" : festivalName.trim();
-        return name + " " + (index + 1) + "회차";
+        return name + " DAY " + (ChronoUnit.DAYS.between(startDate, performanceDate) + 1);
     }
 
     private List<TicketingRoundResponse> toResponses(List<FestivalTicketingRound> rounds) {

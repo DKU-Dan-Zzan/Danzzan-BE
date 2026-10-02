@@ -31,8 +31,15 @@ public class S3Uploader {
     @Value("${nhn.object-storage.swift-auth-path:}")
     private String swiftAuthPath;
 
+    @Value("${nhn.object-storage.public-base-url:}")
+    private String publicBaseUrl;
+
     @Value("${nhn.object-storage.public-read:false}")
     private boolean publicRead;
+
+    public S3UploadResult uploadTicketingBackground(MultipartFile file) {
+        return upload("festival/ticketing-background", file);
+    }
 
     public S3UploadResult uploadNoticeImage(MultipartFile file) {
         return upload("notices/images", file);
@@ -75,7 +82,9 @@ public class S3Uploader {
         }
 
         String url;
-        if (swiftAuthPath != null && !swiftAuthPath.isBlank()) {
+        if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
+            url = publicBaseUrl.replaceAll("/+$", "") + "/" + key;
+        } else if (swiftAuthPath != null && !swiftAuthPath.isBlank()) {
             url = endpoint + "/" + swiftAuthPath + "/" + bucket + "/" + key;
         } else {
             url = s3Client.utilities()

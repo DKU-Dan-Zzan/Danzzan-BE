@@ -60,7 +60,7 @@ class TicketEventRemainingTest {
         // 예전 축제가 쓰던 같은 id 의 재고 값이 남아 있는 상황
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(valueOperations.get(anyString())).thenReturn("2998");
-        when(eventRepository.findAll()).thenReturn(List.of(event(TicketingStatus.READY, 1000)));
+        when(eventRepository.findConfiguredEvents()).thenReturn(List.of(event(TicketingStatus.READY, 1000)));
 
         ResponseTicketEventListDto result = ticketService.getTicketingEvents();
 
@@ -72,7 +72,7 @@ class TicketEventRemainingTest {
     void 오픈한_이벤트는_재고_키를_그대로_쓴다() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get(anyString())).thenReturn("120");
-        when(eventRepository.findAll()).thenReturn(List.of(event(TicketingStatus.OPEN, 1000)));
+        when(eventRepository.findConfiguredEvents()).thenReturn(List.of(event(TicketingStatus.OPEN, 1000)));
 
         ResponseTicketEventListDto result = ticketService.getTicketingEvents();
 
@@ -84,7 +84,7 @@ class TicketEventRemainingTest {
     void 마감한_이벤트는_항상_0이다() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(valueOperations.get(anyString())).thenReturn("500");
-        when(eventRepository.findAll()).thenReturn(List.of(event(TicketingStatus.CLOSED, 1000)));
+        when(eventRepository.findConfiguredEvents()).thenReturn(List.of(event(TicketingStatus.CLOSED, 1000)));
 
         ResponseTicketEventListDto result = ticketService.getTicketingEvents();
 

@@ -88,7 +88,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
                         .requestMatchers("/api/admin/staff/**").hasRole("ADMIN")
-                        .requestMatchers("/api/admin/events/**", "/admin/festival/ticketing-settings")
+                        .requestMatchers("/api/admin/events/**", "/admin/festival/ticketing-settings", "/admin/festival/ticketing-background")
                         .access((authentication, context) -> new AuthorizationDecision(
                                 userAdminAuthorizationService.hasTicketingRole(authentication.get())))
                         .requestMatchers("/api/admin/**", "/admin/map/**", "/admin/timetable/**", "/admin/festival/**")

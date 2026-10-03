@@ -21,6 +21,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Getter
@@ -42,6 +43,16 @@ public class Theme {
     @Column(name = "theme_data", nullable = false, columnDefinition = "json")
     private ThemeData themeData;
 
+    @Column(name = "source_poster_url", length = 2048)
+    private String sourcePosterUrl;
+
+    @Column(name = "selected_base_color", length = 7)
+    private String selectedBaseColor;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "source_colors", columnDefinition = "json")
+    private List<String> sourceColors;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -49,9 +60,17 @@ public class Theme {
     private LocalDateTime updatedAt;
 
     public static Theme create(FestivalSetting festivalSetting, String name, ThemeData themeData) {
+        return create(festivalSetting, name, themeData, null, null, null);
+    }
+
+    public static Theme create(FestivalSetting festivalSetting, String name, ThemeData themeData,
+                               String sourcePosterUrl, String selectedBaseColor, List<String> sourceColors) {
         Theme theme = new Theme();
         theme.festivalSetting = festivalSetting;
         theme.update(name, themeData);
+        theme.sourcePosterUrl = sourcePosterUrl;
+        theme.selectedBaseColor = selectedBaseColor;
+        theme.sourceColors = sourceColors == null ? null : List.copyOf(sourceColors);
         return theme;
     }
 

@@ -44,7 +44,8 @@ public class ThemeService {
     @Transactional
     public ThemeResponse create(Long festivalSettingId, ThemeUpsertRequest request) {
         FestivalSetting setting = findSetting(festivalSettingId);
-        Theme theme = themeRepository.save(Theme.create(setting, request.name(), request.themeData()));
+        Theme theme = themeRepository.save(Theme.create(setting, request.name(), request.themeData(),
+                request.sourcePosterUrl(), request.selectedBaseColor(), request.sourceColors()));
         return ThemeResponse.of(theme, setting.getActiveThemeId());
     }
 

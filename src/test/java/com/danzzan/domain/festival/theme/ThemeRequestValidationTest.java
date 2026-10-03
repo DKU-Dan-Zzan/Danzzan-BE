@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -67,6 +68,25 @@ class ThemeRequestValidationTest {
             ThemeData missingBrand = new ThemeData(null, validRequest().themeData().status(),
                     validRequest().themeData().category());
             assertFalse(validator.validate(new ThemeUpsertRequest("Orange", missingBrand)).isEmpty());
+        }
+    }
+
+    @Test
+    void validatesOptionalProvenance() {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+            assertTrue(validator.validate(validRequest()).isEmpty());
+            assertTrue(validator.validate(new ThemeUpsertRequest("Orange", validRequest().themeData(),
+                    "https://cdn.example.com/festival/1/poster/a.png", "#4EB15E", List.of("#4EB15E"))).isEmpty());
+            assertFalse(validator.validate(new ThemeUpsertRequest("Orange", validRequest().themeData(),
+                    null, "red", List.of("#4EB15E"))).isEmpty());
+            assertFalse(validator.validate(new ThemeUpsertRequest("Orange", validRequest().themeData(),
+                    null, null, List.of("#GGGGGG"))).isEmpty());
+            assertFalse(validator.validate(new ThemeUpsertRequest("Orange", validRequest().themeData(),
+                    null, null, List.of("#123456", "#123456", "#123456", "#123456", "#123456",
+                            "#123456", "#123456", "#123456", "#123456"))).isEmpty());
+            assertFalse(validator.validate(new ThemeUpsertRequest("Orange", validRequest().themeData(),
+                    "not-a-url", null, null)).isEmpty());
         }
     }
 

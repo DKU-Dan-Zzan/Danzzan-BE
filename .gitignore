@@ -58,6 +58,7 @@ out/
 !scripts/add_translation_columns.sql
 !scripts/add_festival_setting.sql
 !scripts/add_theme.sql
+!scripts/add_theme_provenance.sql
 !scripts/rename_theme_brand_strong.sql
 !scripts/add_manager_role.sql
 !scripts/add_manager_permissions.sql

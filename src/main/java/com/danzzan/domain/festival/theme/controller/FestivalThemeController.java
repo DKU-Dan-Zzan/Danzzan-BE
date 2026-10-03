@@ -1,6 +1,6 @@
 package com.danzzan.domain.festival.theme.controller;
 
-import com.danzzan.domain.festival.theme.dto.ThemeResponse;
+import com.danzzan.domain.festival.theme.dto.PublicThemeResponse;
 import com.danzzan.domain.festival.theme.service.ThemeService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -19,9 +19,9 @@ public class FestivalThemeController {
 
     /** 204 means no active theme; the client keeps its bundled Theme Core defaults. */
     @GetMapping("/active")
-    public ResponseEntity<ThemeResponse> active(@PathVariable Long festivalSettingId) {
+    public ResponseEntity<PublicThemeResponse> active(@PathVariable Long festivalSettingId) {
         return themeService.active(festivalSettingId)
-                .map(ResponseEntity::ok)
+                .map(theme -> ResponseEntity.ok(PublicThemeResponse.from(theme)))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

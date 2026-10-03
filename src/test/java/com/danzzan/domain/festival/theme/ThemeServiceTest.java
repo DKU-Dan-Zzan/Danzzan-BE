@@ -5,6 +5,7 @@ import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.theme.dto.ThemeData;
 import com.danzzan.domain.festival.theme.dto.ThemeResponse;
 import com.danzzan.domain.festival.theme.dto.ThemeUpsertRequest;
+import com.danzzan.domain.festival.theme.dto.PublicThemeResponse;
 import com.danzzan.domain.festival.theme.entity.Theme;
 import com.danzzan.domain.festival.theme.exception.ThemeException;
 import com.danzzan.domain.festival.theme.repository.ThemeRepository;
@@ -20,6 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +50,38 @@ class ThemeServiceTest {
         assertEquals("Orange", created.name());
         assertEquals(data(), created.themeData());
         assertFalse(created.active());
+        assertNull(created.sourcePosterUrl());
+    }
+
+    @Test
+    void preservesPosterSnapshotsWhenTheFestivalPosterChanges() {
+        FestivalSetting setting = setting(1L);
+        when(festivalSettingRepository.findById(1L)).thenReturn(Optional.of(setting));
+        when(themeRepository.save(any(Theme.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        String posterA = "https://cdn.example.com/festival/1/poster/a.png";
+        String posterB = "https://cdn.example.com/festival/1/poster/b.png";
+        setting.updatePosterImageUrl(posterA);
+        ThemeResponse first = themeService.create(1L, new ThemeUpsertRequest("A", data(), posterA,
+                "#4EB15E", List.of("#4EB15E", "#13730C")));
+        setting.updatePosterImageUrl(posterB);
+        ThemeResponse second = themeService.create(1L, new ThemeUpsertRequest("B", data(), posterB,
+                "#FBE44B", List.of("#FBE44B")));
+        assertEquals(posterA, first.sourcePosterUrl());
+        assertEquals("#4EB15E", first.selectedBaseColor());
+        assertEquals(List.of("#4EB15E", "#13730C"), first.sourceColors());
+        assertEquals(posterB, second.sourcePosterUrl());
+        assertEquals(posterB, setting.getPosterImageUrl());
+    }
+
+    @Test
+    void publicActiveResponseDoesNotExposeProvenance() throws Exception {
+        Theme theme = Theme.create(setting(1L), "Orange", data(), "https://cdn.example.com/a.png",
+                "#4EB15E", List.of("#4EB15E"));
+        String json = new ObjectMapper().findAndRegisterModules()
+                .writeValueAsString(PublicThemeResponse.from(ThemeResponse.of(theme, null)));
+        assertFalse(json.contains("sourcePosterUrl"));
+        assertFalse(json.contains("selectedBaseColor"));
+        assertFalse(json.contains("sourceColors"));
     }
 
     @Test
@@ -66,13 +100,18 @@ class ThemeServiceTest {
 
     @Test
     void updatesThemeWithoutChangingFestival() {
-        Theme theme = theme(10L, setting(1L));
+        Theme theme = Theme.create(setting(1L), "Orange", data(), "https://cdn.example.com/a.png",
+                "#4EB15E", List.of("#4EB15E"));
+        ReflectionTestUtils.setField(theme, "id", 10L);
         when(themeRepository.findByIdAndFestivalSetting_Id(10L, 1L)).thenReturn(Optional.of(theme));
 
-        ThemeResponse updated = themeService.update(1L, 10L, request(" New name "));
+        ThemeResponse updated = themeService.update(1L, 10L, new ThemeUpsertRequest(" New name ", data(),
+                "https://cdn.example.com/other.png", "#FFFFFF", List.of("#FFFFFF")));
 
         assertEquals("New name", updated.name());
         assertEquals(1L, updated.festivalSettingId());
+        assertEquals("https://cdn.example.com/a.png", updated.sourcePosterUrl());
+        assertEquals("#4EB15E", updated.selectedBaseColor());
     }
 
     @Test

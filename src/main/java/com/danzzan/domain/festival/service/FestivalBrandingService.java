@@ -19,7 +19,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class FestivalBrandingService {
-    public static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024;
+    public static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
     private static final Set<String> ALLOWED_TYPES = Set.of("image/jpeg", "image/png");
 
     private final FestivalSettingRepository settings;
@@ -71,6 +71,6 @@ public class FestivalBrandingService {
     }
 
     private ResponseStatusException invalidImage() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use a valid JPEG or PNG image up to 10 MB and 40 million pixels");
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use a valid JPEG or PNG image up to 5 MB and 40 million pixels");
     }
 }

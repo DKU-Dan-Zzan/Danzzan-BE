@@ -77,4 +77,16 @@ class FestivalBrandingServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.uploadPoster(404L, image()));
         verifyNoInteractions(uploader);
     }
+
+    @Test void oversizedPosterAndLogoKeepExistingUrlsAndNeverUpload() {
+        FestivalSetting setting = setting(1L);
+        setting.updatePosterImageUrl("https://cdn/old-poster.png");
+        setting.updateLogoImageUrl("https://cdn/old-logo.png");
+        var file = new MockMultipartFile("file", "large.png", "image/png", new byte[5 * 1024 * 1024 + 1]);
+        assertThrows(ResponseStatusException.class, () -> service.uploadPoster(1L, file));
+        assertThrows(ResponseStatusException.class, () -> service.uploadLogo(1L, file));
+        assertEquals("https://cdn/old-poster.png", setting.getPosterImageUrl());
+        assertEquals("https://cdn/old-logo.png", setting.getLogoImageUrl());
+        verifyNoInteractions(uploader);
+    }
 }

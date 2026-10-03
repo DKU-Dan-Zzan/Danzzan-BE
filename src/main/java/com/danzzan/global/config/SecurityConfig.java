@@ -84,7 +84,8 @@ public class SecurityConfig {
                                 "/tickets/events",
                                 "/api/ads",
                                 "/api/ads/list",
-                                "/festival/settings"
+                                "/festival/settings",
+                                "/festival/*/themes/active"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()
                         .requestMatchers("/api/admin/staff/**").hasRole("ADMIN")

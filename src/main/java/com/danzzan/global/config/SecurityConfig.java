@@ -85,6 +85,7 @@ public class SecurityConfig {
                                 "/api/ads",
                                 "/api/ads/list",
                                 "/festival/settings",
+                                "/festival/*/branding",
                                 "/festival/*/themes/active"
                         ).permitAll()
                         .requestMatchers("/tickets/request", "/tickets/status", "/tickets/redis/**").permitAll()

@@ -2,6 +2,7 @@ package com.danzzan.domain.home.service;
 
 import com.danzzan.domain.home.model.dto.HomeImageDto;
 import com.danzzan.domain.home.repository.HomeImageRepository;
+import com.danzzan.domain.festival.entity.FestivalSetting;
 
 import com.danzzan.domain.home.model.dto.LineupImageDto;
 import com.danzzan.domain.home.repository.LineupImageRepository;
@@ -18,7 +19,11 @@ public class HomeService {
     private final LineupImageRepository lineupImageRepository;
 
     public List<HomeImageDto> getHomeImages() {
-        return homeImageRepository.findAllByOrderByDisplayOrderAsc()
+        return getHomeImages(FestivalSetting.SINGLETON_ID);
+    }
+
+    public List<HomeImageDto> getHomeImages(Long festivalSettingId) {
+        return homeImageRepository.findAllByFestivalSettingIdOrderByDisplayOrderAsc(festivalSettingId)
                 .stream()
                 .map(image -> new HomeImageDto(
                     image.getId(),

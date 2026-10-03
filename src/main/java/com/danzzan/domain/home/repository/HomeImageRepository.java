@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface HomeImageRepository extends JpaRepository<HomeImage, Long> {
     // display_order 기준 전체 조회
-    List<HomeImage> findAllByOrderByDisplayOrderAsc();
+    List<HomeImage> findAllByFestivalSettingIdOrderByDisplayOrderAsc(Long festivalSettingId);
 }

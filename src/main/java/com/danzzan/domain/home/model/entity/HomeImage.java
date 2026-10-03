@@ -20,6 +20,9 @@ public class HomeImage {
     @Column(name = "image_url", nullable = false)
     private String imageUrl;
 
+    @Column(name = "festival_setting_id", nullable = false)
+    private Long festivalSettingId;
+
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder;
 

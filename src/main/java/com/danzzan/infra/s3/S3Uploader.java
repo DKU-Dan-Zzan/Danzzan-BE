@@ -41,6 +41,14 @@ public class S3Uploader {
         return upload("festival/ticketing-background", file);
     }
 
+    public S3UploadResult uploadFestivalPoster(Long festivalSettingId, MultipartFile file) {
+        return upload("festival/" + festivalSettingId + "/poster", file);
+    }
+
+    public S3UploadResult uploadFestivalLogo(Long festivalSettingId, MultipartFile file) {
+        return upload("festival/" + festivalSettingId + "/logo", file);
+    }
+
     public S3UploadResult uploadNoticeImage(MultipartFile file) {
         return upload("notices/images", file);
     }

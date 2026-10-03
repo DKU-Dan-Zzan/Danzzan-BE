@@ -63,6 +63,22 @@ public class FestivalSetting {
     @Column(name = "ticket_card_background_image_url", length = 2048)
     private String ticketCardBackgroundImageUrl;
 
+    @Column(name = "poster_image_url", length = 2048)
+    private String posterImageUrl;
+
+    @Column(name = "logo_image_url", length = 2048)
+    private String logoImageUrl;
+
+    public void updatePosterImageUrl(String url) {
+        this.posterImageUrl = url;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateLogoImageUrl(String url) {
+        this.logoImageUrl = url;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void updateTicketCardBackgroundImageUrl(String url) {
         this.ticketCardBackgroundImageUrl = url;
         this.updatedAt = LocalDateTime.now();

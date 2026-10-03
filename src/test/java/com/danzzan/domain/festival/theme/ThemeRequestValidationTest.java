@@ -21,7 +21,7 @@ class ThemeRequestValidationTest {
             Validator validator = factory.getValidator();
             for (String group : new String[]{"brand", "status", "category"}) {
                 ObjectNode groupNode = (ObjectNode) objectMapper.valueToTree(validRequest().themeData()).get(group);
-                for (String field : new String[]{"primary", "secondary", "accent", "textEmphasis",
+                for (String field : new String[]{"primary", "secondary", "accent", "strong",
                         "success", "warning", "danger", "pending", "pub", "foodTruck",
                         "experience", "event", "restArea", "facility"}) {
                     if (!groupNode.has(field)) continue;
@@ -43,7 +43,18 @@ class ThemeRequestValidationTest {
                     new ThemeData.Brand("#FFF", " ", "#GGGGGG", "#E13600"),
                     validRequest().themeData().status(), validRequest().themeData().category());
             assertTrue(validator.validate(new ThemeUpsertRequest("Orange", invalid)).size() >= 3);
+            ThemeData invalidStrong = new ThemeData(
+                    new ThemeData.Brand("#FF642D", "#F5E3A3", "#FF642D", "not-a-hex"),
+                    validRequest().themeData().status(), validRequest().themeData().category());
+            assertFalse(validator.validate(new ThemeUpsertRequest("Orange", invalidStrong)).isEmpty());
         }
+    }
+
+    @Test
+    void serializesOnlyTheStrongBrandKey() throws Exception {
+        String json = objectMapper.writeValueAsString(validRequest().themeData());
+        assertTrue(json.contains("\"strong\":\"#E13600\""));
+        assertFalse(json.contains("\"textEmphasis\""));
     }
 
     @Test

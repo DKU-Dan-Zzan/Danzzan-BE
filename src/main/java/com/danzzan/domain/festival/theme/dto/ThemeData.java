@@ -17,7 +17,7 @@ public record ThemeData(
             @NotBlank @Pattern(regexp = HEX) String primary,
             @NotBlank @Pattern(regexp = HEX) String secondary,
             @NotBlank @Pattern(regexp = HEX) String accent,
-            @NotBlank @Pattern(regexp = HEX) String textEmphasis
+            @NotBlank @Pattern(regexp = HEX) String strong
     ) {}
 
     public record Status(

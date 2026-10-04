@@ -155,6 +155,11 @@ octomo:
   message-exists-path: /octomo/v1/public/message/exists
   api-key: ${OCTOMO_API_KEY:}
 
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  theme-model: ${OPENAI_THEME_MODEL:gpt-4o-mini}
+  base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1/responses}
+
 deepl:
   api-key: ${DEEPL_API_KEY:}
   api-url: ${DEEPL_API_URL:}

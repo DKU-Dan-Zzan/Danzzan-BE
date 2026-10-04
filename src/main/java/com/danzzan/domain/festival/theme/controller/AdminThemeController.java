@@ -1,8 +1,11 @@
 package com.danzzan.domain.festival.theme.controller;
 
 import com.danzzan.domain.festival.theme.dto.ThemeResponse;
+import com.danzzan.domain.festival.theme.dto.ThemeData;
+import com.danzzan.domain.festival.theme.dto.ThemeRecommendationRequest;
 import com.danzzan.domain.festival.theme.dto.ThemeUpsertRequest;
 import com.danzzan.domain.festival.theme.service.ThemeService;
+import com.danzzan.domain.festival.theme.service.ThemeRecommendationService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,6 +32,13 @@ import java.util.List;
 @SecurityRequirement(name = "bearerAuth")
 public class AdminThemeController {
     private final ThemeService themeService;
+    private final ThemeRecommendationService recommendationService;
+
+    @PostMapping("/recommend")
+    public ThemeData recommend(@PathVariable Long festivalSettingId,
+                               @Valid @RequestBody ThemeRecommendationRequest request) {
+        return recommendationService.recommend(festivalSettingId, request);
+    }
 
     @GetMapping
     public List<ThemeResponse> list(@PathVariable Long festivalSettingId) {

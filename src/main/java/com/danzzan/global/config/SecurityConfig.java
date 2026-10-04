@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -40,6 +42,7 @@ public class SecurityConfig {
     private final com.danzzan.global.jwt.JwtAuthenticationFilter ticketingJwtAuthenticationFilter;
     private final TicketingApiGateFilter ticketingApiGateFilter;
     private final UserAdminAuthorizationService userAdminAuthorizationService;
+    private final Environment environment;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -53,6 +56,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     // OPTIONS 는 CORS 프리플라이트라 차단보다 먼저 허용해야 한다.
                     auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+                    if (environment.acceptsProfiles(Profiles.of("local-storage & !prod"))) {
+                        auth.requestMatchers(HttpMethod.GET, "/uploads/**").permitAll();
+                    }
 
                     // 티켓팅 사용 여부는 관리자 축제 설정에서 정한다. 껐을 때 /tickets/** 를
                     // 막는 일은 TicketingApiGateFilter 가 맡는다. 로그인·내 정보(/user/**)는

@@ -3,8 +3,7 @@ package com.danzzan.domain.festival;
 import com.danzzan.domain.festival.entity.FestivalSetting;
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.service.FestivalBrandingService;
-import com.danzzan.infra.s3.S3UploadResult;
-import com.danzzan.infra.s3.S3Uploader;
+import com.danzzan.infra.image.ImageStorage;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -21,8 +20,8 @@ import static org.mockito.Mockito.*;
 
 class FestivalBrandingServiceTest {
     private final FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
-    private final S3Uploader uploader = mock(S3Uploader.class);
-    private final FestivalBrandingService service = new FestivalBrandingService(settings, uploader);
+    private final ImageStorage storage = mock(ImageStorage.class);
+    private final FestivalBrandingService service = new FestivalBrandingService(settings, storage);
 
     private FestivalSetting setting(Long id) {
         FestivalSetting setting = FestivalSetting.create("School", "Festival", LocalDate.now(), LocalDate.now(), false);
@@ -43,7 +42,7 @@ class FestivalBrandingServiceTest {
         assertNull(service.get(1L).posterImageUrl());
         assertNull(service.get(2L).logoImageUrl());
         var file = image();
-        when(uploader.uploadFestivalPoster(2L, file)).thenReturn(new S3UploadResult("second/poster", "https://cdn/second.png"));
+        when(storage.uploadPoster(2L, file)).thenReturn("https://cdn/second.png");
         assertEquals("https://cdn/second.png", service.uploadPoster(2L, file).posterImageUrl());
         assertNull(first.getPosterImageUrl());
         assertEquals("https://cdn/second.png", second.getPosterImageUrl());
@@ -54,7 +53,7 @@ class FestivalBrandingServiceTest {
         setting.updatePosterImageUrl("https://cdn/old-poster.png");
         setting.updateLogoImageUrl("https://cdn/old-logo.png");
         var file = image();
-        when(uploader.uploadFestivalLogo(1L, file)).thenReturn(new S3UploadResult("logo", "https://cdn/new-logo.png"));
+        when(storage.uploadLogo(1L, file)).thenReturn("https://cdn/new-logo.png");
         var response = service.uploadLogo(1L, file);
         assertEquals("https://cdn/old-poster.png", response.posterImageUrl());
         assertEquals("https://cdn/new-logo.png", response.logoImageUrl());
@@ -64,7 +63,7 @@ class FestivalBrandingServiceTest {
         FestivalSetting setting = setting(1L);
         setting.updatePosterImageUrl("https://cdn/old.png");
         var file = image();
-        when(uploader.uploadFestivalPoster(1L, file)).thenThrow(new IllegalStateException("storage unavailable"));
+        when(storage.uploadPoster(1L, file)).thenThrow(new IllegalStateException("storage unavailable"));
         assertThrows(IllegalStateException.class, () -> service.uploadPoster(1L, file));
         assertEquals("https://cdn/old.png", setting.getPosterImageUrl());
         var fake = new MockMultipartFile("file", "fake.png", "image/png", "not an image".getBytes());
@@ -75,7 +74,7 @@ class FestivalBrandingServiceTest {
     @Test void missingFestivalFailsBeforeStorage() throws Exception {
         when(settings.findById(404L)).thenReturn(Optional.empty());
         assertThrows(ResponseStatusException.class, () -> service.uploadPoster(404L, image()));
-        verifyNoInteractions(uploader);
+        verifyNoInteractions(storage);
     }
 
     @Test void oversizedPosterAndLogoKeepExistingUrlsAndNeverUpload() {
@@ -87,6 +86,6 @@ class FestivalBrandingServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.uploadLogo(1L, file));
         assertEquals("https://cdn/old-poster.png", setting.getPosterImageUrl());
         assertEquals("https://cdn/old-logo.png", setting.getLogoImageUrl());
-        verifyNoInteractions(uploader);
+        verifyNoInteractions(storage);
     }
 }

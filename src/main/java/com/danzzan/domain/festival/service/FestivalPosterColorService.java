@@ -2,7 +2,7 @@ package com.danzzan.domain.festival.service;
 
 import com.danzzan.domain.festival.dto.response.PosterColorResponse;
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
-import com.danzzan.infra.s3.S3PosterImageReader;
+import com.danzzan.infra.image.ImageStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -14,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional(readOnly = true)
 public class FestivalPosterColorService {
     private final FestivalSettingRepository settings;
-    private final S3PosterImageReader reader;
+    private final ImageStorage imageStorage;
     private final PosterColorExtractor extractor;
 
     public PosterColorResponse extract(Long festivalSettingId) {
@@ -24,6 +24,6 @@ public class FestivalPosterColorService {
         if (posterUrl == null || posterUrl.isBlank()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Upload an official poster first");
         }
-        return extractor.extract(reader.read(festivalSettingId, posterUrl));
+        return extractor.extract(imageStorage.readPoster(festivalSettingId, posterUrl));
     }
 }

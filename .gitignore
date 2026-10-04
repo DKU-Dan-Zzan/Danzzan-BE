@@ -71,6 +71,7 @@ __pycache__/
 *.backup
 *.bak
 *.log
+/uploads/
 
 # Prevent accidental commit of local test overrides
 src/test/resources/application.properties

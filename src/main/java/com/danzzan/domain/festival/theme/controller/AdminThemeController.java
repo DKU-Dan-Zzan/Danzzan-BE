@@ -1,7 +1,7 @@
 package com.danzzan.domain.festival.theme.controller;
 
 import com.danzzan.domain.festival.theme.dto.ThemeResponse;
-import com.danzzan.domain.festival.theme.dto.ThemeData;
+import com.danzzan.domain.festival.theme.dto.ThemeRecommendationResponse;
 import com.danzzan.domain.festival.theme.dto.ThemeRecommendationRequest;
 import com.danzzan.domain.festival.theme.dto.ThemeUpsertRequest;
 import com.danzzan.domain.festival.theme.service.ThemeService;
@@ -35,7 +35,7 @@ public class AdminThemeController {
     private final ThemeRecommendationService recommendationService;
 
     @PostMapping("/recommend")
-    public ThemeData recommend(@PathVariable Long festivalSettingId,
+    public ThemeRecommendationResponse recommend(@PathVariable Long festivalSettingId,
                                @Valid @RequestBody ThemeRecommendationRequest request) {
         return recommendationService.recommend(festivalSettingId, request);
     }

@@ -1,6 +1,6 @@
 package com.danzzan.domain.festival.theme.service;
 
-import com.danzzan.domain.festival.theme.dto.ThemeData;
+import com.danzzan.domain.festival.theme.dto.ThemeRecommendationResponse;
 import com.danzzan.domain.festival.theme.exception.ThemeRecommendationException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,16 +26,29 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
     private static final int MAX_POSTER_BYTES = 5 * 1024 * 1024;
     private static final String INSTRUCTIONS = """
             Analyze the supplied official festival poster image itself, not only the supplied swatches.
-            Recommend exactly 14 #RRGGBB colors for a cohesive festival website with bright white/near-white surfaces.
-            The selected base color is the administrator's preference: reflect it naturally in primary or a related brand color; do not ignore it.
+            Return exactly three related variations of one poster-derived theme in this order: balanced, vibrant, deep.
+            Each candidate must have its fixed id, a short name, a one- or two-sentence description (at most 160 characters),
+            and exactly 14 #RRGGBB colors. Keep bright white/near-white surfaces in all three; none is a dark theme.
+            Balanced (name it Original or Balanced): closest to a single faithful poster-based recommendation. Use the extracted
+            poster colors and selected base color for both brand and category within one coherent palette family; avoid unrelated hues.
+            Vibrant (name it Light): keep Balanced's hue and palette family, with modestly higher lightness and some saturation
+            for a brighter, livelier feel. Do not add a new unrelated color family.
+            Deep: keep Balanced's hue and palette family, but deepen primary and strong and improve CTA contrast without making a dark theme.
+            Do not add unrelated hues. Distinguish the three mainly by lightness, saturation and depth, not by different hue families.
+            Use the administrator-selected base color as a central reference in every candidate. Keep brand palettes visibly
+            different through those variations; do not repeat the same primary in all three or make nearly identical palettes.
             brand.primary: main identity and common active states. brand.secondary: harmonious supporting tone.
             brand.accent: distinct small indicators/icons/badges. brand.strong: a deeper or more intense brand tone
             for prominent CTAs, emphasized text, borders and glow, not simply near-black.
             status.success must remain green; warning yellow/amber/orange; danger red; pending visibly distinct.
-            category.pub, foodTruck, experience, event, restArea, facility must be mutually distinguishable
-            on map markers and polygons, reasonably color-vision-friendly and harmonious with the poster.
+            For category.pub, foodTruck, experience, event, restArea and facility, prioritize (1) poster-derived palette harmony,
+            (2) map marker/polygon distinguishability, then (3) hue diversity. Use extracted colors and nearby hue, lightness and
+            saturation variations instead of assigning unrelated rainbow hues. All six must use distinct HEX values, never reuse
+            a color, and remain visually distinguishable with RGB Euclidean distance at least 35 for every pair.
+            In each candidate, primary must differ from accent or strong by RGB distance at least 20.
             Do not merely copy a single brand color into all categories.
-            Do not output page backgrounds, pure white/black, neutral gray, overlays, shadow opacity or explanation.
+            Return candidate descriptions only, no extra explanation. Do not output page backgrounds, pure white/black,
+            neutral gray, overlays or shadow opacity.
             """;
 
     private final ObjectMapper mapper;
@@ -56,7 +69,7 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
     }
 
     @Override
-    public ThemeData recommend(byte[] poster, List<String> sourceColors, String selectedBaseColor) {
+    public ThemeRecommendationResponse recommend(byte[] poster, List<String> sourceColors, String selectedBaseColor) {
         if (apiKey == null || apiKey.isBlank()) throw failure(HttpStatus.SERVICE_UNAVAILABLE,
                 "OPENAI_KEY_MISSING", "AI recommendation is not configured. Set OPENAI_API_KEY on the backend.");
         String mime = posterMime(poster);
@@ -66,13 +79,13 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
         Map<String, Object> payload = Map.of(
                 "model", model,
                 "store", false,
-                "max_output_tokens", 700,
+                "max_output_tokens", 2400,
                 "input", List.of(
                         Map.of("role", "developer", "content", INSTRUCTIONS),
                         Map.of("role", "user", "content", List.of(
                                 Map.of("type", "input_text", "text", userText),
                                 Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
-                "text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_data",
+                "text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_candidates",
                         "strict", true, "schema", schema())));
         try {
             HttpRequest request = HttpRequest.newBuilder(endpoint)
@@ -99,7 +112,7 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
                 for (JsonNode content : output.path("content")) {
                     if ("output_text".equals(content.path("type").asText()) && content.path("text").isTextual()) {
                         try {
-                            return mapper.readValue(content.path("text").asText(), ThemeData.class);
+                            return mapper.readValue(content.path("text").asText(), ThemeRecommendationResponse.class);
                         } catch (IOException malformed) {
                             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MALFORMED_OUTPUT",
                                     "AI returned an invalid theme structure.");
@@ -134,8 +147,18 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
         fields.put("brand", group("primary", "secondary", "accent", "strong"));
         fields.put("status", group("success", "warning", "danger", "pending"));
         fields.put("category", group("pub", "foodTruck", "experience", "event", "restArea", "facility"));
-        return Map.of("type", "object", "properties", fields,
+        Map<String, Object> themeData = Map.of("type", "object", "properties", fields,
                 "required", List.copyOf(fields.keySet()), "additionalProperties", false);
+        Map<String, Object> candidateFields = new LinkedHashMap<>();
+        candidateFields.put("id", Map.of("type", "string", "enum", List.of("balanced", "vibrant", "deep")));
+        candidateFields.put("name", Map.of("type", "string"));
+        candidateFields.put("description", Map.of("type", "string"));
+        candidateFields.put("themeData", themeData);
+        Map<String, Object> candidate = Map.of("type", "object", "properties", candidateFields,
+                "required", List.copyOf(candidateFields.keySet()), "additionalProperties", false);
+        return Map.of("type", "object", "properties", Map.of("candidates", Map.of("type", "array",
+                        "items", candidate, "minItems", 3, "maxItems", 3)),
+                "required", List.of("candidates"), "additionalProperties", false);
     }
 
     private Map<String, Object> group(String... names) {

@@ -86,30 +86,57 @@ public class ThemeRecommendationService {
             for (ThemeRecommendationValidator.Failure failure : failures) {
                 logFailure(candidate, failure);
             }
+            if (!valid && detailedLogsEnabled()) {
+                boolean categoryUnresolved = failures.stream().anyMatch(f -> f.rule().equals("CATEGORY_DISTANCE_TOO_SMALL"));
+                if (categoryUnresolved && adjusted != null && adjusted.category() != null && candidate.themeData() != null
+                        && candidate.themeData().category() != null) {
+                    log.warn("AI theme exclusion candidate={} stage=PALETTE_ADJUSTMENT reason=CATEGORY_DISTANCE_UNRESOLVED",
+                            candidate.id());
+                }
+                log.warn("AI theme exclusion candidate={} stage=CANDIDATE_VALIDATION failureCount={}", candidate.id(),
+                        failures.size() + (nameValid ? 0 : 1) + (descriptionValid ? 0 : 1));
+            }
             if (valid) validCandidates.add(finalCandidate);
         }
         if (validCandidates.isEmpty()) throw invalid("AI_THEME_VALIDATION_FAILED",
                 "AI recommendation did not satisfy theme color rules. Please try again.");
         List<ThemeRecommendationCandidate> diverseCandidates = new ArrayList<>();
+        ThemeRecommendationCandidate original = validCandidates.stream()
+                .filter(candidate -> candidate.id().equals("balanced")).findFirst().orElse(null);
         for (ThemeRecommendationCandidate candidate : validCandidates) {
-            boolean distinct = true;
-            for (ThemeRecommendationCandidate kept : diverseCandidates) {
-                if (candidate.themeData().brand().primary().equalsIgnoreCase(kept.themeData().brand().primary())) {
-                    distinct = false;
-                    if (detailedLogsEnabled()) log.warn("AI theme diagnostic rule=CANDIDATE_PRIMARY_DUPLICATE "
-                            + "kept={} excluded={} primary={} threshold=distinctPrimaryCount>=2",
-                            kept.id(), candidate.id(), candidate.themeData().brand().primary());
-                }
-                double distance = brandDistance(kept, candidate);
-                if (distance < 30) {
-                    distinct = false;
-                    if (detailedLogsEnabled()) log.warn("AI theme diagnostic rule=CANDIDATE_BRAND_TOO_SIMILAR "
-                            + "first={} firstName={} second={} secondName={} firstBrand={} secondBrand={} averageRgbDistance={} threshold=averageRgbDistance>=30",
-                            kept.id(), kept.name(), candidate.id(), candidate.name(), kept.themeData().brand(),
-                            candidate.themeData().brand(), distance);
-                }
+            if (candidate == original) {
+                diverseCandidates.add(candidate);
+                continue;
             }
-            if (distinct) diverseCandidates.add(candidate);
+            if (original == null) { // No reference palette: retain the existing partial-success behavior.
+                if (diverseCandidates.stream().noneMatch(kept -> kept.themeData().brand().equals(candidate.themeData().brand()))) {
+                    diverseCandidates.add(candidate);
+                } else if (detailedLogsEnabled()) {
+                    log.warn("AI theme exclusion candidate={} stage=DIVERSITY rule=CANDIDATE_BRAND_DUPLICATE",
+                            candidate.id());
+                }
+                continue;
+            }
+            double primaryDelta = labLightness(candidate.themeData().brand().primary())
+                    - labLightness(original.themeData().brand().primary());
+            double strongDelta = labLightness(candidate.themeData().brand().strong())
+                    - labLightness(original.themeData().brand().strong());
+            double direction = candidate.id().equals("vibrant") ? 1 : -1;
+            double primaryShift = direction * primaryDelta;
+            double strongShift = direction * strongDelta;
+            // A modest visible shift in the main CTA color or strong color is enough; neither may strongly reverse.
+            double combinedShift = .7 * primaryShift + .3 * strongShift;
+            if (combinedShift >= 2.5 && Math.max(primaryShift, strongShift) >= 4
+                    && Math.min(primaryShift, strongShift) > -4) {
+                diverseCandidates.add(candidate);
+            } else if (detailedLogsEnabled()) {
+                String rule = combinedShift < 0 || Math.min(primaryShift, strongShift) <= -4
+                        ? "VARIATION_WRONG_DIRECTION" : "CANDIDATE_VARIATION_TOO_SUBTLE";
+                log.warn("AI theme exclusion candidate={} stage={} rule={} primaryDeltaL={} strongDeltaL={} "
+                                + "directionalScore={} threshold=score>=2.5,maxDirectionalShift>=4,reverseShift>-4",
+                        candidate.id(), rule.equals("VARIATION_WRONG_DIRECTION") ? "VARIATION_DIRECTION" : "DIVERSITY",
+                        rule, primaryDelta, strongDelta, combinedShift);
+            }
         }
         return new ThemeRecommendationResponse(diverseCandidates);
     }
@@ -125,20 +152,18 @@ public class ThemeRecommendationService {
                 && environment.acceptsProfiles(Profiles.of("dev", "local", "local-storage"));
     }
 
-    private double brandDistance(ThemeRecommendationCandidate a, ThemeRecommendationCandidate b) {
-        List<String> first = List.of(a.themeData().brand().primary(), a.themeData().brand().secondary(),
-                a.themeData().brand().accent(), a.themeData().brand().strong());
-        List<String> second = List.of(b.themeData().brand().primary(), b.themeData().brand().secondary(),
-                b.themeData().brand().accent(), b.themeData().brand().strong());
-        double sum = 0;
-        for (int i = 0; i < first.size(); i++) {
-            Color x = Color.decode(first.get(i));
-            Color y = Color.decode(second.get(i));
-            sum += Math.sqrt(Math.pow(x.getRed() - y.getRed(), 2)
-                    + Math.pow(x.getGreen() - y.getGreen(), 2)
-                    + Math.pow(x.getBlue() - y.getBlue(), 2));
-        }
-        return sum / first.size();
+    private double labLightness(String hex) {
+        Color color = Color.decode(hex);
+        double red = linearize(color.getRed() / 255.0);
+        double green = linearize(color.getGreen() / 255.0);
+        double blue = linearize(color.getBlue() / 255.0);
+        double y = .2126 * red + .7152 * green + .0722 * blue;
+        double f = y > 216.0 / 24389 ? Math.cbrt(y) : y / (24389.0 / 27) + 16.0 / 116;
+        return 116 * f - 16;
+    }
+
+    private double linearize(double channel) {
+        return channel <= .04045 ? channel / 12.92 : Math.pow((channel + .055) / 1.055, 2.4);
     }
 
     private ThemeRecommendationException invalid(String code, String message) {

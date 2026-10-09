@@ -2,6 +2,7 @@ package com.danzzan.domain.festival.theme.service;
 
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.theme.dto.ThemeRecommendationCandidate;
+import com.danzzan.domain.festival.theme.dto.ThemeData;
 import com.danzzan.domain.festival.theme.dto.ThemeRecommendationResponse;
 import com.danzzan.domain.festival.theme.dto.ThemeRecommendationRequest;
 import com.danzzan.domain.festival.theme.exception.ThemeRecommendationException;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -30,6 +32,7 @@ public class ThemeRecommendationService {
     private final ThemeRecommendationClient client;
     private final ThemeRecommendationValidator validator;
     private final Environment environment;
+    private final AiThemePaletteAdjuster paletteAdjuster = new AiThemePaletteAdjuster();
 
     public ThemeRecommendationResponse recommend(Long festivalSettingId, ThemeRecommendationRequest request) {
         var setting = settings.findById(festivalSettingId).orElseThrow(() ->
@@ -40,10 +43,10 @@ public class ThemeRecommendationService {
                 HttpStatus.CONFLICT, "POSTER_NOT_FOUND", "Upload an official poster first.");
         byte[] poster = imageStorage.readPoster(festivalSettingId, posterUrl);
         ThemeRecommendationResponse result = client.recommend(poster, request.sourceColors(), request.selectedBaseColor());
-        return validateCandidates(result);
+        return validateCandidates(result, request.selectedBaseColor());
     }
 
-    private ThemeRecommendationResponse validateCandidates(ThemeRecommendationResponse result) {
+    private ThemeRecommendationResponse validateCandidates(ThemeRecommendationResponse result, String selectedBaseColor) {
         if (result == null || result.candidates() == null || result.candidates().size() != 3) {
             throw invalid("AI_THEME_CANDIDATE_COUNT", "AI must return exactly three theme candidates.");
         }
@@ -57,8 +60,17 @@ public class ThemeRecommendationService {
             }
         }
         if (!actual.equals(expected)) throw invalid("AI_THEME_DUPLICATE_CANDIDATE", "AI returned incomplete theme candidates.");
+        List<ThemeRecommendationCandidate> prioritizedCandidates = new ArrayList<>(candidates);
+        prioritizedCandidates.sort(Comparator.comparingInt(candidate -> switch (candidate.id()) {
+            case "balanced" -> 0;
+            case "vibrant" -> 1;
+            default -> 2;
+        }));
         List<ThemeRecommendationCandidate> validCandidates = new ArrayList<>();
-        for (ThemeRecommendationCandidate candidate : candidates) {
+        for (ThemeRecommendationCandidate candidate : prioritizedCandidates) {
+            ThemeData adjusted = paletteAdjuster.adjust(candidate.themeData(), selectedBaseColor);
+            ThemeRecommendationCandidate finalCandidate = adjusted == candidate.themeData() ? candidate
+                    : new ThemeRecommendationCandidate(candidate.id(), candidate.name(), candidate.description(), adjusted);
             boolean nameValid = candidate.name() != null && !candidate.name().isBlank() && candidate.name().length() <= 60;
             boolean descriptionValid = candidate.description() != null && !candidate.description().isBlank()
                     && candidate.description().length() <= 160;
@@ -66,7 +78,7 @@ public class ThemeRecommendationService {
                     candidate.id());
             if (!descriptionValid && detailedLogsEnabled()) log.warn("AI theme diagnostic candidate={} name={} rule=CANDIDATE_DESCRIPTION_INVALID threshold=length 1..160",
                     candidate.id(), candidate.name());
-            List<ThemeRecommendationValidator.Failure> failures = validator.diagnose(candidate.themeData());
+            List<ThemeRecommendationValidator.Failure> failures = validator.diagnose(adjusted);
             boolean valid = nameValid && descriptionValid && failures.isEmpty();
             if (detailedLogsEnabled()) log.info("AI theme validation candidate={} name={} result={} failureCount={}",
                     candidate.id(), candidate.name(), valid ? "PASS" : "FAIL",
@@ -74,36 +86,32 @@ public class ThemeRecommendationService {
             for (ThemeRecommendationValidator.Failure failure : failures) {
                 logFailure(candidate, failure);
             }
-            if (valid) validCandidates.add(candidate);
+            if (valid) validCandidates.add(finalCandidate);
         }
-        if (validCandidates.size() < 2) throw invalid("AI_THEME_VALIDATION_FAILED",
+        if (validCandidates.isEmpty()) throw invalid("AI_THEME_VALIDATION_FAILED",
                 "AI recommendation did not satisfy theme color rules. Please try again.");
-        candidates = validCandidates;
-        boolean diversityInvalid = false;
-        if (candidates.stream().map(candidate -> candidate.themeData().brand().primary().toUpperCase())
-                .distinct().count() == 1) {
-            diversityInvalid = true;
-            if (detailedLogsEnabled()) log.warn("AI theme diagnostic rule=CANDIDATE_PRIMARY_DUPLICATE "
-                    + "candidates={} primary={} distinctPrimaryCount=1 threshold=distinctPrimaryCount>=2",
-                    candidates.stream().map(candidate -> candidate.id() + ":" + candidate.name()).toList(),
-                    candidates.get(0).themeData().brand().primary());
-        }
-        for (int i = 0; i < candidates.size(); i++) {
-            for (int j = i + 1; j < candidates.size(); j++) {
-                double distance = brandDistance(candidates.get(i), candidates.get(j));
+        List<ThemeRecommendationCandidate> diverseCandidates = new ArrayList<>();
+        for (ThemeRecommendationCandidate candidate : validCandidates) {
+            boolean distinct = true;
+            for (ThemeRecommendationCandidate kept : diverseCandidates) {
+                if (candidate.themeData().brand().primary().equalsIgnoreCase(kept.themeData().brand().primary())) {
+                    distinct = false;
+                    if (detailedLogsEnabled()) log.warn("AI theme diagnostic rule=CANDIDATE_PRIMARY_DUPLICATE "
+                            + "kept={} excluded={} primary={} threshold=distinctPrimaryCount>=2",
+                            kept.id(), candidate.id(), candidate.themeData().brand().primary());
+                }
+                double distance = brandDistance(kept, candidate);
                 if (distance < 30) {
-                    diversityInvalid = true;
+                    distinct = false;
                     if (detailedLogsEnabled()) log.warn("AI theme diagnostic rule=CANDIDATE_BRAND_TOO_SIMILAR "
                             + "first={} firstName={} second={} secondName={} firstBrand={} secondBrand={} averageRgbDistance={} threshold=averageRgbDistance>=30",
-                            candidates.get(i).id(), candidates.get(i).name(), candidates.get(j).id(), candidates.get(j).name(),
-                            candidates.get(i).themeData().brand(),
-                            candidates.get(j).themeData().brand(), distance);
+                            kept.id(), kept.name(), candidate.id(), candidate.name(), kept.themeData().brand(),
+                            candidate.themeData().brand(), distance);
                 }
             }
+            if (distinct) diverseCandidates.add(candidate);
         }
-        if (diversityInvalid) throw invalid("AI_THEME_VALIDATION_FAILED",
-                "AI recommendation did not satisfy theme color rules. Please try again.");
-        return new ThemeRecommendationResponse(candidates);
+        return new ThemeRecommendationResponse(diverseCandidates);
     }
 
     private void logFailure(ThemeRecommendationCandidate candidate, ThemeRecommendationValidator.Failure failure) {

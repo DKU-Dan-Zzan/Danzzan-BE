@@ -87,7 +87,7 @@ class ThemeRecommendationTest {
         verify(settings, never()).save(any());
     }
 
-    @Test void rejectsWrongCountDuplicateAndIndistinguishableCandidates() {
+    @Test void rejectsWrongCountAndDuplicateButFiltersIndistinguishableCandidates() {
         FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
         ImageStorage storage = mock(ImageStorage.class);
         ThemeRecommendationClient client = mock(ThemeRecommendationClient.class);
@@ -105,19 +105,61 @@ class ThemeRecommendationTest {
                 () -> service.recommend(1L, input)).getCode());
         when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                 candidate("balanced", theme()), candidate("vibrant", theme()), candidate("deep", theme()))));
-        assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                () -> service.recommend(1L, input)).getCode());
+        assertEquals(List.of("balanced"), service.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
         ThemeData near = new ThemeData(new ThemeData.Brand("#FF652D", "#F5E3A3", "#EC4899", "#E13600"),
                 theme().status(), theme().category());
         when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                 candidate("balanced", theme()), candidate("vibrant", near), candidate("deep", deep()))));
-        assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                () -> service.recommend(1L, input)).getCode());
+        assertEquals(List.of("balanced", "deep"), service.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
         when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                 response().candidates().get(0), response().candidates().get(1), response().candidates().get(2),
                 candidate("extra", theme()))));
         assertEquals("AI_THEME_CANDIDATE_COUNT", assertThrows(ThemeRecommendationException.class,
                 () -> service.recommend(1L, input)).getCode());
+    }
+
+    @Test void keepsValidBalancedFirstEvenWhenModelReturnsItLast() {
+        FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
+        ImageStorage storage = mock(ImageStorage.class);
+        ThemeRecommendationClient client = mock(ThemeRecommendationClient.class);
+        ThemeRecommendationValidator validator = mock(ThemeRecommendationValidator.class);
+        var service = new ThemeRecommendationService(settings, storage, client, validator, mock(Environment.class));
+        when(settings.findById(1L)).thenReturn(Optional.of(setting(1L, "poster.png")));
+        when(storage.readPoster(1L, "poster.png")).thenReturn(png);
+        when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
+                candidate("vibrant", vibrant()), candidate("deep", deep()), candidate("balanced", theme()))));
+        assertEquals(List.of("balanced", "vibrant", "deep"), service.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
+
+        when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
+                candidate("vibrant", theme()), candidate("deep", theme()), candidate("balanced", theme()))));
+        assertEquals(List.of("balanced"), service.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
+        verify(client, times(2)).recommend(png, input.sourceColors(), input.selectedBaseColor());
+    }
+
+    @Test void returnsBalancedWhenBothSecondaryVariationsFailValidation() {
+        FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
+        ImageStorage storage = mock(ImageStorage.class);
+        ThemeRecommendationClient client = mock(ThemeRecommendationClient.class);
+        ThemeRecommendationValidator validator = mock(ThemeRecommendationValidator.class);
+        var service = new ThemeRecommendationService(settings, storage, client, validator, mock(Environment.class));
+        when(settings.findById(1L)).thenReturn(Optional.of(setting(1L, "poster.png")));
+        when(storage.readPoster(1L, "poster.png")).thenReturn(png);
+        when(client.recommend(any(), any(), anyString())).thenReturn(response());
+        var categoryFailure = new ThemeRecommendationValidator.Failure("CATEGORY_DISTANCE_TOO_SMALL",
+                Map.of("pub", "#FF642D", "restArea", "#FF642D"), Map.of("distance", 0.0), "distance>=35");
+        when(validator.diagnose(vibrant())).thenReturn(List.of(categoryFailure));
+        when(validator.diagnose(deep())).thenReturn(List.of(categoryFailure));
+
+        assertEquals(List.of("balanced"), service.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
+        verify(validator).diagnose(theme());
+        verify(validator).diagnose(vibrant());
+        verify(validator).diagnose(deep());
+        verify(client, times(1)).recommend(png, input.sourceColors(), input.selectedBaseColor());
     }
 
     @Test void appliesExistingValidatorToEveryCandidate() {
@@ -134,14 +176,15 @@ class ThemeRecommendationTest {
         when(validator.diagnose(deep())).thenReturn(List.of(new ThemeRecommendationValidator.Failure(
                 "CATEGORY_DISTANCE_TOO_SMALL", Map.of("pub", "#FF642D", "foodTruck", "#FF642D"),
                 Map.of("distance", 0.0), "distance>=35")));
-        assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                () -> service.recommend(1L, input)).getCode());
+        assertEquals(List.of("vibrant"), service.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
+        verify(client, times(1)).recommend(png, input.sourceColors(), input.selectedBaseColor());
         verify(validator).diagnose(theme());
         verify(validator).diagnose(vibrant());
         verify(validator).diagnose(deep());
     }
 
-    @Test void returnsOnlyTwoValidCandidatesWhenCategoryColorsRepeat() {
+    @Test void repairsRepeatedCategoryColorsBeforeFilteringCandidates() {
         try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
             FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
             ImageStorage storage = mock(ImageStorage.class);
@@ -155,7 +198,11 @@ class ThemeRecommendationTest {
                     candidate("vibrant", vibrant()), candidate("deep", deep()))));
 
             ThemeRecommendationResponse result = service.recommend(1L, input);
-            assertEquals(List.of("vibrant", "deep"), result.candidates().stream().map(ThemeRecommendationCandidate::id).toList());
+            assertEquals(List.of("balanced", "vibrant", "deep"), result.candidates().stream()
+                    .map(ThemeRecommendationCandidate::id).toList());
+            assertTrue(new ThemeRecommendationValidator(factory.getValidator())
+                    .diagnose(result.candidates().get(0).themeData()).isEmpty());
+            assertEquals(theme().brand(), result.candidates().get(0).themeData().brand());
             verify(client, times(1)).recommend(png, input.sourceColors(), input.selectedBaseColor());
             assertTrue(new ThemeRecommendationValidator(factory.getValidator()).diagnose(duplicateCategory(theme()))
                     .stream().anyMatch(failure -> failure.rule().equals("CATEGORY_DISTANCE_TOO_SMALL")
@@ -165,16 +212,82 @@ class ThemeRecommendationTest {
             when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                     candidate("balanced", duplicateCategory(theme())), candidate("vibrant", vibrant()),
                     candidate("deep", duplicateCategory(deep())))));
-            assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                    () -> service.recommend(1L, input)).getCode());
+            assertEquals(List.of("balanced", "vibrant", "deep"), service.recommend(1L, input).candidates().stream()
+                    .map(ThemeRecommendationCandidate::id).toList());
 
             when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                     candidate("balanced", duplicateCategory(theme())),
                     candidate("vibrant", duplicateCategory(vibrant())),
                     candidate("deep", duplicateCategory(deep())))));
+            assertEquals(List.of("balanced", "vibrant", "deep"), service.recommend(1L, input).candidates().stream()
+                    .map(ThemeRecommendationCandidate::id).toList());
+            verify(settings, never()).save(any());
+        }
+    }
+
+    @Test void returnsRepairedOriginalWhenVariationsHaveWrongSemanticHue() {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
+            ImageStorage storage = mock(ImageStorage.class);
+            ThemeRecommendationClient client = mock(ThemeRecommendationClient.class);
+            var validator = new ThemeRecommendationValidator(factory.getValidator());
+            var service = new ThemeRecommendationService(settings, storage, client, validator, mock(Environment.class));
+            when(settings.findById(1L)).thenReturn(Optional.of(setting(1L, "poster.png")));
+            when(storage.readPoster(1L, "poster.png")).thenReturn(png);
+            ThemeData original = new ThemeData(theme().brand(),
+                    new ThemeData.Status("#99C799", theme().status().warning(), theme().status().danger(),
+                            theme().status().pending()), duplicateCategory(theme()).category());
+            ThemeData wrongHue = new ThemeData(theme().brand(),
+                    new ThemeData.Status("#7BA6D8", theme().status().warning(), theme().status().danger(),
+                            theme().status().pending()), theme().category());
+            when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
+                    candidate("balanced", original), candidate("vibrant", wrongHue), candidate("deep", wrongHue))));
+
+            ThemeRecommendationResponse result = service.recommend(1L, input);
+            assertEquals(List.of("balanced"), result.candidates().stream().map(ThemeRecommendationCandidate::id).toList());
+            ThemeData repaired = result.candidates().get(0).themeData();
+            assertNotEquals(original.status().success(), repaired.status().success());
+            assertNotEquals(original.category(), repaired.category());
+            assertTrue(validator.diagnose(repaired).isEmpty());
+            verify(client, times(1)).recommend(png, input.sourceColors(), input.selectedBaseColor());
+            verify(settings, never()).save(any());
+        }
+    }
+
+    @Test void rejectsUnrepairableAiColorsWithoutSavingOrActivating() {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
+            ImageStorage storage = mock(ImageStorage.class);
+            ThemeRecommendationClient client = mock(ThemeRecommendationClient.class);
+            var service = new ThemeRecommendationService(settings, storage, client,
+                    new ThemeRecommendationValidator(factory.getValidator()), mock(Environment.class));
+            when(settings.findById(1L)).thenReturn(Optional.of(setting(1L, "poster.png")));
+            when(storage.readPoster(1L, "poster.png")).thenReturn(png);
+            ThemeData.Category malformed = new ThemeData.Category("invalid", "#EC4899", "#10B981",
+                    "#F6CA3B", "#8B5CF6", "#3B82F6");
+            when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
+                    candidate("balanced", new ThemeData(theme().brand(), theme().status(), malformed)),
+                    candidate("vibrant", new ThemeData(vibrant().brand(), theme().status(), malformed)),
+                    candidate("deep", new ThemeData(deep().brand(), theme().status(), malformed)))));
+
             assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
                     () -> service.recommend(1L, input)).getCode());
+            verify(client, times(1)).recommend(png, input.sourceColors(), input.selectedBaseColor());
+            verify(settings, never()).save(any());
         }
+    }
+
+    @Test void oneCandidateRecommendationIsAnHttp200Response() throws Exception {
+        ThemeRecommendationService recommendationService = mock(ThemeRecommendationService.class);
+        when(recommendationService.recommend(eq(1L), any())).thenReturn(new ThemeRecommendationResponse(List.of(
+                candidate("vibrant", vibrant()))));
+        var mvc = MockMvcBuilders.standaloneSetup(new AdminThemeController(
+                mock(ThemeService.class), recommendationService)).build();
+        mvc.perform(post("/admin/festival/1/themes/recommend")
+                        .contentType("application/json").content(mapper.writeValueAsString(input)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.candidates.length()").value(1))
+                .andExpect(jsonPath("$.candidates[0].id").value("vibrant"));
     }
 
     @Test void twoCandidateRecommendationIsAnHttp200Response() throws Exception {
@@ -191,7 +304,7 @@ class ThemeRecommendationTest {
                 .andExpect(jsonPath("$.candidates[1].id").value("deep"));
     }
 
-    @Test void checksDiversityBetweenTheTwoSurvivingCandidates() {
+    @Test void keepsOneCandidateWhenTheTwoSurvivorsAreTooSimilar() {
         FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
         ImageStorage storage = mock(ImageStorage.class);
         ThemeRecommendationClient client = mock(ThemeRecommendationClient.class);
@@ -201,14 +314,14 @@ class ThemeRecommendationTest {
                 theme().status(), theme().category());
         when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                 candidate("balanced", theme()), candidate("vibrant", near), candidate("deep", deep()))));
-        // The third candidate is rejected individually; the remaining pair still fails existing diversity rules.
+        // The third candidate is rejected individually; the similar second candidate is omitted.
         ThemeRecommendationValidator validator = mock(ThemeRecommendationValidator.class);
         var filteredService = new ThemeRecommendationService(settings, storage, client, validator, mock(Environment.class));
         when(validator.diagnose(deep())).thenReturn(List.of(new ThemeRecommendationValidator.Failure(
                 "CATEGORY_DISTANCE_TOO_SMALL", Map.of("pub", "#FF642D", "restArea", "#FF642D"),
                 Map.of("distance", 0.0), "distance>=35")));
-        assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                () -> filteredService.recommend(1L, input)).getCode());
+        assertEquals(List.of("balanced"), filteredService.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
     }
 
     @Test void validatesHexHueCategoryAndBrandDistinction() {
@@ -291,16 +404,16 @@ class ThemeRecommendationTest {
         when(validator.diagnose(deep())).thenReturn(List.of());
         when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                 candidate("balanced", theme()), candidate("vibrant", theme()), candidate("deep", theme()))));
-        assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                () -> localService.recommend(1L, input)).getCode());
+        assertEquals(List.of("balanced"), localService.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
         assertTrue(output.getOut().contains("rule=CANDIDATE_PRIMARY_DUPLICATE"));
 
         ThemeData near = new ThemeData(new ThemeData.Brand("#FF652D", "#F5E3A3", "#EC4899", "#E13600"),
                 theme().status(), theme().category());
         when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                 candidate("balanced", theme()), candidate("vibrant", near), candidate("deep", deep()))));
-        assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                () -> localService.recommend(1L, input)).getCode());
+        assertEquals(List.of("balanced", "deep"), localService.recommend(1L, input).candidates().stream()
+                .map(ThemeRecommendationCandidate::id).toList());
         assertTrue(output.getOut().contains("rule=CANDIDATE_BRAND_TOO_SIMILAR"));
         assertTrue(output.getOut().contains("threshold=averageRgbDistance>=30"));
     }
@@ -326,13 +439,28 @@ class ThemeRecommendationTest {
             assertTrue(body.at("/input/1/content/0/text").asText().contains("#4EB15E"));
             String instructions = body.at("/input/0/content").asText();
             assertTrue(instructions.contains("three related variations of one poster-derived theme"));
+            assertTrue(instructions.contains("Balanced is the highest-priority candidate"));
+            assertTrue(instructions.contains("reference palette: design it internally first"));
+            assertTrue(instructions.contains("poster-faithful real-world festival theme"));
+            assertTrue(instructions.contains("Do not sacrifice Balanced's validity or"));
             assertTrue(instructions.contains("Balanced (name it Original or Balanced)"));
             assertTrue(instructions.contains("Vibrant (name it Light)"));
-            assertTrue(instructions.contains("Deep: keep Balanced's hue and palette family"));
+            assertTrue(instructions.contains("derive a secondary variation from valid Balanced"));
+            assertTrue(instructions.contains("Deep: derive another secondary variation from valid Balanced"));
+            assertTrue(instructions.contains("Preserve palette cohesion while satisfying every validation rule"));
             assertTrue(instructions.contains("mainly by lightness, saturation and depth"));
-            assertTrue(instructions.contains("prioritize (1) poster-derived palette harmony"));
-            assertTrue(instructions.contains("nearby hue, lightness and"));
-            assertTrue(instructions.contains("distinct HEX values"));
+            assertTrue(instructions.contains("Status semantics take priority over brand palette harmony"));
+            assertTrue(instructions.contains("success MUST be green (HSB hue 75..175)"));
+            assertTrue(instructions.contains("warning") && instructions.contains("yellow/amber/orange (20..65)"));
+            assertTrue(instructions.contains("danger red (345..360 or 0..15)"));
+            assertTrue(instructions.contains("Pending is more flexible but must remain visibly distinct"));
+            assertTrue(instructions.contains("NEVER make success blue, gray or purple"));
+            assertTrue(instructions.contains("start within the poster-derived festival palette"));
+            assertTrue(instructions.contains("(1) lightness, (2) saturation, (3) warm/cool bias, then (4) subtle hue shifts"));
+            assertTrue(instructions.contains("add only the minimum"));
+            assertTrue(instructions.contains("as a last resort"));
+            assertTrue(instructions.contains("Check all 15"));
+            assertTrue(instructions.contains("Different HEX values alone are not"));
             assertTrue(instructions.contains("RGB Euclidean distance at least 35 for every pair"));
             assertEquals("json_schema", body.at("/text/format/type").asText());
             assertTrue(body.at("/text/format/strict").asBoolean());
@@ -342,6 +470,38 @@ class ThemeRecommendationTest {
             assertEquals(4, body.at("/text/format/schema/properties/candidates/items/properties/themeData/properties/status/properties").size());
             assertEquals(6, body.at("/text/format/schema/properties/candidates/items/properties/themeData/properties/category/properties").size());
             assertFalse(body.at("/text/format/schema/properties/candidates/items/additionalProperties").asBoolean());
+            assertEquals(1, server.getRequestCount());
+        }
+    }
+
+    @Test void monochromaticPosterPrioritizesPaletteCohesionAndCategoryDistance() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse().setResponseCode(200).setBody(completed(mapper.writeValueAsString(response()))));
+            var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "gpt-4o-mini",
+                    server.url("/v1/responses").toString());
+            var violetColors = List.of("#B6A9D8", "#A896E5", "#D9D6E8", "#776AA6", "#7D6CD6", "#7BA6D8");
+
+            assertEquals(response(), client.recommend(png, violetColors, "#A896E5"));
+
+            JsonNode body = mapper.readTree(server.takeRequest().getBody().readUtf8());
+            String posterInput = body.at("/input/1/content/0/text").asText();
+            String instructions = body.at("/input/0/content").asText();
+            assertTrue(posterInput.contains(String.join(", ", violetColors)));
+            assertTrue(posterInput.contains("Administrator-selected base color: #A896E5"));
+            assertTrue(instructions.contains("Reflect the selected base"));
+            assertTrue(instructions.contains("extracted poster colors strongly in its four brand colors"));
+            assertTrue(instructions.contains("success MUST be green"));
+            assertTrue(instructions.contains("For a violet/lavender poster"));
+            assertTrue(instructions.contains("pale lavender, vivid violet, muted mauve, blue-violet, periwinkle"));
+            assertTrue(instructions.contains("cool desaturated blue-purple"));
+            assertTrue(instructions.contains("(1) lightness, (2) saturation, (3) warm/cool bias, then (4) subtle hue shifts"));
+            assertTrue(instructions.contains("unrelated yellow, coral, teal or green must not be the default"));
+            assertTrue(instructions.contains("as a last resort"));
+            assertFalse(instructions.contains("Example hue-zone guide"));
+            assertTrue(instructions.contains("RGB Euclidean distance at least 35 for every pair"));
+            assertTrue(instructions.contains("Light and Deep should vary category lightness, saturation and depth from Balanced"));
+            assertEquals(3, body.at("/text/format/schema/properties/candidates/minItems").asInt());
+            assertEquals(3, body.at("/text/format/schema/properties/candidates/maxItems").asInt());
             assertEquals(1, server.getRequestCount());
         }
     }

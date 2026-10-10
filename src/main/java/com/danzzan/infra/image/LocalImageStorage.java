@@ -56,6 +56,11 @@ public class LocalImageStorage implements ImageStorage {
         return upload(festivalSettingId, "logo", file);
     }
 
+    @Override
+    public String uploadHomeImage(Long festivalSettingId, MultipartFile file) {
+        return upload(festivalSettingId, "home", file);
+    }
+
     private String upload(Long festivalSettingId, String kind, MultipartFile file) {
         if (festivalSettingId == null || festivalSettingId <= 0 || file == null || file.isEmpty()
                 || file.getSize() > MAX_IMAGE_BYTES) {

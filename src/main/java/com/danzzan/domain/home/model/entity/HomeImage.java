@@ -13,6 +13,15 @@ import org.hibernate.annotations.CreationTimestamp;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "home_image")
 public class HomeImage {
+    public HomeImage(String imageUrl, Long festivalSettingId, Integer displayOrder) {
+        this.imageUrl = imageUrl;
+        this.festivalSettingId = festivalSettingId;
+        this.displayOrder = displayOrder;
+    }
+
+    public void updateDisplayOrder(int displayOrder) {
+        this.displayOrder = displayOrder;
+    }
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -53,6 +53,10 @@ public class S3Uploader {
         return uploadAdminImage("festival/" + festivalSettingId + "/logo", file);
     }
 
+    public S3UploadResult uploadFestivalHomeImage(Long festivalSettingId, MultipartFile file) {
+        return uploadAdminImage("festival/" + festivalSettingId + "/home", file);
+    }
+
     public S3UploadResult uploadNoticeImage(MultipartFile file) {
         return uploadAdminImage("notices/images", file);
     }

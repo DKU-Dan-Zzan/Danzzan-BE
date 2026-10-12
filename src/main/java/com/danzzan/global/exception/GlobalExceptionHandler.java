@@ -17,6 +17,8 @@ import com.danzzan.domain.user.exception.WrongPasswordException;
 import com.danzzan.domain.admin.staff.exception.StaffManagementException;
 import com.danzzan.domain.user.phoneverification.exception.PhoneVerificationException;
 import com.danzzan.domain.user.passwordreset.exception.PasswordResetException;
+import com.danzzan.domain.festival.theme.exception.ThemeException;
+import com.danzzan.domain.festival.theme.exception.ThemeRecommendationException;
 import com.danzzan.global.exception.AdminAuthenticationException;
 import com.danzzan.global.exception.AdminForbiddenException;
 import com.danzzan.global.model.ApiError;
@@ -39,6 +41,18 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ThemeRecommendationException.class)
+    public ResponseEntity<Map<String, Object>> handleThemeRecommendation(ThemeRecommendationException e) {
+        return ResponseEntity.status(e.getStatus()).body(Map.of(
+                "status", e.getStatus().value(), "code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(ThemeException.class)
+    public ResponseEntity<ErrorResponse> handleThemeException(ThemeException e) {
+        return ResponseEntity.status(e.getStatus())
+                .body(ErrorResponse.of(e.getMessage(), e.getStatus().value()));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<?> handleIllegalArgument(IllegalArgumentException e, HttpServletRequest request) {

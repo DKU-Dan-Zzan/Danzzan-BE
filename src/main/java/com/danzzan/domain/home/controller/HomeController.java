@@ -54,6 +54,11 @@ public class HomeController {
         return homeService.getHomeImages();
     }
 
+    @GetMapping("/{festivalSettingId}/images")
+    public List<HomeImageDto> getHomeImages(@PathVariable Long festivalSettingId) {
+        return homeService.getHomeImages(festivalSettingId);
+    }
+
     @GetMapping("/lineup-images")
     @Operation(
             summary = "라인업 이미지 조회",

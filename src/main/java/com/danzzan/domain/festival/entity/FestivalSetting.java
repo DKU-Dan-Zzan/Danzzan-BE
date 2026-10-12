@@ -12,7 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * 축제 운영 정보. 학교(=서비스) 하나당 한 줄만 유지하므로 id 는 1 로 고정한다.
+ * 축제 운영 정보. 현재 관리 API는 id=1을 사용하지만 Theme API는 모든 설정 id를 지원한다.
  *
  * 여기 담긴 운영 날짜(startDate~endDate)가 부스맵·타임테이블의 날짜 탭이 된다.
  * 예전에는 프론트 코드에 날짜가 박혀 있어 축제 때마다 배포가 필요했다.
@@ -43,6 +43,15 @@ public class FestivalSetting {
     @Column(name = "ticketing_enabled", nullable = false)
     private boolean ticketingEnabled;
 
+    /** JPA 순환 관계 없이 현재 Theme를 가리킨다. 소속은 Theme 서비스와 DB 복합 FK가 검증한다. */
+    @Column(name = "active_theme_id")
+    private Long activeThemeId;
+
+    public void activateTheme(Long themeId) {
+        this.activeThemeId = themeId;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     @Column(name = "ticketing_background_image_url", length = 2048)
     private String ticketingBackgroundImageUrl;
 
@@ -53,6 +62,22 @@ public class FestivalSetting {
 
     @Column(name = "ticket_card_background_image_url", length = 2048)
     private String ticketCardBackgroundImageUrl;
+
+    @Column(name = "poster_image_url", length = 2048)
+    private String posterImageUrl;
+
+    @Column(name = "logo_image_url", length = 2048)
+    private String logoImageUrl;
+
+    public void updatePosterImageUrl(String url) {
+        this.posterImageUrl = url;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateLogoImageUrl(String url) {
+        this.logoImageUrl = url;
+        this.updatedAt = LocalDateTime.now();
+    }
 
     public void updateTicketCardBackgroundImageUrl(String url) {
         this.ticketCardBackgroundImageUrl = url;

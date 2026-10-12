@@ -28,9 +28,9 @@ DELETE FROM home_image;
 DELETE FROM lineup_image;
 DELETE FROM notice;
 
--- 홈 메인 포스터 (nginx가 서빙하는 정적 파일을 가리킨다)
-INSERT INTO home_image (created_at, display_order, image_url) VALUES
-  (NOW(6), 0, '/legend-poster.jpg');
+-- 홈 화면용 와이드 이미지 (nginx 정적 파일). 공식 원본 포스터 URL과 별개다.
+INSERT INTO home_image (created_at, display_order, image_url, festival_setting_id) VALUES
+  (NOW(6), 0, '/legend-poster.jpg', 1);
 
 -- 단과대 (부스맵 마커 좌표는 죽전캠퍼스 근방 값)
 INSERT INTO college (created_at, location_x, location_y, name, en_is_manual) VALUES

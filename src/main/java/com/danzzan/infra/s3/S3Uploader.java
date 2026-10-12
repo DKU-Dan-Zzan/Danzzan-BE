@@ -3,6 +3,8 @@ package com.danzzan.infra.s3;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -19,6 +21,8 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class S3Uploader {
+
+    private static final long MAX_ADMIN_IMAGE_BYTES = 5L * 1024 * 1024;
 
     private final S3Client s3Client;
 
@@ -41,21 +45,40 @@ public class S3Uploader {
         return upload("festival/ticketing-background", file);
     }
 
+    public S3UploadResult uploadFestivalPoster(Long festivalSettingId, MultipartFile file) {
+        return uploadAdminImage("festival/" + festivalSettingId + "/poster", file);
+    }
+
+    public S3UploadResult uploadFestivalLogo(Long festivalSettingId, MultipartFile file) {
+        return uploadAdminImage("festival/" + festivalSettingId + "/logo", file);
+    }
+
+    public S3UploadResult uploadFestivalHomeImage(Long festivalSettingId, MultipartFile file) {
+        return uploadAdminImage("festival/" + festivalSettingId + "/home", file);
+    }
+
     public S3UploadResult uploadNoticeImage(MultipartFile file) {
-        return upload("notices/images", file);
+        return uploadAdminImage("notices/images", file);
     }
 
     public S3UploadResult uploadAdImage(MultipartFile file) {
-        return upload("ads", file);
+        return uploadAdminImage("ads", file);
     }
 
     public S3UploadResult uploadPubImage(String collegeName, String department, MultipartFile file) {
         String prefix = "pub-images/" + sanitize(collegeName) + "/" + sanitize(department);
-        return upload(prefix, file);
+        return uploadAdminImage(prefix, file);
     }
 
     public S3UploadResult uploadArtistImage(Long artistId, MultipartFile file) {
-        return upload("artists/" + artistId, file);
+        return uploadAdminImage("artists/" + artistId, file);
+    }
+
+    private S3UploadResult uploadAdminImage(String prefix, MultipartFile file) {
+        if (file != null && file.getSize() > MAX_ADMIN_IMAGE_BYTES) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미지 파일은 최대 5MB까지 업로드할 수 있습니다.");
+        }
+        return upload(prefix, file);
     }
 
     private S3UploadResult upload(String prefix, MultipartFile file) {

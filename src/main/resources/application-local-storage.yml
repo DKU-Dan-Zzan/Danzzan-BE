@@ -1,0 +1,5 @@
+# Opt in explicitly with --spring.profiles.active=local-storage.
+# Defaults affect only this profile; dev and prod continue using Object Storage.
+local-image:
+  root-directory: ${LOCAL_IMAGE_ROOT:./uploads}
+  public-base-url: ${LOCAL_IMAGE_PUBLIC_BASE_URL:http://localhost:8080/uploads}

@@ -31,6 +31,16 @@ public class S3ImageStorage implements ImageStorage {
     }
 
     @Override
+    public com.danzzan.infra.s3.S3UploadResult uploadTicketingBackground(Long festivalSettingId, MultipartFile file) {
+        return uploader.uploadTicketingBackground(file);
+    }
+
+    @Override
+    public void validateTicketingBackground(Long festivalSettingId, String url) {
+        uploader.validateTicketingBackground(url);
+    }
+
+    @Override
     public byte[] readPoster(Long festivalSettingId, String posterUrl) {
         return reader.read(festivalSettingId, posterUrl);
     }

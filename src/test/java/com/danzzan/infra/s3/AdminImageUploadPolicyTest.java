@@ -54,7 +54,7 @@ class AdminImageUploadPolicyTest {
         ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "png", bytes);
         var file = new MockMultipartFile("file", "background.png", "image/png",
                 Arrays.copyOf(bytes.toByteArray(), 6 * 1024 * 1024));
-        assertNotNull(new TicketingBackgroundService(uploader).upload(file).url());
+        assertNotNull(new TicketingBackgroundService(new com.danzzan.infra.image.S3ImageStorage(uploader, mock(S3PosterImageReader.class))).upload(file).url());
     }
 
     private void configureStorage() {

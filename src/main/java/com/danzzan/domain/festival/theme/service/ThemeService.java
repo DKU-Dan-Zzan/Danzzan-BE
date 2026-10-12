@@ -1,15 +1,21 @@
 package com.danzzan.domain.festival.theme.service;
 
 import com.danzzan.domain.festival.entity.FestivalSetting;
+import com.danzzan.domain.festival.service.FestivalAppearanceWriter;
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.festival.theme.dto.ThemeResponse;
+import com.danzzan.domain.festival.theme.dto.ThemeBundleRequest;
 import com.danzzan.domain.festival.theme.dto.ThemeUpsertRequest;
 import com.danzzan.domain.festival.theme.entity.Theme;
 import com.danzzan.domain.festival.theme.exception.ThemeException;
 import com.danzzan.domain.festival.theme.repository.ThemeRepository;
+import com.danzzan.infra.image.ImageStorage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.List;
 import java.util.Objects;
@@ -21,6 +27,8 @@ import java.util.Optional;
 public class ThemeService {
     private final FestivalSettingRepository festivalSettingRepository;
     private final ThemeRepository themeRepository;
+    private final ImageStorage imageStorage;
+    private final FestivalAppearanceWriter appearanceWriter;
 
     public List<ThemeResponse> list(Long festivalSettingId) {
         FestivalSetting setting = findSetting(festivalSettingId);
@@ -74,6 +82,21 @@ public class ThemeService {
         setting.activateTheme(themeId);
         festivalSettingRepository.save(setting);
         return ThemeResponse.of(theme, themeId);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ThemeResponse applyBundle(Long festivalSettingId, ThemeBundleRequest request) {
+        // The background upload and recommendation APIs operate on the singleton festival.
+        if (!FestivalSetting.SINGLETON_ID.equals(festivalSettingId)) throw ThemeException.wrongFestival();
+        if (!festivalSettingRepository.existsById(festivalSettingId)) throw ThemeException.settingNotFound();
+        // Scalar preflight avoids retaining a stale managed entity while storage requests are in flight.
+        String poster = festivalSettingRepository.findPosterImageUrlById(festivalSettingId).orElse(null);
+        if (!Objects.equals(poster, request.sourcePosterUrl())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "공식 포스터가 변경되었습니다. 다시 미리보기해 주세요.");
+        }
+        imageStorage.validateTicketingBackground(festivalSettingId, request.ticketCardBackgroundImageUrl());
+        imageStorage.validateTicketingBackground(festivalSettingId, request.ticketingBackgroundImageUrl());
+        return appearanceWriter.applyBundle(festivalSettingId, request);
     }
 
     private FestivalSetting findSetting(Long id) {

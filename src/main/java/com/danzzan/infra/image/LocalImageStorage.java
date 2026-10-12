@@ -61,10 +61,39 @@ public class LocalImageStorage implements ImageStorage {
         return upload(festivalSettingId, "home", file);
     }
 
+    @Override
+    public com.danzzan.infra.s3.S3UploadResult uploadTicketingBackground(Long festivalSettingId, MultipartFile file) {
+        String url = upload(festivalSettingId, "ticketing-background", file, 10 * 1024 * 1024);
+        return new com.danzzan.infra.s3.S3UploadResult(url.substring((publicBase + "/").length()), url);
+    }
+
+    @Override
+    public void validateTicketingBackground(Long festivalSettingId, String backgroundUrl) {
+        try {
+            URI url = URI.create(backgroundUrl);
+            String prefix = publicBase + "/festival/" + festivalSettingId + "/ticketing-background/";
+            if (!backgroundUrl.startsWith(prefix) || url.getRawQuery() != null || url.getRawFragment() != null
+                    || !POSTER_SUFFIX.matcher(backgroundUrl.substring(prefix.length())).matches()) throw invalidBackground();
+            Path source = root.resolve(backgroundUrl.substring((publicBase + "/").length())).normalize();
+            if (!source.startsWith(root) || !source.toRealPath().startsWith(root.toRealPath())
+                    || !Files.isRegularFile(source) || Files.size(source) == 0) throw invalidBackground();
+        } catch (IOException | IllegalArgumentException | NullPointerException exception) {
+            throw invalidBackground();
+        }
+    }
+
+    private ResponseStatusException invalidBackground() {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드한 티켓팅 배경 이미지를 선택해 주세요.");
+    }
+
     private String upload(Long festivalSettingId, String kind, MultipartFile file) {
+        return upload(festivalSettingId, kind, file, MAX_IMAGE_BYTES);
+    }
+
+    private String upload(Long festivalSettingId, String kind, MultipartFile file, int maxBytes) {
         if (festivalSettingId == null || festivalSettingId <= 0 || file == null || file.isEmpty()
-                || file.getSize() > MAX_IMAGE_BYTES) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use a non-empty image up to 5 MB");
+                || file.getSize() > maxBytes) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use a non-empty image up to " + (maxBytes / 1024 / 1024) + " MB");
         }
         String original = file.getOriginalFilename();
         String safeName = original == null || original.isBlank() ? "file"

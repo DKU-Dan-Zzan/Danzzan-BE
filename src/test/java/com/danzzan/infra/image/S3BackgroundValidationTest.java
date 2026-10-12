@@ -72,6 +72,23 @@ class S3BackgroundValidationTest {
                 () -> storage.validateTicketingBackground(1L, url)).getStatusCode());
     }
 
+    @Test void acceptsOnlyOwnedExistingHomeObjectsForAllPublicUrlModes() {
+        for (String[] config : new String[][]{{"https://cdn.example.com/images", ""}, {"", "v1/AUTH_test"}, {"", ""}}) {
+            configure(config[0], config[1]);
+            String url = storage.uploadHomeImage(1L, new MockMultipartFile("file", "home.jpg", "image/jpeg", new byte[]{1, 2}));
+            assertDoesNotThrow(() -> storage.validateHomeImage(1L, url));
+            for (String bad : new String[]{url.replace("/1/home/", "/2/home/"), url.replace("/home/", "/poster/"),
+                    url + "?x=1", url + "#x", "https://external.example/" + url.substring(url.indexOf("festival/"))}) {
+                assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                        () -> storage.validateHomeImage(1L, bad)).getStatusCode());
+            }
+            when(client.headObject(any(HeadObjectRequest.class))).thenThrow(NoSuchKeyException.builder().statusCode(404).build());
+            assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                    () -> storage.validateHomeImage(1L, url)).getStatusCode());
+            reset(client);
+        }
+    }
+
     @Test void rejectsMissingObjectAndDistinguishesStorageFailure() {
         configure("https://cdn.example.com/images", "");
         String url = upload();

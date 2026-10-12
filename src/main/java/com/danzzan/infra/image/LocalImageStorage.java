@@ -69,9 +69,18 @@ public class LocalImageStorage implements ImageStorage {
 
     @Override
     public void validateTicketingBackground(Long festivalSettingId, String backgroundUrl) {
+        validateStoredImage(festivalSettingId, "ticketing-background", backgroundUrl);
+    }
+
+    @Override
+    public void validateHomeImage(Long festivalSettingId, String url) {
+        validateStoredImage(festivalSettingId, "home", url);
+    }
+
+    private void validateStoredImage(Long festivalSettingId, String kind, String backgroundUrl) {
         try {
             URI url = URI.create(backgroundUrl);
-            String prefix = publicBase + "/festival/" + festivalSettingId + "/ticketing-background/";
+            String prefix = publicBase + "/festival/" + festivalSettingId + "/" + kind + "/";
             if (!backgroundUrl.startsWith(prefix) || url.getRawQuery() != null || url.getRawFragment() != null
                     || !POSTER_SUFFIX.matcher(backgroundUrl.substring(prefix.length())).matches()) throw invalidBackground();
             Path source = root.resolve(backgroundUrl.substring((publicBase + "/").length())).normalize();
@@ -83,7 +92,7 @@ public class LocalImageStorage implements ImageStorage {
     }
 
     private ResponseStatusException invalidBackground() {
-        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드한 티켓팅 배경 이미지를 선택해 주세요.");
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드한 이미지를 선택해 주세요.");
     }
 
     private String upload(Long festivalSettingId, String kind, MultipartFile file) {

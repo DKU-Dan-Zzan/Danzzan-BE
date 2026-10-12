@@ -15,5 +15,7 @@ public interface ImageStorage {
     /** Reject URLs outside our upload namespace or whose backing object is missing. */
     void validateTicketingBackground(Long festivalSettingId, String url);
 
+    void validateHomeImage(Long festivalSettingId, String url);
+
     byte[] readPoster(Long festivalSettingId, String posterUrl);
 }

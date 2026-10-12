@@ -8,7 +8,9 @@ import com.danzzan.domain.festival.theme.dto.ThemeResponse;
 import com.danzzan.domain.festival.theme.entity.Theme;
 import com.danzzan.domain.festival.theme.exception.ThemeException;
 import com.danzzan.domain.festival.theme.repository.ThemeRepository;
+import com.danzzan.domain.home.service.HomeImageWriter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +20,16 @@ import java.util.Objects;
 
 /** Short database-only transactions, entered after storage work has completed. */
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 @Transactional
 public class FestivalAppearanceWriter {
     private final FestivalSettingRepository settings;
     private final ThemeRepository themes;
+    private final HomeImageWriter homeImages;
+
+    public FestivalAppearanceWriter(FestivalSettingRepository settings, ThemeRepository themes) {
+        this(settings, themes, null);
+    }
 
     public FestivalBrandingResponse updatePoster(Long festivalSettingId, String url) {
         FestivalSetting setting = lockSetting(festivalSettingId);
@@ -47,6 +54,10 @@ public class FestivalAppearanceWriter {
         setting.activateTheme(theme.getId());
         setting.updateTicketCardBackgroundImageUrl(request.ticketCardBackgroundImageUrl());
         setting.updateTicketingBackgroundImageUrl(request.ticketingBackgroundImageUrl());
+        if (request.homeBanner() != null) {
+            var home = request.homeBanner();
+            homeImages.replaceFirst(festivalSettingId, home.imageUrl(), home.expectedFirstImageId(), home.expectedFirstImageUrl());
+        }
         settings.save(setting);
         return ThemeResponse.of(theme, theme.getId());
     }

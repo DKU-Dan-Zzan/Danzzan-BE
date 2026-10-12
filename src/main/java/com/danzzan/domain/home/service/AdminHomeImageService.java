@@ -2,26 +2,24 @@ package com.danzzan.domain.home.service;
 
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.home.model.dto.AdminHomeImageDto;
-import com.danzzan.domain.home.model.entity.HomeImage;
 import com.danzzan.domain.home.repository.HomeImageRepository;
 import com.danzzan.infra.image.ImageStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import javax.imageio.ImageIO;
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 @Transactional(readOnly = true)
 public class AdminHomeImageService {
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
@@ -30,6 +28,13 @@ public class AdminHomeImageService {
     private final FestivalSettingRepository settings;
     private final HomeImageRepository images;
     private final ImageStorage storage;
+    private final HomeImageWriter writer;
+
+    public AdminHomeImageService(FestivalSettingRepository settings, HomeImageRepository images, ImageStorage storage) {
+        this(settings, images, storage, new HomeImageWriter(settings, images));
+    }
+
+    public record StagedImage(String url) {}
 
     public List<AdminHomeImageDto> list(Long festivalSettingId) {
         requireFestival(festivalSettingId);
@@ -37,36 +42,27 @@ public class AdminHomeImageService {
                 .stream().map(AdminHomeImageDto::from).toList();
     }
 
-    @Transactional
-    public AdminHomeImageDto upload(Long festivalSettingId, MultipartFile file) {
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public StagedImage stage(Long festivalSettingId, MultipartFile file) {
         requireFestival(festivalSettingId);
         validate(file);
-        List<HomeImage> existing = images.findAllByFestivalSettingIdOrderByDisplayOrderAsc(festivalSettingId);
-        int nextOrder = existing.stream().mapToInt(HomeImage::getDisplayOrder).max().orElse(-1) + 1;
-        String url = storage.uploadHomeImage(festivalSettingId, file);
-        return AdminHomeImageDto.from(images.save(new HomeImage(url, festivalSettingId, nextOrder)));
+        return new StagedImage(storage.uploadHomeImage(festivalSettingId, file));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminHomeImageDto upload(Long festivalSettingId, MultipartFile file) {
+        String url = stage(festivalSettingId, file).url();
+        return writer.append(festivalSettingId, url);
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void delete(Long festivalSettingId, Long imageId) {
-        requireFestival(festivalSettingId);
-        HomeImage image = images.findByIdAndFestivalSettingId(imageId, festivalSettingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Home image not found"));
-        images.delete(image);
-        // Keep stored image files intact; other URLs may still reference them.
+        writer.delete(festivalSettingId, imageId);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public List<AdminHomeImageDto> reorder(Long festivalSettingId, List<Long> imageIds) {
-        requireFestival(festivalSettingId);
-        List<HomeImage> existing = images.findAllByFestivalSettingIdOrderByDisplayOrderAsc(festivalSettingId);
-        Map<Long, HomeImage> byId = existing.stream().collect(Collectors.toMap(HomeImage::getId, Function.identity()));
-        if (imageIds == null || imageIds.size() != existing.size() || imageIds.stream().anyMatch(id -> id == null || !byId.containsKey(id))
-                || imageIds.stream().distinct().count() != imageIds.size()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image order must contain every image of this festival exactly once");
-        }
-        for (int index = 0; index < imageIds.size(); index++) byId.get(imageIds.get(index)).updateDisplayOrder(index);
-        return imageIds.stream().map(id -> AdminHomeImageDto.from(byId.get(id))).toList();
+        return writer.reorder(festivalSettingId, imageIds);
     }
 
     private void requireFestival(Long id) {

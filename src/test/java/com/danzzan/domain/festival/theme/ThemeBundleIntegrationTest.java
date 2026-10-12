@@ -59,6 +59,8 @@ class ThemeBundleIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @Autowired ThemeRepository themes;
+    @Autowired com.danzzan.domain.home.repository.HomeImageRepository homeImages;
+    @Autowired com.danzzan.domain.home.service.AdminHomeImageService homeService;
     @Autowired FestivalTicketingRoundRepository rounds;
     @MockitoSpyBean FestivalSettingRepository settings;
     @Autowired UserRepository users;
@@ -74,6 +76,7 @@ class ThemeBundleIntegrationTest {
     final String poster = "http://localhost:8080/uploads/festival/1/poster/current.png";
 
     @BeforeEach void setUp() {
+        homeImages.deleteAll();
         rounds.deleteAll();
         themes.deleteAll();
         settings.deleteAll();
@@ -249,6 +252,177 @@ class ThemeBundleIntegrationTest {
             release.countDown(); executor.shutdownNow();
             assertTrue(executor.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS));
         }
+    }
+
+    MockMultipartFile posterFile() throws Exception {
+        var image = new java.awt.image.BufferedImage(20, 40, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var g = image.createGraphics();
+        g.setColor(java.awt.Color.RED); g.fillRect(0, 0, 20, 40);
+        g.setColor(java.awt.Color.BLUE); g.fillRect(2, 2, 16, 36); g.dispose();
+        var bytes = new java.io.ByteArrayOutputStream(); javax.imageio.ImageIO.write(image, "png", bytes);
+        return new MockMultipartFile("file", "poster.png", "image/png", bytes.toByteArray());
+    }
+    String saveRealPoster() throws Exception {
+        String url = storage.uploadPoster(1L, posterFile());
+        var setting = settings.findById(1L).orElseThrow(); setting.updatePosterImageUrl(url); settings.saveAndFlush(setting);
+        return url;
+    }
+    String stagedHomeUrl() throws Exception { return storage.uploadHomeImage(1L, posterFile()); }
+    java.util.Map<String, Object> banner(String url, Long id, String previousUrl) {
+        var banner = new java.util.LinkedHashMap<String, Object>();
+        banner.put("imageUrl", url); banner.put("expectedFirstImageId", id); banner.put("expectedFirstImageUrl", previousUrl);
+        return banner;
+    }
+    com.danzzan.domain.home.model.entity.HomeImage home(String url, int order) {
+        return homeImages.saveAndFlush(new com.danzzan.domain.home.model.entity.HomeImage(url, 1L, order));
+    }
+    org.springframework.test.web.servlet.ResultActions preview(String token, String url, String layout, double x) throws Exception {
+        return mvc.perform(post("/admin/festival/1/home-images/preview").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(Map.of(
+                        "sourcePosterUrl", url, "layout", layout, "focusX", x))));
+    }
+    @Test void previewContainsEntirePosterAndCoverRespectsFocusWithoutPublishing() throws Exception {
+        String url = saveRealPoster();
+        var response = preview(token(UserRole.ROLE_MANAGER, ManagerPermission.OPERATIONS), url, "contain", .5)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.width").value(900))
+                .andExpect(jsonPath("$.height").value(1600)).andExpect(jsonPath("$.mimeType").value("image/jpeg"))
+                .andExpect(jsonPath("$.sourcePosterUrl").value(url)).andReturn();
+        var json = mapper.readTree(response.getResponse().getContentAsString());
+        var image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(Base64.getDecoder().decode(json.get("imageBase64").asText())));
+        // The portrait fits at x=50..849, full height. Its four red borders must survive contain.
+        for (int[] point : new int[][]{{450, 5}, {450, 1594}, {55, 800}, {844, 800}}) {
+            var color = new java.awt.Color(image.getRGB(point[0], point[1]));
+            assertTrue(color.getRed() > 180 && color.getBlue() < 100);
+        }
+        var cover = preview(admin, url, "cover", .5).andExpect(status().isOk()).andReturn();
+        var coverImage = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(Base64.getDecoder().decode(
+                mapper.readTree(cover.getResponse().getContentAsString()).get("imageBase64").asText())));
+        assertTrue(new java.awt.Color(coverImage.getRGB(450, 5)).getBlue() > 180);
+        assertEquals(0, homeImages.count()); unchanged();
+    }
+    @Test void previewValidatesSourceLayoutFocusAndOperationsPermission() throws Exception {
+        String url = saveRealPoster();
+        preview(admin, poster, "contain", .5).andExpect(status().isConflict());
+        preview(admin, url, "invalid", .5).andExpect(status().isBadRequest());
+        preview(admin, url, "cover", 1.1).andExpect(status().isBadRequest());
+        preview(token(UserRole.ROLE_MANAGER, ManagerPermission.TICKETING), url, "contain", .5).andExpect(status().isForbidden());
+        assertEquals(0, homeImages.count()); unchanged();
+    }
+    @Test void stagedUploadStoresOnlyAndRejectsInvalidFilesAndTicketingOnlyPermission() throws Exception {
+        var response = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                "/admin/festival/1/home-images/staged").file(posterFile())
+                .header("Authorization", "Bearer " + token(UserRole.ROLE_MANAGER, ManagerPermission.OPERATIONS)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.url").isString()).andReturn();
+        String url = mapper.readTree(response.getResponse().getContentAsString()).get("url").asText();
+        assertTrue(url.contains("/festival/1/home/")); assertEquals(0, homeImages.count()); unchanged();
+        for (var file : List.of(new MockMultipartFile("file", "bad.png", "image/png", new byte[]{1}),
+                new MockMultipartFile("file", "big.png", "image/png", new byte[5 * 1024 * 1024 + 1]))) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/admin/festival/1/home-images/staged").file(file).header("Authorization", "Bearer " + admin))
+                    .andExpect(status().isBadRequest());
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                "/admin/festival/1/home-images/staged").file(posterFile()).header("Authorization", "Bearer " +
+                token(UserRole.ROLE_MANAGER, ManagerPermission.TICKETING))).andExpect(status().isForbidden());
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void bundleReplacesOnlyFirstOrCreatesWhenEmpty(boolean empty) throws Exception {
+        var first = empty ? null : home("first", 4);
+        var second = empty ? null : home("second", 8);
+        String url = stagedHomeUrl();
+        body.put("homeBanner", banner(url, first == null ? null : first.getId(), first == null ? null : first.getImageUrl()));
+        apply(admin).andExpect(status().isOk());
+        var all = homeImages.findAllByFestivalSettingIdOrderByDisplayOrderAsc(1L);
+        assertEquals(empty ? 1 : 2, all.size()); assertEquals(url, all.get(0).getImageUrl());
+        assertEquals(empty ? 0 : 4, all.get(0).getDisplayOrder());
+        if (!empty) {
+            assertEquals(first.getId(), all.get(0).getId()); assertEquals(second.getId(), all.get(1).getId());
+            assertEquals("second", all.get(1).getImageUrl()); assertEquals(8, all.get(1).getDisplayOrder());
+        }
+    }
+    @Test void omittedAndNullBannerKeepExistingImages() throws Exception {
+        var first = home("first", 3);
+        apply(admin).andExpect(status().isOk());
+        body.put("homeBanner", null); apply(admin).andExpect(status().isOk());
+        assertEquals(1, homeImages.count());
+        assertEquals("first", homeImages.findById(first.getId()).orElseThrow().getImageUrl());
+    }
+    @Test void staleHomeIdentityOrUrlReturnsConflictAndInvalidHomeUrlDoesNotPublish() throws Exception {
+        var first = home("first", 0);
+        String url = stagedHomeUrl();
+        for (var stale : List.of(banner(url, null, null), banner(url, first.getId(), "older"), banner(url, 999L, "first"))) {
+            body.put("homeBanner", stale); apply(admin).andExpect(status().isConflict()); unchanged();
+        }
+        for (String bad : List.of(url.replace("localhost:8080", "external.example"), url + "missing",
+                body.get("ticketCardBackgroundImageUrl").toString(), url.replace("/1/", "/2/"), url + "?x=1")) {
+            body.put("homeBanner", banner(bad, first.getId(), "first"));
+            apply(admin).andExpect(status().isBadRequest()); unchanged();
+        }
+        assertEquals("first", homeImages.findById(first.getId()).orElseThrow().getImageUrl());
+        homeImages.deleteAll(); body.put("homeBanner", banner(url, first.getId(), "first"));
+        apply(admin).andExpect(status().isConflict()); unchanged();
+    }
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void homeReplacementRollsBackWithThemeAndBackgrounds(boolean empty) throws Exception {
+        var first = empty ? null : home("first", 0); String url = stagedHomeUrl();
+        body.put("homeBanner", banner(url, empty ? null : first.getId(), empty ? null : "first"));
+        doAnswer(invocation -> {
+            assertEquals(url, homeImages.findAllByFestivalSettingIdOrderByDisplayOrderAsc(1L).get(0).getImageUrl());
+            throw new IllegalStateException("injected after home replacement");
+        }).when(settings).save(any(FestivalSetting.class));
+        apply(admin).andExpect(status().isBadRequest()); unchanged();
+        if (empty) assertEquals(0, homeImages.count());
+        else assertEquals("first", homeImages.findById(first.getId()).orElseThrow().getImageUrl());
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"upload", "delete", "reorder"})
+    void allHomePublishingMutatorsWaitForFestivalLock(String mutation) throws Exception {
+        var first = home("first", 0); var second = home("second", 1); var file = posterFile();
+        var locked = new java.util.concurrent.CountDownLatch(1); var release = new java.util.concurrent.CountDownLatch(1);
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var holder = executor.submit(() -> new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> {
+                    settings.findByIdForUpdate(1L).orElseThrow(); locked.countDown();
+                    try { if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new AssertionError("lock not released"); }
+                    catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new RuntimeException(e); }
+                }));
+        try {
+            assertTrue(locked.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            if (mutation.equals("upload")) doAnswer(invocation -> {
+                assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                return invocation.callRealMethod();
+            }).when(storage).uploadHomeImage(eq(1L), any());
+            var task = executor.submit(() -> {
+                started.countDown();
+                if (mutation.equals("upload")) homeService.upload(1L, file);
+                else if (mutation.equals("delete")) homeService.delete(1L, first.getId());
+                else homeService.reorder(1L, List.of(second.getId(), first.getId()));
+            });
+            assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertThrows(java.util.concurrent.TimeoutException.class, () -> task.get(300, java.util.concurrent.TimeUnit.MILLISECONDS));
+            release.countDown(); holder.get(5, java.util.concurrent.TimeUnit.SECONDS); task.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(mutation.equals("upload") ? 3 : mutation.equals("delete") ? 1 : 2, homeImages.count());
+        } finally { release.countDown(); executor.shutdownNow(); assertTrue(executor.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)); }
+    }
+
+    @Test void concurrentHomeReorderDuringVerificationMakesBundleStale() throws Exception {
+        var first = home("first", 0); var second = home("second", 1);
+        body.put("homeBanner", banner(stagedHomeUrl(), first.getId(), "first"));
+        var started = new java.util.concurrent.CountDownLatch(1); var release = new java.util.concurrent.CountDownLatch(1);
+        doAnswer(invocation -> {
+            started.countDown();
+            if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new AssertionError("verification not released");
+            return invocation.callRealMethod();
+        }).when(storage).validateTicketingBackground(1L, body.get("ticketCardBackgroundImageUrl").toString());
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var applying = executor.submit(() -> apply(admin).andReturn());
+            assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            executor.submit(() -> homeService.reorder(1L, List.of(second.getId(), first.getId()))).get(5, java.util.concurrent.TimeUnit.SECONDS);
+            release.countDown(); assertEquals(409, applying.get(5, java.util.concurrent.TimeUnit.SECONDS).getResponse().getStatus());
+            unchanged(); assertEquals(second.getId(), homeImages.findAllByFestivalSettingIdOrderByDisplayOrderAsc(1L).get(0).getId());
+        } finally { release.countDown(); executor.shutdownNow(); assertTrue(executor.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS)); }
     }
 
     void unchanged() {

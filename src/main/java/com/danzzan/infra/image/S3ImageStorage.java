@@ -41,6 +41,11 @@ public class S3ImageStorage implements ImageStorage {
     }
 
     @Override
+    public void validateHomeImage(Long festivalSettingId, String url) {
+        uploader.validateHomeImage(festivalSettingId, url);
+    }
+
+    @Override
     public byte[] readPoster(Long festivalSettingId, String posterUrl) {
         return reader.read(festivalSettingId, posterUrl);
     }

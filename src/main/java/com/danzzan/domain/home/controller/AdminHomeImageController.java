@@ -1,6 +1,9 @@
 package com.danzzan.domain.home.controller;
 
 import com.danzzan.domain.home.model.dto.AdminHomeImageDto;
+import com.danzzan.domain.home.model.dto.HomeBannerPreviewRequest;
+import com.danzzan.domain.home.service.HomeBannerPreviewService;
+import jakarta.validation.Valid;
 import com.danzzan.domain.home.model.dto.HomeImageOrderRequest;
 import com.danzzan.domain.home.service.AdminHomeImageService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +20,18 @@ import java.util.List;
 @PreAuthorize("@userAdminAuthorizationService.hasOperationsRole(authentication)")
 public class AdminHomeImageController {
     private final AdminHomeImageService service;
+    private final HomeBannerPreviewService previews;
+
+    @PostMapping("/preview")
+    public HomeBannerPreviewService.Preview preview(@PathVariable Long festivalSettingId,
+            @Valid @RequestBody HomeBannerPreviewRequest request) {
+        return previews.preview(festivalSettingId, request);
+    }
+
+    @PostMapping(value = "/staged", consumes = "multipart/form-data")
+    public AdminHomeImageService.StagedImage stage(@PathVariable Long festivalSettingId, @RequestPart("file") MultipartFile file) {
+        return service.stage(festivalSettingId, file);
+    }
 
     @GetMapping
     public List<AdminHomeImageDto> list(@PathVariable Long festivalSettingId) {

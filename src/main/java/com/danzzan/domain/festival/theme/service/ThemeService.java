@@ -96,6 +96,7 @@ public class ThemeService {
         }
         imageStorage.validateTicketingBackground(festivalSettingId, request.ticketCardBackgroundImageUrl());
         imageStorage.validateTicketingBackground(festivalSettingId, request.ticketingBackgroundImageUrl());
+        if (request.homeBanner() != null) imageStorage.validateHomeImage(festivalSettingId, request.homeBanner().imageUrl());
         return appearanceWriter.applyBundle(festivalSettingId, request);
     }
 

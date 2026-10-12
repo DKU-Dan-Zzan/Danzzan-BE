@@ -1,5 +1,7 @@
 package com.danzzan.domain.festival.dto.request;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
 import jakarta.validation.Valid;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,7 +15,8 @@ import java.util.List;
 @NoArgsConstructor
 public class UpdateFestivalTicketingSettingsRequest {
     @jakarta.validation.constraints.Size(max = 2048)
-    @jakarta.validation.constraints.Pattern(regexp = "https?://[^\\s]+", message = "올바른 이미지 URL을 입력해 주세요.")
+    @jakarta.validation.constraints.Pattern(regexp = "(?:https?://|azure:images/)[^\\s]+", message = "올바른 이미지 URL을 입력해 주세요.")
+    @JsonDeserialize(using = ImageReferenceDeserializer.class)
     private String ticketingBackgroundImageUrl;
     @com.fasterxml.jackson.annotation.JsonIgnore
     @lombok.Setter(lombok.AccessLevel.NONE)
@@ -25,7 +28,8 @@ public class UpdateFestivalTicketingSettingsRequest {
     }
 
     @jakarta.validation.constraints.Size(max = 2048)
-    @jakarta.validation.constraints.Pattern(regexp = "https?://[^\\s]+", message = "올바른 이미지 URL을 입력해 주세요.")
+    @jakarta.validation.constraints.Pattern(regexp = "(?:https?://|azure:images/)[^\\s]+", message = "올바른 이미지 URL을 입력해 주세요.")
+    @JsonDeserialize(using = ImageReferenceDeserializer.class)
     private String ticketCardBackgroundImageUrl;
     @com.fasterxml.jackson.annotation.JsonIgnore
     @lombok.Setter(lombok.AccessLevel.NONE)

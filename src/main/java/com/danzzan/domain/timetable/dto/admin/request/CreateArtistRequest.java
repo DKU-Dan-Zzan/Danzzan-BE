@@ -1,5 +1,7 @@
 package com.danzzan.domain.timetable.dto.admin.request;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -20,6 +22,7 @@ public class CreateArtistRequest {
     /**
      * 신규 생성 시점에 이미지가 이미 업로드된 경우 함께 저장한다. (선택)
      */
+    @JsonDeserialize(using = ImageReferenceDeserializer.class)
     private String imageUrl;
 
     private String nameEn;

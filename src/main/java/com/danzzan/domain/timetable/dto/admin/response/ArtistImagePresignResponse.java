@@ -1,5 +1,7 @@
 package com.danzzan.domain.timetable.dto.admin.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.danzzan.infra.s3.S3PresignedPutResult;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,6 +17,7 @@ import java.util.Objects;
 public class ArtistImagePresignResponse {
 
     private String presignedUrl;
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String fileUrl;
     private String key;
     private Instant expiresAt;

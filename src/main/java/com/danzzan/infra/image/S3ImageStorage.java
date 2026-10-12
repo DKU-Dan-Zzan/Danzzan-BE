@@ -7,9 +7,9 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Retains the existing S3 uploader, object keys, URLs and poster reader unchanged. */
+/** Compatibility facade for remote image storage; the uploader selects S3 or Azure. */
 @Component
-@Profile("!local-storage | prod")
+@Profile("!local-storage | prod | azure")
 @RequiredArgsConstructor
 public class S3ImageStorage implements ImageStorage {
     private final S3Uploader uploader;

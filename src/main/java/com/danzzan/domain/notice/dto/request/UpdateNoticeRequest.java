@@ -1,5 +1,7 @@
 package com.danzzan.domain.notice.dto.request;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,12 +33,14 @@ public class UpdateNoticeRequest {
      * 공지 본문 이미지 URL 목록.
      * 수정 시에는 전체 목록을 다시 보낸다는 가정으로 기존 이미지를 전부 교체합니다.
      */
+    @JsonDeserialize(contentUsing = ImageReferenceDeserializer.class)
     private List<String> images;
 
     /**
      * 대표 이미지 URL (선택).
      * 미지정이고 images가 비어있지 않으면 서버에서 images[0]을 썸네일로 사용합니다.
      */
+    @JsonDeserialize(using = ImageReferenceDeserializer.class)
     private String thumbnailImageUrl;
 
     /**

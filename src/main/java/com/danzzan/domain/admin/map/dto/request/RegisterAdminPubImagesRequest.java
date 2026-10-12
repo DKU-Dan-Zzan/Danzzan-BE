@@ -1,5 +1,7 @@
 package com.danzzan.domain.admin.map.dto.request;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,7 +13,9 @@ import java.util.List;
 public class RegisterAdminPubImagesRequest {
 
     @NotEmpty(message = "등록할 이미지 URL을 하나 이상 전달해 주세요.")
+    @JsonDeserialize(contentUsing = ImageReferenceDeserializer.class)
     private List<String> imageUrls;
 
+    @JsonDeserialize(using = ImageReferenceDeserializer.class)
     private String mainImageUrl;
 }

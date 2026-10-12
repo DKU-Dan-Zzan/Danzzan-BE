@@ -56,7 +56,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     // OPTIONS 는 CORS 프리플라이트라 차단보다 먼저 허용해야 한다.
                     auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
-                    if (environment.acceptsProfiles(Profiles.of("local-storage & !prod"))) {
+                    if (environment.acceptsProfiles(Profiles.of("local-storage & !prod & !azure"))) {
                         auth.requestMatchers(HttpMethod.GET, "/uploads/**").permitAll();
                     }
 
@@ -75,6 +75,7 @@ public class SecurityConfig {
                         )
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/user/{signup-token}").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/images/read-url").permitAll()
                         .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers("/actuator/health", "/actuator/prometheus")

@@ -1,6 +1,8 @@
 package com.danzzan.infra.s3;
 
-import lombok.RequiredArgsConstructor;
+import com.danzzan.infra.azure.AzureBlobStorage;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.http.HttpStatus;
@@ -19,17 +21,29 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 @Component
-@RequiredArgsConstructor
 public class S3Uploader {
 
     private static final long MAX_ADMIN_IMAGE_BYTES = 5L * 1024 * 1024;
 
     private final S3Client s3Client;
 
-    @Value("${nhn.object-storage.endpoint}")
+    private AzureBlobStorage azureStorage;
+
+    public S3Uploader(S3Client s3Client) {
+        this.s3Client = s3Client;
+    }
+
+    @Autowired
+    public S3Uploader(ObjectProvider<S3Client> clients, ObjectProvider<AzureBlobStorage> azure) {
+        this(clients.getIfAvailable());
+        this.azureStorage = azure.getIfAvailable();
+    }
+
+
+    @Value("${nhn.object-storage.endpoint:}")
     private String endpoint;
 
-    @Value("${nhn.object-storage.container}")
+    @Value("${nhn.object-storage.container:}")
     private String bucket;
 
     @Value("${nhn.object-storage.swift-auth-path:}")
@@ -87,6 +101,10 @@ public class S3Uploader {
         }
 
         String key = buildKey(prefix, file.getOriginalFilename());
+
+        if (azureStorage != null) {
+            return new S3UploadResult(key, azureStorage.upload(key, file));
+        }
 
         PutObjectRequest.Builder req = PutObjectRequest.builder()
                 .bucket(bucket)

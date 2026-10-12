@@ -1,6 +1,8 @@
 package com.danzzan.infra.s3;
 
-import lombok.RequiredArgsConstructor;
+import com.danzzan.infra.azure.AzureBlobStorage;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -15,15 +17,28 @@ import java.util.regex.Pattern;
 
 /** Reads only an official poster object stored in our existing bucket. Never fetches an arbitrary URL. */
 @Component
-@RequiredArgsConstructor
 public class S3PosterImageReader {
     private static final int MAX_BYTES = 5 * 1024 * 1024;
     private final S3Client s3Client;
 
-    @Value("${nhn.object-storage.container}")
+    private AzureBlobStorage azureStorage;
+
+    public S3PosterImageReader(S3Client s3Client) {
+        this.s3Client = s3Client;
+    }
+
+    @Autowired
+    public S3PosterImageReader(ObjectProvider<S3Client> clients, ObjectProvider<AzureBlobStorage> azure) {
+        this(clients.getIfAvailable());
+        this.azureStorage = azure.getIfAvailable();
+    }
+
+
+    @Value("${nhn.object-storage.container:}")
     private String bucket;
 
     public byte[] read(Long festivalSettingId, String posterImageUrl) {
+        if (azureStorage != null) return azureStorage.readPoster(festivalSettingId, posterImageUrl);
         String key = objectKey(festivalSettingId, posterImageUrl);
         try (var stream = s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build())) {
             Long contentLength = stream.response().contentLength();

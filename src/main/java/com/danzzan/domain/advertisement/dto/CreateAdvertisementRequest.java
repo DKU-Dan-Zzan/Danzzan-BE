@@ -1,5 +1,7 @@
 package com.danzzan.domain.advertisement.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
 import com.danzzan.domain.advertisement.AdvertisementPlacement;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
@@ -20,6 +22,7 @@ public class CreateAdvertisementRequest {
 
     @NotBlank(message = "광고 이미지 URL을 입력해 주세요.")
     @JsonAlias({"fileUrl", "image_url", "imageURL"})
+    @JsonDeserialize(using = ImageReferenceDeserializer.class)
     private String imageUrl;
 
     @Size(max = 2048, message = "광고 이동 URL은 2048자 이하여야 합니다.")

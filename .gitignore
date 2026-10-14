@@ -86,3 +86,6 @@ k6-test/tokens*.json
 
 !scripts/add_ticketing_background.sql
 !scripts/add_festival_branding.sql
+!deploy/azure/schema.sql
+!deploy/azure/demo-seed.sql
+deploy/azure/secrets/

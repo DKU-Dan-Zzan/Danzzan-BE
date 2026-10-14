@@ -1,6 +1,6 @@
 # 단짠 Azure 준비·이미지 연동 인수인계
 
-기준일: **2026-10-13, 한국 시간**. 현재까지 실제 수행한 작업과 동료 계정에서 재현할 절차를 정리한다. VM 배포는 아직 하지 않았다. 이 문서는 리소스 생성이나 권한 변경을 자동 실행하지 않는다.
+기준일: **2026-10-14, 한국 시간**. 현재까지 실제 수행한 작업과 동료 계정에서 재현할 절차를 정리한다. VM·네트워크·관리 ID, 새 DB 기반 앱 배포와 HTTPS 설정까지 진행했다. 이 문서는 리소스 생성이나 권한 변경을 자동 실행하지 않는다.
 
 ## 1. 현재 어디까지 완료했는가
 
@@ -14,13 +14,16 @@
 | 삭제 복구 | Blob·컨테이너 일시 삭제 각각 3일 | 삭제 후 보존 기간의 저장 비용은 남을 수 있음 |
 | 개발자 인증 | Azure CLI 2.91.0 설치·본인 학교 계정 로그인 완료 | 로그인 정보는 다른 사람에게 전달하지 않음 |
 | 개발자 권한 | 구독에서 상속된 Owner + `images`의 Storage Blob Data Contributor | 동료에게 Owner를 그대로 부여할 필요는 없음. 아래 최소 범위 참고 |
-| BE·FE 이미지 전환 | DANZ-372·DANZ-373 작업 브랜치의 커밋 대상 | 원격 푸시는 별도이며, main clone만으로 변경이 전달되지 않음 |
-| 실제 Azure 검증 | SDK 업로드·조회·만료·삭제, 테스트 공지 API·브라우저 조회 성공 | 기존 공지 데이터 보존 및 테스트 데이터 정리 확인 |
+| BE·FE 이미지 전환 | BE `4d71343`, FE `3cb26497` 커밋 완료 | 원격 푸시는 별도이며, main clone만으로 변경이 전달되지 않음 |
+| 실제 Azure 검증 | SDK 업로드·조회·만료·삭제, 테스트 공지 API·브라우저 조회 성공 | 5분 SAS 만료 403→재발급 PNG 200, 임시 공지 ID 2와 신규 Blob 정리 완료. 활성 Blob 이름·ETag 전후 0개 동일, 기존 공지·이미지 미변경 |
 | 기존 NHN 이미지 | 이관하지 않음 | 졸업작품용 새 이미지를 사용하기로 결정 |
-| VM·전체 배포 | 미실행 | 10-13 해당 리소스 그룹에는 스토리지 계정만 조회됨 |
-| Compute 쿼터 | 미확정 | 공급자 `NotRegistered`, 쿼터 API는 빈 목록. 등록 변경하지 않음 |
+| VM·네트워크 | 10-14 생성 완료, 실행 중 | D2as_v4 / 2 vCPU / 8 GiB / 64 GiB Standard SSD, FE·BE·MySQL·Redis·Kafka 실행 구성 |
+| VM 관리 ID | Blob 역할 2개 할당 및 VM 내부 인증 검증 완료 | 비공개 목록 조회와 사용자 위임 키 발급 HTTP 200. 기존 데이터 쓰기·삭제 없음 |
+| HTTPS | Let’s Encrypt 인증서 발급 및 renewal dry-run 성공 | Azure 제공 DNS에서 HTTPS 실행. 현재 인증서 만료일 2027-01-12, systemd timer 활성화. dry-run과 deploy hook 수동 검증은 구분 |
+| 새 시연 DB | `danzzan_demo` | 30 테이블, 합성 계정 2개와 공지 1건. 기존 게시물·이미지 미변경 |
+| Compute·Network | 공급자 등록 완료 | 생성 직전 지역 vCPU 6 / DASv4 4, DASv5·DSv5 0. 동료 구독은 재확인 필요 |
 
-코드·상세 검증 기록은 [azure-image-storage.md](azure-image-storage.md)에 있다. 아래 재현 절차는 현재 사용자 구독의 리소스를 중복 생성하라는 의미가 아니다.
+코드·상세 검증 기록은 [azure-image-storage.md](azure-image-storage.md), 실제 VM 구성·접속·권한·비용은 [azure-vm-infrastructure.md](azure-vm-infrastructure.md), 앱·DB·HTTPS 배포와 운영 절차는 [azure-vm-deployment.md](azure-vm-deployment.md)에 있다. 아래 재현 절차는 현재 사용자 구독의 리소스를 중복 생성하라는 의미가 아니다.
 
 ## 2. 동료 계정으로 진행하기 전에 결정할 사항
 
@@ -325,14 +328,15 @@ AZURE_IMAGE_SMOKE=true ./gradlew test \
 
 실연동에서 SDK가 Blob 이름의 `/`를 `%2F`로 인코딩하여 저장 요청이 400이 되는 문제를 수정했다. 한 번 디코딩한 뒤 키를 검증하며, 실제 SDK URL을 사용하는 회귀 테스트로 확인했다.
 
-미검증 범위:
+10-14 VM 배포에서 추가 검증한 항목은 [배포 기록](azure-vm-deployment.md)에 있다. Docker 내부 관리 ID, 새 DB의 `ddl-auto: validate`, HTTPS 및 인증서 갱신 모의 실행, 300초 SAS 만료·재발급, 서비스 재시작 후 데이터 보존을 확인했다.
+
+남은 미검증 범위:
 
 - 관리자 로그인·파일 선택 UI를 포함한 모든 화면의 수동 E2E
-- 기본 300초 SAS를 사용한 장시간 체류, 실제 Azure 장애 상황
-- VM 관리 ID 인증·Docker 내부 인증, VM에서의 실제 메모리·CPU 부하
-- VM 재시작/할당 취소 후 DB·Redis·Kafka 데이터 영속성
-- 새 MySQL 스키마·시연 데이터 준비, `ddl-auto: validate` 통과
-- HTTPS 도메인·인증서·방화벽·전체 Azure Compose 배포
+- 장시간 체류 및 실제 Azure 장애 상황
+- VM에서의 실제 메모리·CPU 부하 시험
+- VM 자체 재부팅/할당 취소 후 DB·Redis·Kafka 데이터 영속성
+- 카카오맵 도메인 등록 후 동작과 미설정 메일·문자·AI 외부 연동
 
 ## 12. 문제 발생 시 확인 순서
 
@@ -351,7 +355,9 @@ AZURE_IMAGE_SMOKE=true ./gradlew test \
 | Azure presign 400 | 의도한 동작. 현재 FE는 multipart 경로 사용 |
 | VM 생성 후보가 안 보임 | 올바른 구독·지역, Compute 등록, 총 vCPU/제품군 쿼터, SKU 제한·실제 용량 |
 
-## 13. VM은 다음 단계: 후보와 예상 비용만 확인한 상태
+## 13. VM 선택과 예상 비용
+
+**10-14 갱신:** 사용자 승인 후 D2as_v4 VM·네트워크·관리 ID를 생성했다. VM 단가는 $0.118/시간, 168시간의 VM·E6 디스크·공인 IP 기본 합계는 약 **$21.77**이다. 실제 구성과 검증은 [VM 생성 기록](azure-vm-infrastructure.md)을 따른다. 아래 표는 10-13의 초기 후보 비교이며 현재 선택을 뜻하지 않는다.
 
 목표: x86 Linux VM 한 대에서 FE/Nginx·Spring Boot·MySQL·Redis·Kafka 운영, 이미지는 별도 Blob. Kafka는 소비자·outbox 때문에 유지한다. 이미지 연동 검증을 먼저 끝내고 VM을 준비한다.
 
@@ -366,42 +372,45 @@ AZURE_IMAGE_SMOKE=true ./gradlew test \
 | **D2as_v5 (2 vCPU / 8GiB)** | **$0.106** | **$17.81** | **$19.75** |
 | D2s_v5 (2 vCPU / 8GiB) | $0.118 | $19.82 | $21.77 |
 
-추천 후보는 D2as_v5다. B2as_v2와 주당 약 $2.08 차이로 B 계열 CPU 크레딧 소진에 따른 성능 제한을 피할 수 있다. 학생 구독의 금전 크레딧과 B 계열 CPU 크레딧은 서로 다르다.
+초기 추천 후보는 D2as_v5였지만 10-14 공급자 등록 후 해당 제품군 쿼터가 0임을 확인했다. 실제 생성은 쿼터가 확보된 D2as_v4로 진행했다. B 계열 CPU 크레딧 소진에 따른 성능 제한을 피하려는 선택이며, 학생 구독의 금전 크레딧과 B 계열 CPU 크레딧은 서로 다르다.
 
 - E6: 월 $4.80, 168시간 약 $1.10. **I/O 작업 비용 별도**.
 - Standard 공인 IPv4: 시간당 $0.005, 168시간 $0.84.
 - Hot LRS Blob 첫 저장 구간: GB당 월 $0.02. 읽기/쓰기 요청·인터넷 송신 등 별도.
 - 평가 일주일 예산은 소규모 사용을 가정해 $25~30 정도를 계획했지만 과금 상한은 아니다. 사전 테스트 시간·세금·할인·실제 청구 단가는 별도로 확인한다.
 - 할당 취소 후에도 E6 디스크 + 공인 IP를 보관하면 월 약 **$8.45 + Blob 비용**. 일정이 미정인 동안 너무 일찍 생성하면 대기 비용이 쌓인다.
-- 현재 사용자 구독에서는 B2ms가 `NotAvailableForSubscription`, 표의 네 SKU는 제한 없음으로 조회됐다. Compute 공급자는 미등록이고 쿼터 응답이 비어 있어 **생성 가능 확정 아님**. 동료 구독에는 이 결과를 그대로 적용하지 않는다.
+- 10-13에는 B2ms가 `NotAvailableForSubscription`, 표의 네 SKU는 제한 없음으로 조회됐지만 Compute 미등록으로 쿼터를 확인하지 못했다. **SKU 제한 없음과 제품군 쿼터 확보는 별개**이며, 실제 생성 가능 여부는 10-14 다시 확인했다. 동료 구독에는 이 결과를 그대로 적용하지 않는다.
 
 [가격 API](https://learn.microsoft.com/en-us/rest/api/cost-management/retail-prices/azure-retail-prices), [디스크 과금](https://azure.microsoft.com/en-us/pricing/details/managed-disks/), [B 계열 CPU 크레딧](https://learn.microsoft.com/en-us/azure/virtual-machines/sizes/b-series-cpu-credit-model), [VM 상태별 과금](https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing)
 
-### 이후 VM 배포 시 준비할 순서 — 아직 실행하지 않음
+### 전체 앱 배포 상태와 평가 전 체크 항목
+
+현재 사용자 구독에서는 VM 사양 확정, 공급자 등록, VM·네트워크 생성, 관리 ID 역할 할당, 새 DB 기반 앱 배포와 HTTPS 설정을 진행했다. 실제 운영 절차는 [Azure VM 시연 배포 기록](azure-vm-deployment.md)을 따른다. 동료 구독에서는 인프라 사전 확인부터 다시 진행한다.
 
 1. 동료 구독·테넌트·남은 크레딧과 평가 일정을 확정한다.
 2. 해당 구독의 SKU·지역·총/제품군 vCPU 쿼터와 최종 견적을 확인한다. Compute 등록·리소스 생성은 승인 후 진행한다.
 3. Azure 전용 Compose와 비밀 주입 설정을 준비한다. 현재 `docker-compose.prod.yml`의 NHN 고정 Kafka 주소와 host network를 그대로 사용하지 않는다.
-4. 새 DB 스키마·시연 데이터 준비 방법을 확정한다. `ddl-auto: validate`는 빈 DB 스키마를 자동으로 만들어 주지 않는다.
+4. 새 DB 스키마·시연 데이터를 준비한다. `ddl-auto: validate`는 빈 DB 스키마를 자동으로 만들어 주지 않으므로 schema bootstrap이 필요하다.
 5. VM에는 시스템 할당 관리 ID를 사용하고, 7번의 Blob 데이터 역할·위임 역할을 부여한다. 현재 Java 코드는 사용자 할당 관리 ID 선택용 client ID를 지정하지 않는다.
 6. BE를 `prod,azure` + `AZURE_STORAGE_CREDENTIAL=managed-identity`로 구성하고 실제 컨테이너에서 관리 ID 인증을 검증한다. SDK 라이브러리 추가만으로 VM IAM 설정이 완료되는 것은 아니다.
-7. OS 영구 디스크의 Docker 볼륨에 MySQL·Redis·Kafka 데이터를 두고 재시작·할당 취소/재할당 후 보존을 검증한다. 데이터에 임시 디스크를 사용하지 않는다. `docker compose down -v`는 볼륨을 삭제하므로 사용하지 않는다.
-8. Nginx 업로드 본문 크기·타임아웃·API 경로, HTTPS, 필요한 인바운드 포트만 공개하는 방화벽을 검증한다. DB·Redis·Kafka 포트를 인터넷에 공개하지 않는다.
+7. OS 영구 디스크의 Docker 볼륨에 MySQL·Redis·Kafka 데이터를 둔다. 서비스 재시작 후 MySQL 행 수·Redis AOF 키·Kafka 독립 topic 메시지 보존을 확인했고 검증용 키·topic은 정리했다. Azure 할당 취소/재할당 후 보존은 아직 검증하지 않았다. 데이터에 임시 디스크를 사용하지 않는다. `docker compose down -v`는 볼륨을 삭제하므로 사용하지 않는다.
+8. Nginx 업로드 본문 크기·타임아웃·API 경로, HTTPS, 필요한 인바운드 포트만 공개하는 방화벽을 검증한다. DB·Redis·Kafka 포트를 인터넷에 공개하지 않는다. Certbot renewal dry-run은 성공했다.
 9. JVM/Kafka 메모리, MySQL 버퍼, 스레드 수, Docker 로그 회전, 디스크 여유를 실제 부하에 맞게 조정한다. VM 내부 빌드의 순간 메모리도 별도 고려한다.
-10. 실제 테스트 공지·이미지만 사용해 업로드·조회·만료·삭제와 핵심 시연 흐름을 확인한다.
+10. 실제 테스트 공지·이미지만 사용해 업로드·조회·만료·삭제와 핵심 시연 흐름을 확인한다. 5분 SAS 만료 후 403, BE 읽기 URL 재발급 후 PNG 200, 브라우저 이미지 로드를 확인했다. 임시 공지 ID 2와 신규 Blob은 정확한 ID·UUID 제목 guard를 거쳐 정리했다.
 11. 준비가 끝나면 **중지(할당 취소)**하고 상태를 확인한다. 게스트 OS 내부 종료만으로는 컴퓨팅 요금이 멈추지 않을 수 있다.
 12. 평가 전에 다시 켜고 재접속·서비스 상태·데이터·이미지를 확인한다. 할당 취소 후 재가동 시 지역 용량 확보는 보장되지 않으므로 평가 직전까지 기다리지 않는다.
 
 ## 14. 인수인계 완료 체크리스트
 
-- [ ] 동료가 받을 BE·FE 변경이 실제 커밋/패치에 포함됐는지 확인
-- [ ] VM·저장소의 구독/테넌트와 비용 부담 주체 기록
+- [x] BE·FE 이미지 전환 코드·문서 커밋 완료. 원격 전달은 별도
+- [x] 현재 VM·저장소는 본인 학생 구독 및 동일 테넌트 사용으로 확정
 - [ ] 기존 저장소 공동 사용 또는 새 저장소 준비 결정
-- [ ] 비공개 컨테이너, HTTPS, Shared Key 비활성, 3일 soft delete 확인
+- [x] 비공개 컨테이너, HTTPS, Shared Key 비활성, 3일 soft delete 및 renewal dry-run 성공 확인
 - [ ] 동료 개발자의 데이터 역할·위임 권한과 CLI 로그인 확인
 - [ ] 새 endpoint를 BE에 명시하고 smoke 하드코딩 대상 확인
-- [ ] 새 공지·새 이미지 검증과 정확한 테스트 데이터 정리
-- [ ] VM 생성 전에 Compose·새 DB·시연 데이터·관리 ID 계획 검토
+- [x] 임시 공지·새 이미지 정리와 서비스 재시작 보존 확인
+- [ ] VM 할당 취소·재시작 후 서비스와 영구 볼륨 보존 확인
+- [x] Azure Compose·새 DB·시연 데이터 준비 및 Docker 내부 관리 ID 검증
 - [ ] 평가 일정·중지 후 보관 비용·종료 후 보관/삭제 정책 확정
 
-인수인계 문서 작성에서는 문서만 변경했으며, 이후 사용자 요청으로 기존 Azure 코드·테스트·문서를 함께 커밋 대상으로 확인했다. Azure 리소스 생성, 역할 변경, 기존 이미지/게시물 수정·삭제, VM 생성, 원격 푸시는 수행하지 않았다.
+10-13에는 이미지 전환 코드·테스트·문서를 BE·FE에 각각 커밋했다. 10-14에는 별도 사용자 승인에 따라 VM·네트워크 생성과 VM 관리 ID 역할 할당·인증 검증, 새 DB 기반 앱 배포와 HTTPS 구성을 수행했다. 기존 이미지/게시물은 수정·삭제하지 않았다. 배포 파일과 문서는 BE·FE 각 작업 브랜치의 커밋 대상이며, 원격 푸시는 별도 작업이다.

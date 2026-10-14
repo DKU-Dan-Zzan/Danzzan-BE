@@ -51,19 +51,33 @@ public class HomeImageWriter {
     }
 
     /** Joins the caller's bundle transaction; the comparison and mutation both run under its row lock. */
-    public void replaceFirst(Long festivalId, String url, Long expectedId, String expectedUrl) {
-        lock(festivalId);
+    public AdminHomeImageDto replaceFirst(Long festivalId, String url, Long expectedId, String expectedUrl) {
+        return replaceFirst(festivalId, url, expectedId, expectedUrl, null);
+    }
+
+    /**
+     * A generated banner is only publishable while the poster it was generated from remains current.
+     * The poster identity and the first-home-image CAS are checked under the same festival lock.
+     */
+    public AdminHomeImageDto replaceFirst(Long festivalId, String url, Long expectedId, String expectedUrl,
+                                          String sourcePosterUrl) {
+        var setting = lock(festivalId);
+        if (sourcePosterUrl != null && !Objects.equals(setting.getPosterImageUrl(), sourcePosterUrl)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "공식 포스터가 변경되었습니다. 다시 미리보기해 주세요.");
+        }
         var existing = images.findAllByFestivalSettingIdOrderByDisplayOrderAsc(festivalId);
         HomeImage first = existing.isEmpty() ? null : existing.get(0);
         if (!Objects.equals(first == null ? null : first.getId(), expectedId)
                 || !Objects.equals(first == null ? null : first.getImageUrl(), expectedUrl)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "홈 이미지가 변경되었습니다. 다시 미리보기해 주세요.");
         }
-        if (first == null) images.save(new HomeImage(url, festivalId, 0));
-        else first.updateImageUrl(url);
+        if (first == null) return AdminHomeImageDto.from(images.save(new HomeImage(url, festivalId, 0)));
+        first.updateImageUrl(url);
+        return AdminHomeImageDto.from(first);
     }
 
-    private void lock(Long id) {
-        settings.findByIdForUpdate(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Festival setting not found"));
+    private com.danzzan.domain.festival.entity.FestivalSetting lock(Long id) {
+        return settings.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Festival setting not found"));
     }
 }

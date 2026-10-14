@@ -45,7 +45,7 @@ services:
       AZURE_STORAGE_CONTAINER: images
       AZURE_STORAGE_CREDENTIAL: managed-identity
       AZURE_STORAGE_READ_SAS_EXPIRATION_SECONDS: 300
-      CORS_ALLOWED_ORIGINS: https://danzzan-demo-2026.koreacentral.cloudapp.azure.com
+      CORS_ALLOWED_ORIGINS: https://danzzan.koreacentral.cloudapp.azure.com
       APP_CORS_ALLOWED_ORIGIN_PATTERNS: ""
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       SERVER_TOMCAT_MAX_THREADS: 100

@@ -20,12 +20,14 @@
 | NSG | `nsg-danzzan-demo`, NIC에 연결 |
 | 공인 IP | `pip-danzzan-demo`, Standard / Regional / Static IPv4 |
 | 현재 공인 주소 | `20.214.148.172` |
-| Azure DNS | `danzzan-demo-2026.koreacentral.cloudapp.azure.com` |
+| Azure DNS | `danzzan.koreacentral.cloudapp.azure.com` |
 | 관리 ID | SystemAssigned |
 | 관리 ID principal ID | `a72053fb-3109-4281-86bc-17f702e937fa` |
 | SSH 사용자 | `danzzan`, 공개 키 인증 |
 
 `Microsoft.Compute`와 `Microsoft.Network` 공급자가 Registered 상태임을 확인했다. 생성 직전 지역 전체 vCPU 쿼터는 6, DASv4 제품군은 4였다. D2as_v5/D2s_v5 제품군은 쿼터가 0이어서 D2as_v4로 변경하고 승인받았다. 동료 구독에서는 공급자 등록·쿼터·SKU 가용성을 다시 확인한다.
+
+2026-10-14 DNS label을 `danzzan-demo-2026`에서 `danzzan`으로 줄였다. 공인 IP는 유지했으며 HTTPS·CORS도 함께 변경했다. 검증과 이전 설정 보관 위치는 [배포 기록](azure-vm-deployment.md)의 DNS 이름 변경 절에 있다.
 
 공인 IP 리소스를 보존하면 VM 할당 취소/시작 시에도 같은 IP와 DNS 이름을 사용할 수 있다. IP 리소스를 삭제하거나 DNS 설정을 변경하면 주소 유지가 보장되지 않는다. 이 DNS 이름은 웹 서버나 TLS 인증서가 자동으로 설치됐다는 의미가 아니다.
 
@@ -46,7 +48,7 @@ DB 3306, Redis 6379, Kafka 9092/9094, Spring 8080을 인터넷에 허용하는 �
 
 ```bash
 ssh -i ~/.ssh/danzzan-azure-demo \
-  danzzan@danzzan-demo-2026.koreacentral.cloudapp.azure.com
+  danzzan@danzzan.koreacentral.cloudapp.azure.com
 ```
 
 접속 네트워크의 공인 IP가 바뀌면 SSH가 막힐 수 있다. 이때 NSG의 작업자 `/32` 주소를 확인하고 승인된 새 주소로 변경한다. SSH를 `0.0.0.0/0`으로 열어 해결하지 않는다.

@@ -6,7 +6,7 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 접속 주소 | `https://danzzan-demo-2026.koreacentral.cloudapp.azure.com` |
+| 접속 주소 | `https://danzzan.koreacentral.cloudapp.azure.com` |
 | 공개 서비스 | FE/Nginx만 TCP 80·443 공개. BE, MySQL, Redis, Kafka는 Compose 내부 네트워크만 사용 |
 | TLS | Let's Encrypt 인증서 발급 완료. 현재 인증서 만료일은 **2027-01-12** |
 | 컨테이너 | `frontend`, `app`, `mysql`, `redis`, `kafka`, `kafka-init` 실행 구성 |
@@ -15,6 +15,24 @@
 | 합성 시연 데이터 | 공지 1건, 계정 2개: `90000001`(관리자), `90000002`(일반 사용자), 이미지 참조 0건 |
 
 비밀번호, JWT 비밀값, DB 비밀번호, Azure 토큰·SAS·계정 키, 외부 API 키는 이 문서나 Git에 기록하지 않는다.
+
+## DNS 이름 변경 기록 (2026-10-14)
+
+기존 `danzzan-demo-2026.koreacentral.cloudapp.azure.com`에서 **`danzzan.koreacentral.cloudapp.azure.com`**으로 변경했다. Azure 이름 가용성 API의 `available: true`를 확인한 뒤 기존 `pip-danzzan-demo`의 DNS label만 `danzzan`으로 갱신했다. 공인 IP `20.214.148.172`와 VM·데이터 볼륨·Blob 저장소는 그대로다. 이전 이름은 Azure DNS에서 해제되므로 이전 주소의 리디렉션을 보장하지 않는다.
+
+새 이름으로 Let's Encrypt 인증서를 발급하고 Nginx의 `server_name`·인증서 경로 및 BE의 `CORS_ALLOWED_ORIGINS`를 변경했다. FE 이미지를 다시 빌드하고 `app`·`frontend`만 재생성했다. MySQL·Redis·Kafka 컨테이너와 기존 게시물·이미지는 변경하지 않았다.
+
+검증 결과:
+
+- 새 DNS → 기존 공인 IP 확인, 새 인증서를 신뢰하는 HTTPS 요청 성공.
+- 홈페이지·관리자 로그인 경로·공지·API health HTTP 200 및 HTTP → 새 HTTPS 301 확인.
+- 관리자/일반 합성 계정의 새 Origin 로그인 성공. 내부 BE preflight의 새 Origin 허용 헤더와 기존/임의 Origin의 HTTP 403 확인.
+- 실제 브라우저에서 새 주소의 공지 목록 표시 확인.
+- 새 인증서의 `certbot renew --cert-name danzzan.koreacentral.cloudapp.azure.com --dry-run --no-random-sleep-on-renew` 성공, Nginx 검사·reload 후크 별도 성공.
+
+이전 도메인 갱신 설정은 `/etc/letsencrypt/renewal-retired/`로 옮겨 자동 갱신 대상에서 제외했고, 이전 인증서·개인 키는 삭제하지 않았다. 이전 Compose/Nginx 사본은 VM의 `/opt/danzzan/dns-change-backup-20261014/`에 보관했다. 이름을 되돌리려면 이전 DNS label의 가용성을 다시 확인해야 한다.
+
+로컬 비공개 시연 로그인 안내의 URL도 갱신했다. 주소 변경으로 브라우저 로그인 상태가 이어지지 않을 수 있으므로 새 주소에서 다시 로그인한다. 카카오 앱 관리자는 **새 짧은 주소**를 JavaScript SDK 도메인에 등록해야 한다.
 
 ## 실제 구성
 
@@ -64,7 +82,7 @@ MySQL·Redis·Kafka를 실제로 재시작한 뒤에도 MySQL 행 수, Redis AOF
 
 ## HTTPS와 갱신
 
-인증서 대상 FQDN은 `danzzan-demo-2026.koreacentral.cloudapp.azure.com`이다. Nginx는 HTTP-01 경로 `/.well-known/acme-challenge/`를 호스트의 `/var/www/certbot`에서 제공한다. Certbot은 webroot 방식을 사용하며, 성공적으로 새 인증서가 배포될 때만 `deploy/azure/renew-nginx.sh`가 Nginx 설정 검사 후 reload한다.
+인증서 대상 FQDN은 `danzzan.koreacentral.cloudapp.azure.com`이다. Nginx는 HTTP-01 경로 `/.well-known/acme-challenge/`를 호스트의 `/var/www/certbot`에서 제공한다. Certbot은 webroot 방식을 사용하며, 성공적으로 새 인증서가 배포될 때만 `deploy/azure/renew-nginx.sh`가 Nginx 설정 검사 후 reload한다.
 
 Certbot은 연락처 이메일 없이 등록됐고 systemd timer가 활성화되어 있다. `certbot renew --dry-run`은 webroot 갱신 시뮬레이션으로 최종 성공했다. 이 dry-run은 deploy hook을 기본 실행하지 않으므로, `deploy/azure/renew-nginx.sh`의 Nginx 설정 검사와 reload도 별도로 수동 성공을 확인했다. 운영 중 인증서나 갱신 설정을 다시 만들기 위해 반복 발급하지 않는다.
 
@@ -110,8 +128,8 @@ sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
 cd /opt/danzzan/Danzzan-BE
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml ps
-curl -fsS https://danzzan-demo-2026.koreacentral.cloudapp.azure.com/ >/dev/null
-curl -fsSI https://danzzan-demo-2026.koreacentral.cloudapp.azure.com/ | head
+curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/ >/dev/null
+curl -fsSI https://danzzan.koreacentral.cloudapp.azure.com/ | head
 sudo certbot certificates
 ```
 
@@ -127,7 +145,7 @@ sudo certbot certificates
 - DeepL API
 - 카카오맵 SDK Azure 도메인 등록
 
-카카오맵은 기존 public JavaScript 키로 정상 SDK endpoint를 Azure FQDN Referer와 함께 요청할 때 HTTP 401을 반환했다. 키 비활성화·잘못된 키 가능성도 남아 있지만, 현재 Azure 도메인이 Kakao Developers의 해당 앱 JavaScript SDK 도메인에 등록되지 않았을 가능성이 높다. 동료 또는 앱 관리자는 `https://danzzan-demo-2026.koreacentral.cloudapp.azure.com`을 등록한 뒤 지도를 다시 검증한다. [Kakao Maps Web 안내](https://apis.map.kakao.com/web/guide/)
+카카오맵은 기존 public JavaScript 키로 정상 SDK endpoint를 변경 전 Azure FQDN Referer와 함께 요청했을 때 HTTP 401을 반환했다. 키 비활성화·잘못된 키 가능성도 남아 있지만, 현재 Azure 도메인이 Kakao Developers의 해당 앱 JavaScript SDK 도메인에 등록되지 않았을 가능성이 높다. 동료 또는 앱 관리자는 `https://danzzan.koreacentral.cloudapp.azure.com`을 등록한 뒤 지도를 다시 검증한다. [Kakao Maps Web 안내](https://apis.map.kakao.com/web/guide/)
 
 이 기능들을 활성화하려면 각각의 실제 비밀값·비용·외부 서비스 약관을 별도로 검토한다. 빈 값이나 테스트용 더미 값을 실제 키로 바꾸기 위해 기존 설정 파일의 비밀값을 복사하지 않는다.
 

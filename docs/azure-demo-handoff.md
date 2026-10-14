@@ -19,6 +19,7 @@
 | 기존 NHN 이미지 | 이관하지 않음 | 졸업작품용 새 이미지를 사용하기로 결정 |
 | VM·네트워크 | 10-14 생성 완료, 실행 중 | D2as_v4 / 2 vCPU / 8 GiB / 64 GiB Standard SSD, FE·BE·MySQL·Redis·Kafka 실행 구성 |
 | VM 관리 ID | Blob 역할 2개 할당 및 VM 내부 인증 검증 완료 | 비공개 목록 조회와 사용자 위임 키 발급 HTTP 200. 기존 데이터 쓰기·삭제 없음 |
+| 접속 주소 | `https://danzzan.koreacentral.cloudapp.azure.com` | 10-14 DNS 이름 단축 및 새 인증서·CORS 적용 검증 완료 |
 | HTTPS | Let’s Encrypt 인증서 발급 및 renewal dry-run 성공 | Azure 제공 DNS에서 HTTPS 실행. 현재 인증서 만료일 2027-01-12, systemd timer 활성화. dry-run과 deploy hook 수동 검증은 구분 |
 | 새 시연 DB | `danzzan_demo` | 30 테이블, 합성 계정 2개와 공지 1건. 기존 게시물·이미지 미변경 |
 | Compute·Network | 공급자 등록 완료 | 생성 직전 지역 vCPU 6 / DASv4 4, DASv5·DSv5 0. 동료 구독은 재확인 필요 |

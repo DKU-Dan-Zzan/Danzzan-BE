@@ -31,6 +31,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -491,6 +492,29 @@ class ThemeRecommendationTest {
         var client = new OpenAiThemeRecommendationClient(mapper, "", "gpt-4o-mini", "https://api.openai.com/v1/responses");
         assertEquals("OPENAI_KEY_MISSING", assertThrows(ThemeRecommendationException.class,
                 () -> client.recommend(png, input.sourceColors(), input.selectedBaseColor())).getCode());
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void logsSafeThemeRecommendationTransportDiagnostics(CapturedOutput output) throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse().setResponseCode(500).setBody("SENTINEL_UPSTREAM_BODY"));
+            var client = new OpenAiThemeRecommendationClient(mapper, "sentinel-secret-key", "test-model",
+                    server.url("/v1/responses").toString());
+
+            assertEquals("OPENAI_MODEL_ERROR", assertThrows(ThemeRecommendationException.class,
+                    () -> client.recommend(png, input.sourceColors(), input.selectedBaseColor())).getCode());
+
+            String logs = output.getOut();
+            assertTrue(logs.matches("(?s).*correlationId=[0-9a-f-]{36} operation=theme.*"));
+            assertTrue(logs.contains("imageBytes=8 modelConfigured=true endpointConfigured=true"));
+            assertTrue(logs.contains("status=500 protocol="));
+            assertTrue(logs.contains("outcome=OPENAI_MODEL_ERROR elapsedMs="));
+            assertFalse(logs.contains("sentinel-secret-key"));
+            assertFalse(logs.contains("SENTINEL_UPSTREAM_BODY"));
+            assertFalse(logs.contains("data:image"));
+            assertFalse(logs.contains(Base64.getEncoder().encodeToString(png)));
+        }
     }
 
     @Test void sendsImageBytesAndStrictFourteenColorSchema() throws Exception {

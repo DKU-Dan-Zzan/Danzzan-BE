@@ -3,6 +3,8 @@ package com.danzzan.domain.festival.background;
 import com.danzzan.domain.festival.theme.exception.ThemeRecommendationException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,7 @@ import java.util.*;
 /** No upstream bodies, keys or poster bytes are logged or included in errors. */
 @Component
 public class OpenAiPosterFocusClient {
+    private static final Logger log = LoggerFactory.getLogger(OpenAiPosterFocusClient.class);
     public record Focus(double x, double y, String reason) {}
     private final ObjectMapper mapper;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
@@ -34,13 +37,18 @@ public class OpenAiPosterFocusClient {
 
     public Focus recommend(byte[] poster, String target) {
         var size = PosterBackgroundRenderer.Target.parse(target);
-        if (key == null || key.isBlank()) throw error(HttpStatus.SERVICE_UNAVAILABLE, "OPENAI_KEY_MISSING", "AI 추천이 설정되지 않았습니다.");
-        String mime = (poster[0] & 0xff) == 0x89 ? "image/png" : "image/jpeg";
-        Map<String, Object> schema = Map.of("type", "object", "additionalProperties", false,
-                "required", List.of("x", "y", "reason"), "properties", Map.of(
-                        "x", Map.of("type", "number"), "y", Map.of("type", "number"), "reason", Map.of("type", "string")));
-        var payload = Map.of("model", model, "store", false, "max_output_tokens", 400,
-                "input", List.of(Map.of("role", "developer", "content", """
+        String correlationId = UUID.randomUUID().toString();
+        long startedAt = System.nanoTime();
+        log.info("AI recommendation start correlationId={} operation=background target={} imageBytes={} modelConfigured={} endpointConfigured={}",
+                correlationId, target, poster == null ? -1 : poster.length, model != null && !model.isBlank(), endpoint != null);
+        try {
+            if (key == null || key.isBlank()) throw error(HttpStatus.SERVICE_UNAVAILABLE, "OPENAI_KEY_MISSING", "AI 추천이 설정되지 않았습니다.");
+            String mime = (poster[0] & 0xff) == 0x89 ? "image/png" : "image/jpeg";
+            Map<String, Object> schema = Map.of("type", "object", "additionalProperties", false,
+                    "required", List.of("x", "y", "reason"), "properties", Map.of(
+                            "x", Map.of("type", "number"), "y", Map.of("type", "number"), "reason", Map.of("type", "string")));
+            var payload = Map.of("model", model, "store", false, "max_output_tokens", 400,
+                    "input", List.of(Map.of("role", "developer", "content", """
                     Analyze this official festival poster visually. Recommend a focal point for a cover crop background.
                     x and y are normalized coordinates in the original image, both between 0 and 1 inclusive.
                     Favor atmospheric illustration and negative space, avoiding dense lettering and distracting faces.
@@ -50,24 +58,47 @@ public class OpenAiPosterFocusClient {
                     """), Map.of("role", "user", "content", List.of(
                         Map.of("type", "input_text", "text", "Target: " + target + ", aspect " + size.width() + ":" + size.height()),
                         Map.of("type", "input_image", "detail", "high", "image_url", "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(poster))))),
-                "text", Map.of("format", Map.of("type", "json_schema", "name", "poster_background_focus", "strict", true, "schema", schema)));
-        try {
+                    "text", Map.of("format", Map.of("type", "json_schema", "name", "poster_background_focus", "strict", true, "schema", schema)));
             var request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(45))
                     .header("Authorization", "Bearer " + key).header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload))).build();
             var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            log.info("AI recommendation response correlationId={} operation=background target={} status={} protocol={} elapsedMs={}",
+                    correlationId, target, response.statusCode(), response.version(), elapsedMs(startedAt));
             if (response.statusCode() == 429) throw error(HttpStatus.TOO_MANY_REQUESTS, "OPENAI_RATE_LIMIT", "AI 요청이 많습니다. 잠시 후 다시 시도해 주세요.");
             if (response.statusCode() < 200 || response.statusCode() >= 300)
                 throw error(HttpStatus.BAD_GATEWAY, "OPENAI_MODEL_ERROR", "AI 모델 요청에 실패했습니다.");
-            return parseResponse(response.body());
+            Focus focus = parseResponse(response.body());
+            logOutcome(correlationId, target, "SUCCESS", startedAt);
+            return focus;
+        } catch (ThemeRecommendationException failure) {
+            logOutcome(correlationId, target, failure.getCode(), startedAt);
+            throw failure;
         } catch (HttpTimeoutException exception) {
+            logTransportFailure(correlationId, target, "OPENAI_TIMEOUT", exception, startedAt);
             throw error(HttpStatus.GATEWAY_TIMEOUT, "OPENAI_TIMEOUT", "AI 추천 시간이 초과되었습니다. 다시 시도해 주세요.");
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            logOutcome(correlationId, target, "OPENAI_MODEL_ERROR", startedAt);
             throw error(HttpStatus.BAD_GATEWAY, "OPENAI_MODEL_ERROR", "AI 요청이 중단되었습니다.");
         } catch (IOException exception) {
+            logTransportFailure(correlationId, target, "OPENAI_MODEL_ERROR", exception, startedAt);
             throw error(HttpStatus.BAD_GATEWAY, "OPENAI_MODEL_ERROR", "AI 서비스에 연결할 수 없습니다.");
         }
+    }
+
+    private void logOutcome(String correlationId, String target, String outcome, long startedAt) {
+        log.info("AI recommendation outcome correlationId={} operation=background target={} outcome={} elapsedMs={}",
+                correlationId, target, outcome, elapsedMs(startedAt));
+    }
+
+    private void logTransportFailure(String correlationId, String target, String outcome, Exception exception, long startedAt) {
+        log.info("AI recommendation outcome correlationId={} operation=background target={} outcome={} exceptionClass={} elapsedMs={}",
+                correlationId, target, outcome, exception.getClass().getSimpleName(), elapsedMs(startedAt));
+    }
+
+    private long elapsedMs(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
     }
 
     Focus parseResponse(String body) {

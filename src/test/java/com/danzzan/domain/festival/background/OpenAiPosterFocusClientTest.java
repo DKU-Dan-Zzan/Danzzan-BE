@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.http.HttpStatus;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import java.util.List;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,6 +34,29 @@ class OpenAiPosterFocusClientTest {
     @Test void missingKeyFailsBeforeNetwork() {
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, assertThrows(ThemeRecommendationException.class,
                 () -> client.recommend(new byte[]{(byte)0xff}, "ticket")).getStatus());
+    }
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void logsSafeBackgroundRecommendationTransportDiagnostics(CapturedOutput output) throws Exception {
+        try (var server = new MockWebServer()) {
+            server.start();
+            server.enqueue(new MockResponse().setResponseCode(500).setBody("SENTINEL_UPSTREAM_BODY"));
+            var transport = new OpenAiPosterFocusClient(mapper, "sentinel-secret-key", "test-model",
+                    server.url("/v1/responses").toString());
+
+            assertEquals("OPENAI_MODEL_ERROR", assertThrows(ThemeRecommendationException.class,
+                    () -> transport.recommend(new byte[]{(byte) 0xff, (byte) 0xd8, (byte) 0xff}, "closed")).getCode());
+
+            String logs = output.getOut();
+            assertTrue(logs.matches("(?s).*correlationId=[0-9a-f-]{36} operation=background target=closed.*"));
+            assertTrue(logs.contains("imageBytes=3 modelConfigured=true endpointConfigured=true"));
+            assertTrue(logs.contains("status=500 protocol="));
+            assertTrue(logs.contains("outcome=OPENAI_MODEL_ERROR elapsedMs="));
+            assertFalse(logs.contains("sentinel-secret-key"));
+            assertFalse(logs.contains("SENTINEL_UPSTREAM_BODY"));
+            assertFalse(logs.contains("data:image"));
+            assertFalse(logs.contains("/v1/responses"));
+        }
     }
     @Test void sendsActualImageToResponsesAndMapsUpstreamErrorsWithoutLeakingBody() throws Exception {
         try (var server = new MockWebServer()) {

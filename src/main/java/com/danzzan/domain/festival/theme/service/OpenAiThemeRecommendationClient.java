@@ -4,6 +4,8 @@ import com.danzzan.domain.festival.theme.dto.ThemeRecommendationResponse;
 import com.danzzan.domain.festival.theme.exception.ThemeRecommendationException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -18,10 +20,12 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /** Responses API transport. Never logs the key, poster bytes, prompt, or upstream body. */
 @Component
 public class OpenAiThemeRecommendationClient implements ThemeRecommendationClient {
+    private static final Logger log = LoggerFactory.getLogger(OpenAiThemeRecommendationClient.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(45);
     private static final int MAX_POSTER_BYTES = 5 * 1024 * 1024;
     private static final String INSTRUCTIONS = """
@@ -86,24 +90,28 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
 
     @Override
     public ThemeRecommendationResponse recommend(byte[] poster, List<String> sourceColors, String selectedBaseColor) {
-        if (apiKey == null || apiKey.isBlank()) throw failure(HttpStatus.SERVICE_UNAVAILABLE,
-                "OPENAI_KEY_MISSING", "AI recommendation is not configured. Set OPENAI_API_KEY on the backend.");
-        String mime = posterMime(poster);
-        String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(poster);
-        String userText = "Extracted poster colors: " + String.join(", ", sourceColors)
-                + ". Administrator-selected base color: " + selectedBaseColor + ".";
-        Map<String, Object> payload = Map.of(
-                "model", model,
-                "store", false,
-                "max_output_tokens", 2400,
-                "input", List.of(
-                        Map.of("role", "developer", "content", INSTRUCTIONS),
-                        Map.of("role", "user", "content", List.of(
-                                Map.of("type", "input_text", "text", userText),
-                                Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
-                "text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_candidates",
-                        "strict", true, "schema", schema())));
+        String correlationId = UUID.randomUUID().toString();
+        long startedAt = System.nanoTime();
+        log.info("AI recommendation start correlationId={} operation=theme imageBytes={} modelConfigured={} endpointConfigured={}",
+                correlationId, poster == null ? -1 : poster.length, model != null && !model.isBlank(), endpoint != null);
         try {
+            if (apiKey == null || apiKey.isBlank()) throw failure(HttpStatus.SERVICE_UNAVAILABLE,
+                    "OPENAI_KEY_MISSING", "AI recommendation is not configured. Set OPENAI_API_KEY on the backend.");
+            String mime = posterMime(poster);
+            String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(poster);
+            String userText = "Extracted poster colors: " + String.join(", ", sourceColors)
+                    + ". Administrator-selected base color: " + selectedBaseColor + ".";
+            Map<String, Object> payload = Map.of(
+                    "model", model,
+                    "store", false,
+                    "max_output_tokens", 2400,
+                    "input", List.of(
+                            Map.of("role", "developer", "content", INSTRUCTIONS),
+                            Map.of("role", "user", "content", List.of(
+                                    Map.of("type", "input_text", "text", userText),
+                                    Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
+                    "text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_candidates",
+                            "strict", true, "schema", schema())));
             HttpRequest request = HttpRequest.newBuilder(endpoint)
                     .timeout(TIMEOUT)
                     .header("Authorization", "Bearer " + apiKey)
@@ -111,6 +119,8 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)))
                     .build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            log.info("AI recommendation response correlationId={} operation=theme status={} protocol={} elapsedMs={}",
+                    correlationId, response.statusCode(), response.version(), elapsedMs(startedAt));
             if (response.statusCode() == 429) throw failure(HttpStatus.TOO_MANY_REQUESTS,
                     "OPENAI_RATE_LIMIT", "AI request limit reached. Please try again later.");
             if (response.statusCode() < 200 || response.statusCode() >= 300) throw failure(HttpStatus.BAD_GATEWAY,
@@ -128,7 +138,9 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
                 for (JsonNode content : output.path("content")) {
                     if ("output_text".equals(content.path("type").asText()) && content.path("text").isTextual()) {
                         try {
-                            return mapper.readValue(content.path("text").asText(), ThemeRecommendationResponse.class);
+                            ThemeRecommendationResponse recommendation = mapper.readValue(content.path("text").asText(), ThemeRecommendationResponse.class);
+                            logOutcome(correlationId, "SUCCESS", startedAt);
+                            return recommendation;
                         } catch (IOException malformed) {
                             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MALFORMED_OUTPUT",
                                     "AI returned an invalid theme structure.");
@@ -138,14 +150,34 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
             }
             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MALFORMED_OUTPUT",
                     "AI returned no theme data.");
+        } catch (ThemeRecommendationException failure) {
+            logOutcome(correlationId, failure.getCode(), startedAt);
+            throw failure;
         } catch (java.net.http.HttpTimeoutException timeout) {
+            logTransportFailure(correlationId, "OPENAI_TIMEOUT", timeout, startedAt);
             throw failure(HttpStatus.GATEWAY_TIMEOUT, "OPENAI_TIMEOUT", "AI recommendation timed out. Please try again.");
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
+            logOutcome(correlationId, "OPENAI_MODEL_ERROR", startedAt);
             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MODEL_ERROR", "AI recommendation was interrupted.");
         } catch (IOException transport) {
+            logTransportFailure(correlationId, "OPENAI_MODEL_ERROR", transport, startedAt);
             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MODEL_ERROR", "AI recommendation service is unavailable.");
         }
+    }
+
+    private void logOutcome(String correlationId, String outcome, long startedAt) {
+        log.info("AI recommendation outcome correlationId={} operation=theme outcome={} elapsedMs={}",
+                correlationId, outcome, elapsedMs(startedAt));
+    }
+
+    private void logTransportFailure(String correlationId, String outcome, Exception exception, long startedAt) {
+        log.info("AI recommendation outcome correlationId={} operation=theme outcome={} exceptionClass={} elapsedMs={}",
+                correlationId, outcome, exception.getClass().getSimpleName(), elapsedMs(startedAt));
+    }
+
+    private long elapsedMs(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
     }
 
     private String posterMime(byte[] bytes) {

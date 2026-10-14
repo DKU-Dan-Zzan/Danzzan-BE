@@ -9,6 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface FestivalSettingRepository extends JpaRepository<FestivalSetting, Long> {
+    @Query("select f.posterImageUrl from FestivalSetting f where f.id = :id")
+    Optional<String> findPosterImageUrlById(@Param("id") Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select f from FestivalSetting f where f.id = :id")
     Optional<FestivalSetting> findByIdForUpdate(@Param("id") Long id);

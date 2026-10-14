@@ -1,6 +1,7 @@
 package com.danzzan.domain.festival.service;
 
-import com.danzzan.infra.s3.S3Uploader;
+import com.danzzan.infra.image.ImageStorage;
+import com.danzzan.domain.festival.entity.FestivalSetting;
 import com.danzzan.infra.s3.S3UploadResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,7 +15,7 @@ import java.io.IOException;
 @Service
 @RequiredArgsConstructor
 public class TicketingBackgroundService {
-    private final S3Uploader uploader;
+    private final ImageStorage imageStorage;
     public S3UploadResult upload(MultipartFile file) {
         if (file == null || file.isEmpty() || file.getSize() > 10 * 1024 * 1024L)
             throw invalidImage();
@@ -34,7 +35,7 @@ public class TicketingBackgroundService {
                 if (pixels <= 0 || pixels > 40_000_000L || reader.read(0) == null) throw invalidImage();
             } finally { reader.dispose(); }
         } catch (IOException | IllegalArgumentException ex) { throw invalidImage(); }
-        return uploader.uploadTicketingBackground(file);
+        return imageStorage.uploadTicketingBackground(FestivalSetting.SINGLETON_ID, file);
     }
     private ResponseStatusException invalidImage() {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, "10MB 이하, 4천만 화소 이하의 JPG·PNG 이미지를 선택해 주세요.");

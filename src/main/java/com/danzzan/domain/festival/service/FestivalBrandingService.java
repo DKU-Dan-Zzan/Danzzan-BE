@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -24,27 +25,30 @@ public class FestivalBrandingService {
 
     private final FestivalSettingRepository settings;
     private final ImageStorage imageStorage;
+    private final FestivalAppearanceWriter appearanceWriter;
 
     public FestivalBrandingResponse get(Long festivalSettingId) {
         return FestivalBrandingResponse.of(find(festivalSettingId));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public FestivalBrandingResponse uploadPoster(Long festivalSettingId, MultipartFile file) {
-        FestivalSetting setting = find(festivalSettingId);
+        // Do not hydrate an entity before storage I/O: an OSIV context could retain a stale snapshot.
+        if (!settings.existsById(festivalSettingId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Festival setting not found");
         validate(file);
         String url = imageStorage.uploadPoster(festivalSettingId, file);
-        setting.updatePosterImageUrl(url);
-        return FestivalBrandingResponse.of(setting);
+        return appearanceWriter.updatePoster(festivalSettingId, url);
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public FestivalBrandingResponse uploadLogo(Long festivalSettingId, MultipartFile file) {
-        FestivalSetting setting = find(festivalSettingId);
+        // Do not hydrate an entity before storage I/O: an OSIV context could retain a stale snapshot.
+        if (!settings.existsById(festivalSettingId))
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Festival setting not found");
         validate(file);
         String url = imageStorage.uploadLogo(festivalSettingId, file);
-        setting.updateLogoImageUrl(url);
-        return FestivalBrandingResponse.of(setting);
+        return appearanceWriter.updateLogo(festivalSettingId, url);
     }
 
     private FestivalSetting find(Long id) {

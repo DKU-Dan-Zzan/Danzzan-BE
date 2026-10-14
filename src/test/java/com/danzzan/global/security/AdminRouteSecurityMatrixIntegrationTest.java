@@ -60,6 +60,7 @@ class AdminRouteSecurityMatrixIntegrationTest {
     @Autowired private UserRepository userRepository;
 
     @MockitoBean private JwtRevocationService jwtRevocationService;
+    @MockitoBean private com.danzzan.domain.festival.background.PosterBackgroundService posterBackgroundService;
 
     private String adminToken;
     private String managerToken;
@@ -114,7 +115,10 @@ class AdminRouteSecurityMatrixIntegrationTest {
             } else {
                 assertThat(manager).as(route + " manager").isNotIn(401, 403);
                 assertThat(noPermissionManager).as(route + " no permission manager").isEqualTo(403);
-                if (route.ticketingOnly()) {
+                if (route.path().endsWith("/themes/apply-bundle")) {
+                    assertThat(operationsManager).as(route + " operations manager").isEqualTo(403);
+                    assertThat(ticketingManager).as(route + " ticketing manager").isEqualTo(403);
+                } else if (route.ticketingOnly()) {
                     assertThat(ticketingManager).as(route + " ticketing manager").isNotIn(401, 403);
                     assertThat(operationsManager).as(route + " operations manager").isEqualTo(403);
                 } else {
@@ -123,6 +127,28 @@ class AdminRouteSecurityMatrixIntegrationTest {
                 }
             }
         }
+    }
+
+    @Test
+    void posterRecommendationAllowsTicketingOnlyAndRejectsOperationsOnly() throws Exception {
+        org.mockito.Mockito.when(posterBackgroundService.recommend("ticket")).thenReturn(
+                new com.danzzan.domain.festival.background.PosterBackgroundService.Recommendation(
+                        "ticket", "image/jpeg", "/9j/2Q==", 800, 360, .5, .5, "여백", "https://cdn/current.png"));
+        String path = "/admin/festival/ticketing-background/recommend";
+        for (String allowed : List.of(ticketingManagerToken, managerToken, adminToken)) {
+            mockMvc.perform(request(HttpMethod.POST, path).header("Authorization", "Bearer " + allowed)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"target\":\"ticket\"}"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.mimeType").value("image/jpeg"));
+        }
+        for (String denied : List.of(operationsManagerToken, noPermissionManagerToken, userToken)) {
+            mockMvc.perform(request(HttpMethod.POST, path).header("Authorization", "Bearer " + denied)
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"target\":\"ticket\"}"))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+        }
+        mockMvc.perform(request(HttpMethod.POST, path).contentType(MediaType.APPLICATION_JSON).content("{\"target\":\"ticket\"}"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
+        org.mockito.Mockito.verify(posterBackgroundService, org.mockito.Mockito.times(3)).recommend("ticket");
     }
 
     private List<AdminRoute> adminRoutes() {
@@ -160,7 +186,7 @@ class AdminRouteSecurityMatrixIntegrationTest {
     private int status(AdminRoute route, String token) throws Exception {
         MockHttpServletRequestBuilder request = request(route.method(), route.path())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{}");
+                .content(route.path().endsWith("/themes/apply-bundle") ? bundleBody() : "{}");
         if (token != null) {
             request.header("Authorization", "Bearer " + token);
         }
@@ -173,6 +199,17 @@ class AdminRouteSecurityMatrixIntegrationTest {
             }
             throw e;
         }
+    }
+
+    private String bundleBody() {
+        return """
+                {"name":"Bundle","themeData":{
+                  "brand":{"primary":"#FF642D","secondary":"#F5E3A3","accent":"#FF642D","strong":"#E13600"},
+                  "status":{"success":"#2E7D32","warning":"#B26A00","danger":"#B3261E","pending":"#E3776A"},
+                  "category":{"pub":"#FF642D","foodTruck":"#EC4899","experience":"#10B981","event":"#F6CA3B","restArea":"#8B5CF6","facility":"#3B82F6"}},
+                  "sourcePosterUrl":"https://cdn/current.png","sourceColors":["#FF642D"],"selectedBaseColor":"#FF642D",
+                  "ticketCardBackgroundImageUrl":"https://cdn/ticket.jpg","ticketingBackgroundImageUrl":"https://cdn/closed.jpg"}
+                """;
     }
 
     private boolean hasMultipartBindingFailure(Throwable error) {
@@ -210,7 +247,7 @@ class AdminRouteSecurityMatrixIntegrationTest {
 
         boolean ticketingOnly() {
             return path.startsWith("/api/admin/events") || path.equals("/admin/festival/ticketing-settings")
-                    || path.equals("/admin/festival/ticketing-background");
+                    || path.equals("/admin/festival/ticketing-background") || path.startsWith("/admin/festival/ticketing-background/");
         }
     }
 }

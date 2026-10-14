@@ -38,10 +38,13 @@ class LocalFestivalImageFlowTest {
         FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
         ThemeRepository themes = mock(ThemeRepository.class);
         when(settings.findById(1L)).thenReturn(Optional.of(setting));
+        when(settings.existsById(1L)).thenReturn(true);
+        when(settings.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
         when(themes.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        FestivalBrandingService branding = new FestivalBrandingService(settings, storage);
+        var writer = new com.danzzan.domain.festival.service.FestivalAppearanceWriter(settings, themes);
+        FestivalBrandingService branding = new FestivalBrandingService(settings, storage, writer);
         FestivalPosterColorService analysis = new FestivalPosterColorService(settings, storage, new PosterColorExtractor());
-        ThemeService themeService = new ThemeService(settings, themes);
+        ThemeService themeService = new ThemeService(settings, themes, storage, writer);
 
         String posterA = branding.uploadPoster(1L, image(Color.RED)).posterImageUrl();
         String colorA = analysis.extract(1L).colors().get(0).hex();

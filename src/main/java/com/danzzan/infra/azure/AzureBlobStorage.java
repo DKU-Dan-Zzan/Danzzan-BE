@@ -6,7 +6,9 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.models.BlobHttpHeaders;
+import com.azure.storage.blob.models.BlobProperties;
 import com.azure.storage.blob.models.BlobRequestConditions;
+import com.azure.storage.blob.models.BlobStorageException;
 import com.azure.storage.blob.sas.BlobSasPermission;
 import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
 import com.azure.storage.blob.options.BlobParallelUploadOptions;
@@ -142,6 +144,48 @@ public class AzureBlobStorage {
         }
     }
 
+    /**
+     * Confirms that a staged ticketing background is an existing object created in this storage
+     * namespace.  Accepting the current SAS URL here is safe because it is normalized before any
+     * caller persists it.
+     */
+    public void validateTicketingBackground(String reference) {
+        validateStoredImage("festival/ticketing-background/", reference, MAX_UPLOAD_BYTES);
+    }
+
+    /** Confirms that a staged home banner belongs to the requested festival. */
+    public void validateHomeImage(Long festivalId, String reference) {
+        if (festivalId == null || festivalId <= 0) throw invalidBackground();
+        validateStoredImage("festival/" + festivalId + "/home/", reference, MAX_POSTER_BYTES);
+    }
+
+    private void validateStoredImage(String prefix, String reference, long maxBytes) {
+        String key;
+        try {
+            String normalized = normalizeReference(reference);
+            if (normalized == null || !normalized.startsWith(referencePrefix)) throw invalidBackground();
+            key = keyFromReference(normalized);
+            String suffix = key.startsWith(prefix) ? key.substring(prefix.length()) : null;
+            if (suffix == null || !isGeneratedImageSuffix(suffix)) throw invalidBackground();
+        } catch (IllegalArgumentException | ResponseStatusException exception) {
+            throw invalidBackground();
+        }
+
+        try {
+            BlobProperties properties = blobClient(key).getProperties();
+            Long size = properties.getBlobSize();
+            if (size == null || size <= 0 || size > maxBytes
+                    || !isAllowedImageContentType(properties.getContentType())) {
+                throw invalidBackground();
+            }
+        } catch (BlobStorageException exception) {
+            if (exception.getStatusCode() == 404) throw invalidBackground();
+            throw storageUnavailable("Unable to verify the uploaded image", exception);
+        } catch (AzureException exception) {
+            throw storageUnavailable("Unable to verify the uploaded image", exception);
+        }
+    }
+
     private BlobClient blobClient(String key) {
         return containerClient.getBlobClient(key);
     }
@@ -187,6 +231,14 @@ public class AzureBlobStorage {
             if (segment.isEmpty() || ".".equals(segment) || "..".equals(segment)) throw invalidReference();
         }
         return key;
+    }
+
+    private static boolean isGeneratedImageSuffix(String suffix) {
+        return suffix.matches("[0-9]{8}/[a-fA-F0-9-]{36}_[A-Za-z0-9._-]+");
+    }
+
+    private static boolean isAllowedImageContentType(String contentType) {
+        return contentType != null && ALLOWED_IMAGE_CONTENT_TYPES.contains(contentType.trim().toLowerCase(Locale.ROOT));
     }
 
     private String validatedContentType(String contentType) {
@@ -279,6 +331,10 @@ public class AzureBlobStorage {
     private static ResponseStatusException invalidPoster() {
         return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                 "Saved poster URL does not identify a valid Azure festival poster");
+    }
+
+    private static ResponseStatusException invalidBackground() {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "업로드한 이미지를 선택해 주세요.");
     }
 
     private static ResponseStatusException storageUnavailable(String message, Exception cause) {

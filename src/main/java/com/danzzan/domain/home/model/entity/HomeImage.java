@@ -19,6 +19,10 @@ public class HomeImage {
         this.displayOrder = displayOrder;
     }
 
+    public void updateImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
+
     public void updateDisplayOrder(int displayOrder) {
         this.displayOrder = displayOrder;
     }

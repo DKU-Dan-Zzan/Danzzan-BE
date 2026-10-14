@@ -10,5 +10,12 @@ public interface ImageStorage {
 
     String uploadHomeImage(Long festivalSettingId, MultipartFile file);
 
+    com.danzzan.infra.s3.S3UploadResult uploadTicketingBackground(Long festivalSettingId, MultipartFile file);
+
+    /** Reject URLs outside our upload namespace or whose backing object is missing. */
+    void validateTicketingBackground(Long festivalSettingId, String url);
+
+    void validateHomeImage(Long festivalSettingId, String url);
+
     byte[] readPoster(Long festivalSettingId, String posterUrl);
 }

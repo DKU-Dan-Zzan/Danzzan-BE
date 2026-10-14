@@ -21,12 +21,15 @@ import static org.mockito.Mockito.*;
 class FestivalBrandingServiceTest {
     private final FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
     private final ImageStorage storage = mock(ImageStorage.class);
-    private final FestivalBrandingService service = new FestivalBrandingService(settings, storage);
+    private final FestivalBrandingService service = new FestivalBrandingService(settings, storage,
+            new com.danzzan.domain.festival.service.FestivalAppearanceWriter(settings, null));
 
     private FestivalSetting setting(Long id) {
         FestivalSetting setting = FestivalSetting.create("School", "Festival", LocalDate.now(), LocalDate.now(), false);
         ReflectionTestUtils.setField(setting, "id", id);
         when(settings.findById(id)).thenReturn(Optional.of(setting));
+        when(settings.existsById(id)).thenReturn(true);
+        when(settings.findByIdForUpdate(id)).thenReturn(Optional.of(setting));
         return setting;
     }
 
@@ -72,7 +75,7 @@ class FestivalBrandingServiceTest {
     }
 
     @Test void missingFestivalFailsBeforeStorage() throws Exception {
-        when(settings.findById(404L)).thenReturn(Optional.empty());
+        when(settings.existsById(404L)).thenReturn(false);
         assertThrows(ResponseStatusException.class, () -> service.uploadPoster(404L, image()));
         verifyNoInteractions(storage);
     }

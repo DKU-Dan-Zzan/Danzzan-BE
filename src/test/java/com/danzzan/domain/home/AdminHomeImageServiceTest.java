@@ -25,6 +25,12 @@ class AdminHomeImageServiceTest {
     private final ImageStorage storage = mock(ImageStorage.class);
     private final AdminHomeImageService service = new AdminHomeImageService(settings, images, storage);
 
+    @org.junit.jupiter.api.BeforeEach void lockFixture() {
+        when(settings.findByIdForUpdate(anyLong())).thenAnswer(call -> settings.existsById(call.getArgument(0))
+                ? Optional.of(com.danzzan.domain.festival.entity.FestivalSetting.create("school", "festival", java.time.LocalDate.now(), java.time.LocalDate.now(), false))
+                : Optional.empty());
+    }
+
     private HomeImage image(long id, long festival, int order) {
         HomeImage result = new HomeImage("https://cdn/" + id + ".png", festival, order);
         ReflectionTestUtils.setField(result, "id", id);

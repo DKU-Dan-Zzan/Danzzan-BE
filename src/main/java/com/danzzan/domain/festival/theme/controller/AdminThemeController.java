@@ -1,6 +1,7 @@
 package com.danzzan.domain.festival.theme.controller;
 
 import com.danzzan.domain.festival.theme.dto.ThemeResponse;
+import com.danzzan.domain.festival.theme.dto.ThemeBundleRequest;
 import com.danzzan.domain.festival.theme.dto.ThemeRecommendationResponse;
 import com.danzzan.domain.festival.theme.dto.ThemeRecommendationRequest;
 import com.danzzan.domain.festival.theme.dto.ThemeUpsertRequest;
@@ -33,6 +34,13 @@ import java.util.List;
 public class AdminThemeController {
     private final ThemeService themeService;
     private final ThemeRecommendationService recommendationService;
+
+    @PostMapping("/apply-bundle")
+    @PreAuthorize("@userAdminAuthorizationService.hasOperationsRole(authentication) and @userAdminAuthorizationService.hasTicketingRole(authentication)")
+    public ThemeResponse applyBundle(@PathVariable Long festivalSettingId,
+                                     @Valid @RequestBody ThemeBundleRequest request) {
+        return themeService.applyBundle(festivalSettingId, request);
+    }
 
     @PostMapping("/recommend")
     public ThemeRecommendationResponse recommend(@PathVariable Long festivalSettingId,

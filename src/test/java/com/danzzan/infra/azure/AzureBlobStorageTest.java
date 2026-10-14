@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -154,6 +155,32 @@ class AzureBlobStorageTest {
                 new MockMultipartFile("file", "notice.png", "image/png", new byte[]{1})));
         assertEquals(HttpStatus.BAD_GATEWAY, failure.getStatusCode());
         verify(blobClient, never()).generateUserDelegationSas(any(), any());
+    }
+
+    @Test
+    void validatesOnlyOwnedExistingSizedImageObjectsForThemeBackgrounds() {
+        BlobProperties properties = mock(BlobProperties.class);
+        when(blobClient.getProperties()).thenReturn(properties);
+        when(properties.getBlobSize()).thenReturn(10L);
+        when(properties.getContentType()).thenReturn("image/jpeg");
+
+        assertDoesNotThrow(() -> storage.validateTicketingBackground(
+                "azure:images/festival/ticketing-background/20261014/123e4567-e89b-12d3-a456-426614174000_background.jpg"));
+        assertDoesNotThrow(() -> storage.validateHomeImage(7L,
+                "azure:images/festival/7/home/20261014/123e4567-e89b-12d3-a456-426614174000_banner.jpg"));
+
+        assertBadRequest(() -> storage.validateHomeImage(8L,
+                "azure:images/festival/7/home/20261014/123e4567-e89b-12d3-a456-426614174000_banner.jpg"));
+        assertBadRequest(() -> storage.validateTicketingBackground(
+                "azure:images/festival/7/poster/20261014/123e4567-e89b-12d3-a456-426614174000_poster.jpg"));
+
+        when(properties.getBlobSize()).thenReturn(10L * 1024 * 1024 + 1);
+        assertBadRequest(() -> storage.validateTicketingBackground(
+                "azure:images/festival/ticketing-background/20261014/123e4567-e89b-12d3-a456-426614174000_background.jpg"));
+        when(properties.getBlobSize()).thenReturn(10L);
+        when(properties.getContentType()).thenReturn("application/octet-stream");
+        assertBadRequest(() -> storage.validateTicketingBackground(
+                "azure:images/festival/ticketing-background/20261014/123e4567-e89b-12d3-a456-426614174000_background.jpg"));
     }
 
     @Test

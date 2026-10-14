@@ -2,6 +2,10 @@ package com.danzzan.infra.image;
 
 import com.danzzan.domain.festival.dto.request.UpdateFestivalTicketingSettingsRequest;
 import com.danzzan.domain.festival.dto.response.FestivalBrandingResponse;
+import com.danzzan.domain.festival.background.PosterBackgroundService;
+import com.danzzan.domain.festival.theme.dto.ThemeBundleRequest;
+import com.danzzan.domain.home.model.dto.HomeBannerPreviewRequest;
+import com.danzzan.domain.home.service.HomeBannerPreviewService;
 import com.danzzan.domain.notice.dto.request.CreateNoticeRequest;
 import com.danzzan.domain.notice.dto.response.NoticeResponse;
 import com.danzzan.domain.boothmap.util.ThumbnailUrlResolver;
@@ -48,6 +52,11 @@ class ImageJsonBoundaryTest {
             assertEquals(URL, json.get("thumbnailImageUrl").asText());
             assertEquals(List.of(REF), notice.getImageUrls());
             assertEquals(URL, mapper.readTree(mapper.writeValueAsString(new ImageUploadResponse(REF, "key"))).get("imageUrl").asText());
+            var recommendation = new PosterBackgroundService.Recommendation(
+                    "ticket", "image/jpeg", "preview", 1, 1, .5, .5, "reason", REF);
+            assertEquals(URL, mapper.readTree(mapper.writeValueAsString(recommendation)).get("sourcePosterUrl").asText());
+            var preview = new HomeBannerPreviewService.Preview("image/jpeg", "preview", 1, 1, REF);
+            assertEquals(URL, mapper.readTree(mapper.writeValueAsString(preview)).get("sourcePosterUrl").asText());
         });
     }
 
@@ -66,6 +75,29 @@ class ImageJsonBoundaryTest {
             var clear = mapper.readValue("{\"ticketingBackgroundImageUrl\":null}", UpdateFestivalTicketingSettingsRequest.class);
             assertTrue(clear.isBackgroundImageSpecified());
             assertNull(clear.getTicketingBackgroundImageUrl());
+        });
+    }
+
+    @Test void bundleAndPreviewRequestsNormalizeReadSasBeforeComparisonOrPersistence() {
+        runner().run(context -> {
+            ObjectMapper mapper = context.getBean(ObjectMapper.class);
+            String bundleJson = ("""
+                    {"name":"Azure","themeData":{"brand":{"primary":"#112233","secondary":"#112233","accent":"#112233","strong":"#112233"},
+                    "status":{"success":"#112233","warning":"#112233","danger":"#112233","pending":"#112233"},
+                    "category":{"pub":"#112233","foodTruck":"#112233","experience":"#112233","event":"#112233","restArea":"#112233","facility":"#112233"}},
+                    "sourcePosterUrl":"%s","sourceColors":["#112233"],"selectedBaseColor":"#112233",
+                    "ticketCardBackgroundImageUrl":"%s","ticketingBackgroundImageUrl":"%s",
+                    "homeBanner":{"imageUrl":"%s","expectedFirstImageUrl":"%s"}}""").formatted(URL, URL, URL, URL, URL);
+            ThemeBundleRequest bundle = mapper.readValue(bundleJson, ThemeBundleRequest.class);
+            assertEquals(REF, bundle.sourcePosterUrl());
+            assertEquals(REF, bundle.ticketCardBackgroundImageUrl());
+            assertEquals(REF, bundle.ticketingBackgroundImageUrl());
+            assertEquals(REF, bundle.homeBanner().imageUrl());
+            assertEquals(REF, bundle.homeBanner().expectedFirstImageUrl());
+
+            HomeBannerPreviewRequest preview = mapper.readValue(
+                    "{\"sourcePosterUrl\":\"" + URL + "\",\"layout\":\"cover\"}", HomeBannerPreviewRequest.class);
+            assertEquals(REF, preview.sourcePosterUrl());
         });
     }
 

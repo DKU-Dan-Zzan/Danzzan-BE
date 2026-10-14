@@ -10,13 +10,13 @@ import java.io.ByteArrayOutputStream;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 class TicketingBackgroundServiceTest {
-    private final S3Uploader uploader = mock(S3Uploader.class);
+    private final com.danzzan.infra.image.ImageStorage uploader = mock(com.danzzan.infra.image.ImageStorage.class);
     private final TicketingBackgroundService service = new TicketingBackgroundService(uploader);
     @Test void uploadsVerifiedImage() throws Exception {
         var bytes = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(2,2,BufferedImage.TYPE_INT_RGB), "png", bytes);
         var file = new MockMultipartFile("file","poster.png","image/png",bytes.toByteArray());
-        when(uploader.uploadTicketingBackground(file)).thenReturn(new S3UploadResult("key", "https://example.com/poster.png"));
+        when(uploader.uploadTicketingBackground(1L, file)).thenReturn(new S3UploadResult("key", "https://example.com/poster.png"));
         assertEquals("https://example.com/poster.png",service.upload(file).url());
     }
     @Test void rejectsFakeImageAndSvgBeforeStorage() {

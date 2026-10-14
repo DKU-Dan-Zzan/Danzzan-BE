@@ -80,4 +80,10 @@ public class AdminThemeController {
     public ThemeResponse activate(@PathVariable Long festivalSettingId, @PathVariable Long themeId) {
         return themeService.activate(festivalSettingId, themeId);
     }
+
+    @PutMapping("/default/activate")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void activateDefault(@PathVariable Long festivalSettingId) {
+        themeService.activateDefault(festivalSettingId);
+    }
 }

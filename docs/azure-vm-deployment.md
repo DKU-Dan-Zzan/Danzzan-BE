@@ -196,6 +196,21 @@ sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
 
 커밋 정리 시 외부 서비스 샘플에는 빈 자격 증명과 명시적인 테스트 값만 남겼다. 실제 `secrets/` 파일은 Git 제외를 확인했다. 로컬 Compose `config --quiet`와 번역 보정·용어집 대상 테스트 17건이 통과했다. 이 검증은 외부 API를 호출하거나 Azure를 다시 배포하지 않는다.
 
+## 기본 테마·5월 색상 프리셋 배포 (2026-10-14)
+
+`20261014-theme-presets`로 다음 변경을 기존 VM에 반영했다. BE의 `AdminThemeController`, `ThemeService`와 FE의 테마 API·색상 적용·기본 팔레트·관리 화면·편집 도우미 소스 등 총 8개 파일만 전달했으며 각 SHA-256이 로컬과 일치함을 확인했다. 환경변수·Compose·SQL·이미지 파일은 이번 전송에 포함하지 않았다.
+
+- BE: `PUT /admin/festival/{festivalSettingId}/themes/default/activate` 추가. 명시적 요청 시에만 현재 축제의 활성 테마 참조를 해제한다. 기존 테마 레코드나 이미지에는 쓰지 않는다.
+- FE: `Tangerine Cream`(초기 주황·크림), `Coastal Sunset`(PR #103의 일반 화면 청회색·살구색) 선택지를 제공한다. 과거 소스와 14색 대응은 FE `docs/azure-image-integration.md`에 기록했다. 조회·선택은 데이터를 생성하지 않으며 Coastal Sunset의 저장·활성화는 적용 버튼을 누를 때만 수행한다.
+- BE 테마 서비스 테스트 14개 통과. FE 마지막 이름 변경 관련 테스트 64개 통과(앞선 전체 검사 130개 파일·660개 통과). VM BE·FE Docker 빌드 모두 성공.
+- `app`을 먼저 `up -d --no-deps --wait`로 교체하고 healthy 확인 후 `frontend`를 재생성했다. MySQL·Redis·Kafka의 컨테이너 ID는 그대로다. `ddl-auto=validate`를 유지했으며 스키마 이관은 실행하지 않았다.
+- 기존 게시물·이미지 참조·축제 설정·테마를 포함한 20개 테이블의 정규화 데이터 덤프 해시가 배포 전후 및 UI 확인 후 일치했다. 덤프 내용은 출력·전송하지 않고 VM에서 해시로 비교했다. Blob 업로드·삭제는 실행하지 않았다.
+- HTTPS 홈·공지·관리자 테마 페이지·health HTTP 200, 내부 health와 Nginx 설정 검사 성공. 실제 관리자 브라우저에서 두 이름·미리보기·읽기 전용 색상 입력을 확인했다. 기존 활성 테마는 유지했다. 운영 환경의 활성화·복제·삭제 요청은 실행하지 않았다.
+
+복구 자료는 `/opt/danzzan/deployment-backups/20261014-theme-presets`에 권한 700으로 보관한다. `sources-before.tar.gz`, `source-manifest.json`, `deployed-images.txt`, 배포 로그와 콘텐츠 해시 비교 결과가 있다. 이전 실행 이미지 태그는 `danzzan-be:rollback-20261014-theme-presets`, `danzzan-fe:rollback-20261014-theme-presets`다. 롤백은 이 이미지로 `app`·`frontend`만 교체하며 DB 복원이나 볼륨 삭제는 필요 없다. SSH는 DNS 변경 전부터 보관한 호스트 키를 `HostKeyAlias=danzzan-demo-2026.koreacentral.cloudapp.azure.com`, `StrictHostKeyChecking=yes`로 검증했다.
+
+커밋 정리 시 BE `ThemeServiceTest` 14건을 다시 실행해 통과했다. 기본 테마 활성화는 HTTP 204를 반환하며, 활성 테마 ID만 해제한다. 저장된 테마 레코드와 이미지 참조는 유지한다. 관련 API·프리셋의 FE 변경과 함께 사용해야 관리자 화면에서 기본 색상을 다시 선택할 수 있다.
+
 ## 동료 계정 또는 다른 VM으로 옮길 때
 
 Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·다른 VM으로 이동하면 FQDN이 달라질 수 있으며, 다음 위치를 새 실제 FQDN에 맞춰 바꾼다.

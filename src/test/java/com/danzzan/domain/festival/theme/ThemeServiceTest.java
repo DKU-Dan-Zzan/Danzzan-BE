@@ -154,6 +154,42 @@ class ThemeServiceTest {
     }
 
     @Test
+    void activatesDefaultThemeByClearingTheActiveTheme() {
+        FestivalSetting setting = setting(1L);
+        setting.activateTheme(10L);
+        when(festivalSettingRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
+
+        themeService.activateDefault(1L);
+
+        assertNull(setting.getActiveThemeId());
+        verify(festivalSettingRepository).save(setting);
+        verifyNoInteractions(themeRepository);
+    }
+
+    @Test
+    void activatingDefaultThemeIsIdempotent() {
+        FestivalSetting setting = setting(1L);
+        when(festivalSettingRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(setting));
+
+        themeService.activateDefault(1L);
+
+        assertNull(setting.getActiveThemeId());
+        verify(festivalSettingRepository).save(setting);
+        verifyNoInteractions(themeRepository);
+    }
+
+    @Test
+    void rejectsDefaultThemeActivationForMissingFestivalWithoutChangingThemes() {
+        when(festivalSettingRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+
+        ThemeException error = assertThrows(ThemeException.class, () -> themeService.activateDefault(99L));
+
+        assertEquals(HttpStatus.NOT_FOUND, error.getStatus());
+        verify(festivalSettingRepository, never()).save(any());
+        verifyNoInteractions(themeRepository);
+    }
+
+    @Test
     void rejectsDeletionOfActiveTheme() {
         FestivalSetting setting = setting(1L);
         setting.activateTheme(10L);

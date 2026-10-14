@@ -84,6 +84,13 @@ public class ThemeService {
         return ThemeResponse.of(theme, themeId);
     }
 
+    @Transactional
+    public void activateDefault(Long festivalSettingId) {
+        FestivalSetting setting = lockSetting(festivalSettingId);
+        setting.activateTheme(null);
+        festivalSettingRepository.save(setting);
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ThemeResponse applyBundle(Long festivalSettingId, ThemeBundleRequest request) {
         // The background upload and recommendation APIs operate on the singleton festival.

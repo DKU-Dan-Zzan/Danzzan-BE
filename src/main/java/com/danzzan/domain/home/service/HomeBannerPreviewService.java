@@ -31,8 +31,9 @@ public class HomeBannerPreviewService {
         String source = settings.findPosterImageUrlById(festivalId).orElse(null);
         if (!Objects.equals(source, request.sourcePosterUrl()))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "공식 포스터가 변경되었습니다. 다시 미리보기해 주세요.");
-        byte[] image = renderer.render(storage.readPoster(festivalId, source), request.layout(), request.focusX(), request.focusY());
-        return new Preview("image/jpeg", Base64.getEncoder().encodeToString(image),
-                HomeBannerRenderer.WIDTH, HomeBannerRenderer.HEIGHT, source);
+        HomeBannerRenderer.Rendered image = renderer.renderImage(
+                storage.readPoster(festivalId, source), request.layout(), request.focusX(), request.focusY());
+        return new Preview("image/jpeg", Base64.getEncoder().encodeToString(image.bytes()),
+                image.width(), image.height(), source);
     }
 }

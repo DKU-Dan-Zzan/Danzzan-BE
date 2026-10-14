@@ -38,35 +38,21 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
             Each candidate must have its fixed id, a short name, a one- or two-sentence description (at most 160 characters),
             and exactly 14 #RRGGBB colors. Keep bright white/near-white surfaces in all three; none is a dark theme.
             Balanced (name it Original or Balanced): the production-ready primary recommendation. Reflect the selected base
-            color and extracted poster colors strongly in its four brand colors and keep its six map category colors within
-            the same festival palette whenever possible. Preserve palette cohesion while satisfying every validation rule.
+            color and extracted poster colors strongly in its four brand colors. The backend fixes status and most map
+            category colors, so focus the recommendation on a cohesive brand palette.
             Vibrant (name it Light): derive a secondary variation from valid Balanced, keeping its brand hue and visual identity,
             with modestly higher lightness and gently adjusted saturation for a brighter, softer feel.
             Deep: derive another secondary variation from valid Balanced, keeping its brand hue and visual identity, but
-            deepen primary, strong and selected category colors and improve contrast without making a dark theme.
+            deepen primary and strong colors and improve contrast without making a dark theme.
             Distinguish the three mainly by lightness, saturation and depth, not by different brand hue families.
             Use the administrator-selected base color as a central reference in every candidate. Keep brand palettes visibly
             different through those variations; do not repeat the same primary in all three or make nearly identical palettes.
             brand.primary: main identity and common active states. brand.secondary: harmonious supporting tone.
             brand.accent: distinct small indicators/icons/badges. brand.strong: a deeper or more intense brand tone
             for prominent CTAs, emphasized text, borders and glow, not simply near-black.
-            Status semantics take priority over brand palette harmony: success MUST be green (HSB hue 75..175), warning
-            yellow/amber/orange (20..65), danger red (345..360 or 0..15), each with HSB saturation at least 0.25.
-            Pending is more flexible but must remain visibly distinct from the other statuses. Harmonize status tones with
-            the festival only within those semantic hue families. Even when selectedBaseColor or poster colors are blue,
-            gray or purple, NEVER make success blue, gray or purple.
-            Category.pub, foodTruck, experience, event, restArea and facility must be distinct map marker/polygon colors,
-            but start within the poster-derived festival palette, especially for Balanced. Separate all six first by
-            (1) lightness, (2) saturation, (3) warm/cool bias, then (4) subtle hue shifts. For a violet/lavender poster,
-            try pale lavender, vivid violet, muted mauve, blue-violet, periwinkle and cool desaturated blue-purple, adjusted
-            far enough apart to pass RGB Euclidean distance at least 35 for every pair. Different HEX values alone are not
-            enough: check all 15 category pairs. If this palette family cannot meet the distance rule, add only the minimum
-            harmonious supporting hue needed as a last resort; unrelated yellow, coral, teal or green must not be the default.
-            Never weaken the distance rule, but do not turn a cohesive poster theme into a rainbow just to separate categories.
-            Light and Deep should vary category lightness, saturation and depth from Balanced rather than replace its palette.
-            Check all 15 category pairs before returning, without outputting calculations.
+            The backend overwrites status colors and all map categories except pub. Set category.pub equal to brand.primary;
+            values for the other category and status fields are accepted as placeholders and are not part of the design.
             In each candidate, primary must differ from accent or strong by RGB distance at least 20.
-            Do not merely copy a single brand color into all categories.
             Return candidate descriptions only, no extra explanation. Do not output page backgrounds, pure white/black,
             neutral gray, overlays or shadow opacity.
             """;

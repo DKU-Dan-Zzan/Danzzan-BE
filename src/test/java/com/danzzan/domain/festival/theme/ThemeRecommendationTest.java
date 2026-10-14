@@ -185,7 +185,7 @@ class ThemeRecommendationTest {
         verify(validator).diagnose(deep());
     }
 
-    @Test void repairsRepeatedCategoryColorsBeforeFilteringCandidates() {
+    @Test void normalizesRepeatedCategoryColorsBeforeFilteringCandidates() {
         try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
             FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
             ImageStorage storage = mock(ImageStorage.class);
@@ -205,10 +205,6 @@ class ThemeRecommendationTest {
                     .diagnose(result.candidates().get(0).themeData()).isEmpty());
             assertEquals(theme().brand(), result.candidates().get(0).themeData().brand());
             verify(client, times(1)).recommend(png, input.sourceColors(), input.selectedBaseColor());
-            assertTrue(new ThemeRecommendationValidator(factory.getValidator()).diagnose(duplicateCategory(theme()))
-                    .stream().anyMatch(failure -> failure.rule().equals("CATEGORY_DISTANCE_TOO_SMALL")
-                            && failure.measured().get("distance") == 0.0
-                            && failure.threshold().equals("distance>=35")));
 
             when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                     candidate("balanced", duplicateCategory(theme())), candidate("vibrant", vibrant()),
@@ -255,7 +251,7 @@ class ThemeRecommendationTest {
         }
     }
 
-    @Test void rejectsUnrepairableAiColorsWithoutSavingOrActivating() {
+    @Test void normalizesAiSemanticAndMapColorsBeforeValidation() {
         try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
             FestivalSettingRepository settings = mock(FestivalSettingRepository.class);
             ImageStorage storage = mock(ImageStorage.class);
@@ -271,8 +267,10 @@ class ThemeRecommendationTest {
                     candidate("vibrant", new ThemeData(vibrant().brand(), theme().status(), malformed)),
                     candidate("deep", new ThemeData(deep().brand(), theme().status(), malformed)))));
 
-            assertEquals("AI_THEME_VALIDATION_FAILED", assertThrows(ThemeRecommendationException.class,
-                    () -> service.recommend(1L, input)).getCode());
+            ThemeRecommendationResponse recommendation = service.recommend(1L, input);
+            assertEquals(List.of("balanced", "vibrant", "deep"), recommendation.candidates().stream()
+                    .map(ThemeRecommendationCandidate::id).toList());
+            assertEquals("#FF642D", recommendation.candidates().get(0).themeData().category().pub());
             verify(client, times(1)).recommend(png, input.sourceColors(), input.selectedBaseColor());
             verify(settings, never()).save(any());
         }
@@ -334,9 +332,9 @@ class ThemeRecommendationTest {
         when(settings.findById(1L)).thenReturn(Optional.of(setting(1L, "poster.png")));
         when(storage.readPoster(1L, "poster.png")).thenReturn(png);
         ThemeData light = new ThemeData(new ThemeData.Brand("#FF814F", "#F5E3A3", "#EC4899", "#F46B38"),
-                theme().status(), theme().category());
+                theme().status(), categoryFor("#FF814F"));
         ThemeData dark = new ThemeData(new ThemeData.Brand("#D44E21", "#F5E3A3", "#EC4899", "#AD2A00"),
-                theme().status(), theme().category());
+                theme().status(), categoryFor("#D44E21"));
         when(client.recommend(any(), any(), anyString())).thenReturn(new ThemeRecommendationResponse(List.of(
                 candidate("deep", dark), candidate("vibrant", light), candidate("balanced", theme()))));
 
@@ -398,9 +396,6 @@ class ThemeRecommendationTest {
             assertThrows(ThemeRecommendationException.class, () -> validator.validate(new ThemeData(
                     theme().brand(), new ThemeData.Status("#4488FF", "#B26A00", "#B3261E", "#E3776A"), theme().category())));
             assertThrows(ThemeRecommendationException.class, () -> validator.validate(new ThemeData(
-                    theme().brand(), theme().status(), new ThemeData.Category("#FF642D", "#FF642D", "#10B981",
-                    "#F6CA3B", "#8B5CF6", "#3B82F6"))));
-            assertThrows(ThemeRecommendationException.class, () -> validator.validate(new ThemeData(
                     new ThemeData.Brand("#FF642D", "#F5E3A3", "#FF642D", "#FF642D"),
                     theme().status(), theme().category())));
         }
@@ -419,8 +414,6 @@ class ThemeRecommendationTest {
                     && f.threshold().contains("75.0..175.0")));
             assertTrue(failures.stream().anyMatch(f -> f.rule().equals("STATUS_WARNING_HUE_OUT_OF_RANGE")
                     && f.threshold().contains("20.0..65.0")));
-            assertTrue(failures.stream().anyMatch(f -> f.rule().equals("CATEGORY_DISTANCE_TOO_SMALL")
-                    && f.measured().get("distance") == 0.0 && f.threshold().equals("distance>=35")));
             assertTrue(failures.stream().anyMatch(f -> f.rule().equals("BRAND_PRIMARY_NOT_DISTINCT")
                     && f.measured().get("primaryAccentDistance") == 0.0
                     && f.measured().get("primaryStrongDistance") == 0.0));
@@ -452,7 +445,6 @@ class ThemeRecommendationTest {
         assertTrue(output.getOut().contains("candidate=vibrant name=vibrant result=PASS"));
         assertTrue(output.getOut().contains("candidate=deep name=deep result=FAIL"));
         assertTrue(output.getOut().contains("candidate=deep name=deep rule=CATEGORY_DISTANCE_TOO_SMALL"));
-        assertTrue(output.getOut().contains("candidate=deep stage=PALETTE_ADJUSTMENT reason=CATEGORY_DISTANCE_UNRESOLVED"));
         assertTrue(output.getOut().contains("candidate=deep stage=CANDIDATE_VALIDATION"));
         assertTrue(output.getOut().contains("distance=0.0"));
         assertTrue(output.getOut().contains("threshold=distance>=35"));
@@ -540,21 +532,10 @@ class ThemeRecommendationTest {
             assertTrue(instructions.contains("Vibrant (name it Light)"));
             assertTrue(instructions.contains("derive a secondary variation from valid Balanced"));
             assertTrue(instructions.contains("Deep: derive another secondary variation from valid Balanced"));
-            assertTrue(instructions.contains("Preserve palette cohesion while satisfying every validation rule"));
+            assertTrue(instructions.contains("focus the recommendation on a cohesive brand palette"));
             assertTrue(instructions.contains("mainly by lightness, saturation and depth"));
-            assertTrue(instructions.contains("Status semantics take priority over brand palette harmony"));
-            assertTrue(instructions.contains("success MUST be green (HSB hue 75..175)"));
-            assertTrue(instructions.contains("warning") && instructions.contains("yellow/amber/orange (20..65)"));
-            assertTrue(instructions.contains("danger red (345..360 or 0..15)"));
-            assertTrue(instructions.contains("Pending is more flexible but must remain visibly distinct"));
-            assertTrue(instructions.contains("NEVER make success blue, gray or purple"));
-            assertTrue(instructions.contains("start within the poster-derived festival palette"));
-            assertTrue(instructions.contains("(1) lightness, (2) saturation, (3) warm/cool bias, then (4) subtle hue shifts"));
-            assertTrue(instructions.contains("add only the minimum"));
-            assertTrue(instructions.contains("as a last resort"));
-            assertTrue(instructions.contains("Check all 15"));
-            assertTrue(instructions.contains("Different HEX values alone are not"));
-            assertTrue(instructions.contains("RGB Euclidean distance at least 35 for every pair"));
+            assertTrue(instructions.contains("The backend overwrites status colors and all map categories except pub"));
+            assertTrue(instructions.contains("Set category.pub equal to brand.primary"));
             assertEquals("json_schema", body.at("/text/format/type").asText());
             assertTrue(body.at("/text/format/strict").asBoolean());
             assertEquals(3, body.at("/text/format/schema/properties/candidates/minItems").asInt());
@@ -567,7 +548,7 @@ class ThemeRecommendationTest {
         }
     }
 
-    @Test void monochromaticPosterPrioritizesPaletteCohesionAndCategoryDistance() throws Exception {
+    @Test void monochromaticPosterStillGuidesBrandColors() throws Exception {
         try (MockWebServer server = new MockWebServer()) {
             server.enqueue(new MockResponse().setResponseCode(200).setBody(completed(mapper.writeValueAsString(response()))));
             var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "gpt-4o-mini",
@@ -583,16 +564,8 @@ class ThemeRecommendationTest {
             assertTrue(posterInput.contains("Administrator-selected base color: #A896E5"));
             assertTrue(instructions.contains("Reflect the selected base"));
             assertTrue(instructions.contains("extracted poster colors strongly in its four brand colors"));
-            assertTrue(instructions.contains("success MUST be green"));
-            assertTrue(instructions.contains("For a violet/lavender poster"));
-            assertTrue(instructions.contains("pale lavender, vivid violet, muted mauve, blue-violet, periwinkle"));
-            assertTrue(instructions.contains("cool desaturated blue-purple"));
-            assertTrue(instructions.contains("(1) lightness, (2) saturation, (3) warm/cool bias, then (4) subtle hue shifts"));
-            assertTrue(instructions.contains("unrelated yellow, coral, teal or green must not be the default"));
-            assertTrue(instructions.contains("as a last resort"));
             assertFalse(instructions.contains("Example hue-zone guide"));
-            assertTrue(instructions.contains("RGB Euclidean distance at least 35 for every pair"));
-            assertTrue(instructions.contains("Light and Deep should vary category lightness, saturation and depth from Balanced"));
+            assertTrue(instructions.contains("backend fixes status and most map"));
             assertEquals(3, body.at("/text/format/schema/properties/candidates/minItems").asInt());
             assertEquals(3, body.at("/text/format/schema/properties/candidates/maxItems").asInt());
             assertEquals(1, server.getRequestCount());
@@ -636,18 +609,22 @@ class ThemeRecommendationTest {
 
     private ThemeData vibrant() {
         return new ThemeData(new ThemeData.Brand("#F69324", "#F5D251", "#B74FB4", "#FA7840"),
-                theme().status(), theme().category());
+                theme().status(), categoryFor("#F69324"));
     }
 
     private ThemeData deep() {
         return new ThemeData(new ThemeData.Brand("#983508", "#DBB477", "#C04473", "#711D08"),
-                theme().status(), theme().category());
+                theme().status(), categoryFor("#983508"));
     }
 
     private ThemeData duplicateCategory(ThemeData data) {
         var category = data.category();
         return new ThemeData(data.brand(), data.status(), new ThemeData.Category(category.pub(),
                 category.foodTruck(), category.experience(), category.event(), category.pub(), category.facility()));
+    }
+
+    private ThemeData.Category categoryFor(String primary) {
+        return new ThemeData.Category(primary, "#EC4899", "#10B981", "#F6CA3B", "#8B5CF6", "#3B82F6");
     }
 
     private ThemeRecommendationCandidate candidate(String id, ThemeData data) {

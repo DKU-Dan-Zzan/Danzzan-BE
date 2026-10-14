@@ -52,7 +52,7 @@ public class ThemeService {
     @Transactional
     public ThemeResponse create(Long festivalSettingId, ThemeUpsertRequest request) {
         FestivalSetting setting = findSetting(festivalSettingId);
-        Theme theme = themeRepository.save(Theme.create(setting, request.name(), request.themeData(),
+        Theme theme = themeRepository.save(Theme.create(setting, request.name(), ThemeColorPolicy.normalize(request.themeData()),
                 request.sourcePosterUrl(), request.selectedBaseColor(), request.sourceColors()));
         return ThemeResponse.of(theme, setting.getActiveThemeId());
     }
@@ -60,7 +60,7 @@ public class ThemeService {
     @Transactional
     public ThemeResponse update(Long festivalSettingId, Long themeId, ThemeUpsertRequest request) {
         Theme theme = findTheme(festivalSettingId, themeId);
-        theme.update(request.name(), request.themeData());
+        theme.update(request.name(), ThemeColorPolicy.normalize(request.themeData()));
         return ThemeResponse.of(theme, theme.getFestivalSetting().getActiveThemeId());
     }
 
@@ -104,7 +104,7 @@ public class ThemeService {
         imageStorage.validateTicketingBackground(festivalSettingId, request.ticketCardBackgroundImageUrl());
         imageStorage.validateTicketingBackground(festivalSettingId, request.ticketingBackgroundImageUrl());
         if (request.homeBanner() != null) imageStorage.validateHomeImage(festivalSettingId, request.homeBanner().imageUrl());
-        return appearanceWriter.applyBundle(festivalSettingId, request);
+        return appearanceWriter.applyBundle(festivalSettingId, normalizedBundle(request));
     }
 
     private FestivalSetting findSetting(Long id) {
@@ -118,5 +118,11 @@ public class ThemeService {
     private Theme findTheme(Long festivalSettingId, Long themeId) {
         return themeRepository.findByIdAndFestivalSetting_Id(themeId, festivalSettingId)
                 .orElseThrow(ThemeException::themeNotFound);
+    }
+
+    private ThemeBundleRequest normalizedBundle(ThemeBundleRequest request) {
+        return new ThemeBundleRequest(request.name(), ThemeColorPolicy.normalize(request.themeData()),
+                request.sourcePosterUrl(), request.sourceColors(), request.selectedBaseColor(),
+                request.ticketCardBackgroundImageUrl(), request.ticketingBackgroundImageUrl(), request.homeBanner());
     }
 }

@@ -2,6 +2,8 @@ package com.danzzan.domain.festival.theme;
 
 import com.danzzan.domain.festival.entity.FestivalSetting;
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
+import com.danzzan.domain.festival.service.FestivalAppearanceWriter;
+import com.danzzan.domain.festival.theme.dto.ThemeBundleRequest;
 import com.danzzan.domain.festival.theme.dto.ThemeData;
 import com.danzzan.domain.festival.theme.dto.ThemeResponse;
 import com.danzzan.domain.festival.theme.dto.ThemeUpsertRequest;
@@ -10,10 +12,12 @@ import com.danzzan.domain.festival.theme.entity.Theme;
 import com.danzzan.domain.festival.theme.exception.ThemeException;
 import com.danzzan.domain.festival.theme.repository.ThemeRepository;
 import com.danzzan.domain.festival.theme.service.ThemeService;
+import com.danzzan.infra.image.ImageStorage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -31,6 +35,8 @@ import static org.mockito.Mockito.*;
 class ThemeServiceTest {
     @Mock FestivalSettingRepository festivalSettingRepository;
     @Mock ThemeRepository themeRepository;
+    @Mock ImageStorage imageStorage;
+    @Mock FestivalAppearanceWriter appearanceWriter;
     @InjectMocks ThemeService themeService;
 
     @Test
@@ -43,12 +49,13 @@ class ThemeServiceTest {
             return theme;
         });
 
-        ThemeResponse created = themeService.create(1L, request(" Orange "));
+        ThemeData supplied = unregulatedData();
+        ThemeResponse created = themeService.create(1L, request(" Orange ", supplied));
 
         assertEquals(10L, created.id());
         assertEquals(1L, created.festivalSettingId());
         assertEquals("Orange", created.name());
-        assertEquals(data(), created.themeData());
+        assertEquals(normalized(supplied), created.themeData());
         assertFalse(created.active());
         assertNull(created.sourcePosterUrl());
     }
@@ -105,13 +112,34 @@ class ThemeServiceTest {
         ReflectionTestUtils.setField(theme, "id", 10L);
         when(themeRepository.findByIdAndFestivalSetting_Id(10L, 1L)).thenReturn(Optional.of(theme));
 
-        ThemeResponse updated = themeService.update(1L, 10L, new ThemeUpsertRequest(" New name ", data(),
+        ThemeData supplied = unregulatedData();
+        ThemeResponse updated = themeService.update(1L, 10L, new ThemeUpsertRequest(" New name ", supplied,
                 "https://cdn.example.com/other.png", "#FFFFFF", List.of("#FFFFFF")));
 
         assertEquals("New name", updated.name());
         assertEquals(1L, updated.festivalSettingId());
         assertEquals("https://cdn.example.com/a.png", updated.sourcePosterUrl());
         assertEquals("#4EB15E", updated.selectedBaseColor());
+        assertEquals(normalized(supplied), updated.themeData());
+    }
+
+    @Test
+    void normalizesBundleThemeDataBeforePassingItToTheDatabaseWriter() {
+        ThemeData supplied = unregulatedData();
+        ThemeBundleRequest request = new ThemeBundleRequest("Theme", supplied, "azure:images/poster.png",
+                List.of("#3355AA"), "#3355AA", "azure:images/ticket-card.png", "azure:images/ticketing.png");
+        when(festivalSettingRepository.existsById(1L)).thenReturn(true);
+        when(festivalSettingRepository.findPosterImageUrlById(1L)).thenReturn(Optional.of("azure:images/poster.png"));
+        ThemeResponse expected = new ThemeResponse(10L, 1L, "Theme", normalized(supplied), null, null, null,
+                null, null, true);
+        when(appearanceWriter.applyBundle(eq(1L), any(ThemeBundleRequest.class))).thenReturn(expected);
+
+        ThemeResponse response = themeService.applyBundle(1L, request);
+
+        ArgumentCaptor<ThemeBundleRequest> captor = ArgumentCaptor.forClass(ThemeBundleRequest.class);
+        verify(appearanceWriter).applyBundle(eq(1L), captor.capture());
+        assertEquals(normalized(supplied), captor.getValue().themeData());
+        assertEquals(expected, response);
     }
 
     @Test
@@ -236,11 +264,27 @@ class ThemeServiceTest {
         return new ThemeUpsertRequest(name, data());
     }
 
+    private ThemeUpsertRequest request(String name, ThemeData themeData) {
+        return new ThemeUpsertRequest(name, themeData);
+    }
+
     private ThemeData data() {
         return new ThemeData(
                 new ThemeData.Brand("#FF642D", "#F5E3A3", "#FF642D", "#E13600"),
                 new ThemeData.Status("#2E7D32", "#B26A00", "#B3261E", "#E3776A"),
                 new ThemeData.Category("#FF642D", "#EC4899", "#10B981", "#F6CA3B", "#8B5CF6", "#3B82F6")
         );
+    }
+
+    private ThemeData normalized(ThemeData input) {
+        return new ThemeData(input.brand(),
+                new ThemeData.Status("#2E7D32", "#B26A00", "#B3261E", "#E3776A"),
+                new ThemeData.Category(input.brand().primary(), "#EC4899", "#10B981", "#F6CA3B", "#8B5CF6", "#3B82F6"));
+    }
+
+    private ThemeData unregulatedData() {
+        return new ThemeData(new ThemeData.Brand("#3355AA", "#ABCDEF", "#FFCC00", "#112244"),
+                new ThemeData.Status("#111111", "#222222", "#333333", "#444444"),
+                new ThemeData.Category("#555555", "#666666", "#777777", "#888888", "#999999", "#AAAAAA"));
     }
 }

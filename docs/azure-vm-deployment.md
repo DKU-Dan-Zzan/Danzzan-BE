@@ -228,3 +228,12 @@ Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·�
 ## 평가 종료 후
 
 서비스 준비가 끝났고 평가 기간이 아닐 때는 포털 또는 CLI에서 VM을 **할당 취소**한다. OS 종료만으로는 컴퓨팅 과금이 멈추지 않을 수 있다. 디스크·정적 공인 IP·Blob은 할당 취소 후에도 비용이 남으므로, 평가가 끝난 뒤 보관 기간과 삭제 대상을 별도로 결정한다.
+
+
+## Coastal Sunset·포스터 자산 FE 추가 배포 (2026-10-14)
+
+`20261014-coastal-sunset`으로 FE의 메인색 보정(`brand.primary=#073161`)과 커밋 `c300d4bf`까지의 포스터 자산 변경을 반영했다. BE 코드·환경변수·Compose는 변경하지 않고 frontend만 `--no-build --no-deps --force-recreate`로 교체했다. 관련 FE 테스트 87개와 VM Docker 빌드(타입 검사 포함)가 통과했다.
+
+실제 관리자 브라우저에서 기본 Coastal Sunset의 새 HEX를 확인했고 기존 활성 저장 테마는 유지했다. 적용 버튼은 누르지 않았다. 이미지 4개 HTTPS 응답과 로컬 파일 해시가 일치했다. Nginx 설정·HTTPS 주요 경로 정상, BE/MySQL/Redis/Kafka 컨테이너 ID 및 20개 콘텐츠 테이블의 데이터 해시가 배포 전후 동일했다. 앞서 옮긴 11/27·28 일정 조회도 정상이다.
+
+복구 위치: `/opt/danzzan/deployment-backups/20261014-coastal-sunset/` (권한 700). 이전 소스 아카이브·전송 파일 해시·비공개 빌드 및 검증 로그를 보관했다. 이전 이미지 `danzzan-fe:rollback-20261014-coastal-sunset`을 FE 이미지로 지정하고 frontend만 재생성하면 애플리케이션 복구가 가능하다. DB 덮어쓰기·데이터 컨테이너 재시작은 필요하지 않다. 상세 자산과 UI 확인 기록은 FE `docs/azure-image-integration.md` 10절에 있다.

@@ -21,10 +21,12 @@
 | VM 관리 ID | Blob 역할 2개 할당 및 VM 내부 인증 검증 완료 | 비공개 목록 조회와 사용자 위임 키 발급 HTTP 200. 기존 데이터 쓰기·삭제 없음 |
 | 접속 주소 | `https://danzzan.koreacentral.cloudapp.azure.com` | 10-14 DNS 이름 단축 및 새 인증서·CORS 적용 검증 완료 |
 | HTTPS | Let’s Encrypt 인증서 발급 및 renewal dry-run 성공 | Azure 제공 DNS에서 HTTPS 실행. 현재 인증서 만료일 2027-01-12, systemd timer 활성화. dry-run과 deploy hook 수동 검증은 구분 |
-| 새 시연 DB | `danzzan_demo` | 30 테이블, 합성 계정 2개와 공지 1건. 기존 게시물·이미지 미변경 |
+| 현재 시연 DB | `danzzan_fall_demo` | 10-14 로컬 `festival_test`의 40개 테이블·36,174행 복원 및 앱 연결 전환. 원본·기존 `danzzan_demo` 보존. NHN 이미지 파일은 미이관 |
 | Compute·Network | 공급자 등록 완료 | 생성 직전 지역 vCPU 6 / DASv4 4, DASv5·DSv5 0. 동료 구독은 재확인 필요 |
 
 코드·상세 검증 기록은 [azure-image-storage.md](azure-image-storage.md), 실제 VM 구성·접속·권한·비용은 [azure-vm-infrastructure.md](azure-vm-infrastructure.md), 앱·DB·HTTPS 배포와 운영 절차는 [azure-vm-deployment.md](azure-vm-deployment.md)에 있다. 아래 재현 절차는 현재 사용자 구독의 리소스를 중복 생성하라는 의미가 아니다.
+
+현재 DB의 복원·검증·복구 및 이미지 교체 주의점은 [azure-db-migration.md](azure-db-migration.md)에 있다. 초기 seed만으로 현재 데이터를 재현할 수 없으며, DB 덤프는 비공개 경로에 보관한다.
 
 ## 2. 동료 계정으로 진행하기 전에 결정할 사항
 

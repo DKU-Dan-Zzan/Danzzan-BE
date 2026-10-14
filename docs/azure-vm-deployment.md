@@ -1,6 +1,6 @@
 # Azure VM 시연 배포 기록
 
-기준일: **2026-10-14 KST**. 이 문서는 `vm-danzzan-demo`에서 실제로 실행 중인 단짠 시연 환경을 기록한다. 기존 게시물과 기존 이미지 Blob은 이 배포에서 생성·수정·삭제하지 않았다. MySQL은 별도 영속 볼륨의 새 `danzzan_demo` 데이터베이스만 사용한다.
+기준일: **2026-10-14 KST**. 이 문서는 `vm-danzzan-demo`에서 실제로 실행 중인 단짠 시연 환경을 기록한다. 최초 배포는 합성 데이터가 있는 `danzzan_demo`로 진행했다. 10월 14일 로컬 `festival_test`를 별도 `danzzan_fall_demo`로 복원하고 앱 연결을 전환했다. 로컬 원본과 기존 Azure DB는 보존했으며 Blob은 변경하지 않았다.
 
 ## 현재 상태
 
@@ -11,8 +11,9 @@
 | TLS | Let's Encrypt 인증서 발급 완료. 현재 인증서 만료일은 **2027-01-12** |
 | 컨테이너 | `frontend`, `app`, `mysql`, `redis`, `kafka`, `kafka-init` 실행 구성 |
 | BE 저장소 인증 | VM의 시스템 할당 관리 ID. 비공개 `images` 컨테이너와 사용자 위임 SAS를 사용 |
-| DB | 새 `danzzan_demo`, 부팅 시 `ddl-auto: validate` 성공 |
-| 합성 시연 데이터 | 공지 1건, 계정 2개: `90000001`(관리자), `90000002`(일반 사용자), 이미지 참조 0건 |
+| 현재 DB | `danzzan_fall_demo`: 로컬 `festival_test`의 40개 테이블·36,174행 복원, 스키마·데이터 해시 일치 및 앱 기동 확인 |
+| 이전 시연 DB | `danzzan_demo` 보존. 합성 계정 2개와 공지 1건은 이전 DB에만 있음 |
+| Redis / Kafka | Redis DB 1, 소비자 그룹 `ticket-issue-fall-demo-20261014`. 이전 Redis DB 0과 Kafka 데이터 보존 |
 
 비밀번호, JWT 비밀값, DB 비밀번호, Azure 토큰·SAS·계정 키, 외부 API 키는 이 문서나 Git에 기록하지 않는다.
 
@@ -51,7 +52,7 @@
 
 Compose의 `mysql_data`, `redis_data`, `kafka_data` 명명 볼륨은 VM OS 영구 디스크(`/dev/sda1`)에 있다. `/mnt` 임시 디스크에는 데이터를 두지 않는다. `docker compose down -v`는 이 볼륨을 삭제하므로 시연 환경에서 실행하지 않는다.
 
-## 새 DB와 합성 데이터의 범위
+## 최초 배포 DB와 합성 데이터의 범위 (현재는 이전 DB)
 
 `deploy/azure/schema.sql`은 새 `danzzan_demo` 데이터베이스만 대상으로 테이블을 준비하고, `deploy/azure/demo-seed.sql`을 배포 전 비밀 디렉터리에 복사해 MySQL 초기화에 사용했다. 두 SQL 파일은 대상 DB가 `danzzan_demo`가 아니면 중단하도록 보호한다.
 
@@ -65,7 +66,9 @@ Compose의 `mysql_data`, `redis_data`, `kafka_data` 명명 볼륨은 VM OS 영�
 
 로컬의 `deploy/azure/secrets/demo-login.txt`(권한 `600`)에는 생성 당시의 시연 계정 로그인 정보가 있으며 Git에 포함하지 않는다. 서버에는 실행용 `app.env`·`mysql.env`, FE 공개 키 빌드 설정 및 BCrypt 해시가 들어간 seed 파일을 둔다. 계정 평문 비밀번호 목록은 전송하지 않았다. 스키마 정의만 참고했으며 기존 NHN/로컬/운영 데이터베이스의 데이터 행, 기존 게시물, 기존 이미지 참조는 이 DB에 복사하지 않았다.
 
-## 이미지 검증
+현재 서비스는 위 합성 계정 대신 이관한 로컬 DB의 계정을 사용한다. `demo-login.txt`의 합성 계정 정보는 이전 DB 복구 시에만 유효하다. 현재 DB 이관·검증·복구 절차는 [azure-db-migration.md](azure-db-migration.md)를 참고한다. 새 VM에서는 기본 초기화 SQL만 실행하면 현재 DB가 생기지 않으므로 별도 복원과 권한 부여가 필요하다.
+
+## 최초 배포 당시 이미지 검증
 
 실제 브라우저와 API에서 다음 흐름을 확인했다.
 
@@ -133,7 +136,7 @@ curl -fsSI https://danzzan.koreacentral.cloudapp.azure.com/ | head
 sudo certbot certificates
 ```
 
-로그에 비밀값이나 SAS URL이 보이면 로그를 외부 공유하지 않는다. 이미지·계정·공지 API 검증은 새 `danzzan_demo`의 두 합성 계정과 합성 공지만 대상으로 한다.
+로그에 비밀값이나 SAS URL이 보이면 로그를 외부 공유하지 않는다. 현재 DB에는 로컬에서 복원한 게시물·계정이 있으므로 쓰기 검증에는 별도 테스트 데이터를 사용한다. 이번 DB 전환 후에는 조회 API만 확인했으며 로그인·업로드·발권은 재검증하지 않았다.
 
 ## 현재 미설정 또는 조사 중인 기능
 

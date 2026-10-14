@@ -35,11 +35,13 @@ services:
     env_file: ./deploy/azure/secrets/app.env
     environment:
       SPRING_PROFILES_ACTIVE: prod,azure
-      DB_URL: jdbc:mysql://mysql:3306/danzzan_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_URL: jdbc:mysql://mysql:3306/danzzan_fall_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       DB_USERNAME: danzzan
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      SPRING_DATA_REDIS_DATABASE: 1
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: ticket-issue-fall-demo-20261014
       IMAGE_STORAGE_PROVIDER: azure
       AZURE_STORAGE_ENDPOINT: https://danzzandemo2026.blob.core.windows.net
       AZURE_STORAGE_CONTAINER: images

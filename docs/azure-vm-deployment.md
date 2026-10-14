@@ -95,6 +95,8 @@ Nginx 컨테이너가 Certbot의 `live/` 심볼릭 링크가 가리키는 인증
 
 다음 명령은 VM에서 실행하는 운영 절차다. VM에는 allowlist 기반 소스 아카이브만 전송했고 `.git` 디렉터리가 없으므로 VM에서 `git status`를 실행해 배포 버전을 판별할 수 없다. 배포할 브랜치·커밋·로컬 변경은 전송 전에 개발 컴퓨터의 Git 작업 트리에서 확인한다. VM에서는 아카이브 내용과 비밀 파일 권한을 확인한다. 현재 일반 VM 사용자는 `docker` 그룹에 넣지 않았으므로 Docker 명령에 `sudo`를 붙인다.
 
+외부 서비스 환경변수 분리 이후에는 아래의 `external-services.env`도 반드시 준비한다. 기존 VM에 새 Compose만 먼저 복사하면 이 파일이 없어 Compose 실행이 실패한다. 새 비공개 파일을 먼저 준비하고 Compose를 반영한다.
+
 ```bash
 cd /opt/danzzan/Danzzan-BE
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
@@ -105,7 +107,7 @@ sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml ps
 ```
 
-`app.env`, `mysql.env`, `frontend-build.env` 및 배포 시 사용하는 seed 파일은 `deploy/azure/secrets/`에 둔다. 디렉터리 권한은 `700`, 환경 파일 권한은 `600`으로 유지한다. MySQL 컨테이너가 초기화 SQL을 읽어야 하므로 Compose에 바인드한 seed SQL 파일은 `644`다. 이 파일에는 평문 비밀번호를 넣지 않는다.
+`app.env`, `external-services.env`, `mysql.env`, `frontend-build.env` 및 배포 시 사용하는 seed 파일은 `deploy/azure/secrets/`에 둔다. 디렉터리 권한은 `700`, 환경 파일 권한은 `600`으로 유지한다. MySQL 컨테이너가 초기화 SQL을 읽어야 하므로 Compose에 바인드한 seed SQL 파일은 `644`다. 이 파일에는 평문 비밀번호를 넣지 않는다.
 
 단순 서비스 재시작은 볼륨을 지우지 않는다.
 
@@ -138,19 +140,61 @@ sudo certbot certificates
 
 로그에 비밀값이나 SAS URL이 보이면 로그를 외부 공유하지 않는다. 현재 DB에는 로컬에서 복원한 게시물·계정이 있으므로 쓰기 검증에는 별도 테스트 데이터를 사용한다. 이번 DB 전환 후에는 조회 API만 확인했으며 로그인·업로드·발권은 재검증하지 않았다.
 
-## 현재 미설정 또는 조사 중인 기능
+## 외부 서비스 최초 반영 검증 (2026-10-14)
 
-다음은 핵심 시연 경로와 분리되어 있으며, 설정하지 않았거나 원인이 확정되지 않았다.
+이전 배포에서는 Octomo가 테스트 값이고 OpenAI·DeepL·메일 자격 증명이 비어 있었다. 2026-10-14 사용자가 입력한 `external-services.env`를 VM에 반영하고 새 app 컨테이너에 모든 항목이 동일하게 주입됐는지 값을 출력하지 않고 비교했다. `DB_PASSWORD`, `JWT_SECRET`, `CODE_ENCRYPTION_SECRET` 및 기존 DB 연결은 유지했다.
 
-- SMTP 메일 발송
-- Octomo API
-- OpenAI API
-- DeepL API
-- 카카오맵 SDK Azure 도메인 등록
+| 서비스 | 이번 확인 결과 | 아직 실행하지 않은 검증 |
+| --- | --- | --- |
+| SMTP | TLS 연결·로그인 성공 | 실제 메일 발송·수신 |
+| Octomo | 입력값의 컨테이너 주입 확인 | 외부 인증·전화번호 인증 흐름 |
+| OpenAI | 설정한 모델 조회 HTTP 200 | 테마 생성·과금 요청 |
+| DeepL | 사용량 조회 HTTP 200; 빈 `DEEPL_API_URL`은 Free/Pro 자동 선택 | 실제 번역·용어집 생성 |
+| 카카오맵 | 이번 배포에서 재검증하지 않음 | Azure 도메인 등록과 지도 표시 |
 
 카카오맵은 기존 public JavaScript 키로 정상 SDK endpoint를 변경 전 Azure FQDN Referer와 함께 요청했을 때 HTTP 401을 반환했다. 키 비활성화·잘못된 키 가능성도 남아 있지만, 현재 Azure 도메인이 Kakao Developers의 해당 앱 JavaScript SDK 도메인에 등록되지 않았을 가능성이 높다. 동료 또는 앱 관리자는 `https://danzzan.koreacentral.cloudapp.azure.com`을 등록한 뒤 지도를 다시 검증한다. [Kakao Maps Web 안내](https://apis.map.kakao.com/web/guide/)
 
-이 기능들을 활성화하려면 각각의 실제 비밀값·비용·외부 서비스 약관을 별도로 검토한다. 빈 값이나 테스트용 더미 값을 실제 키로 바꾸기 위해 기존 설정 파일의 비밀값을 복사하지 않는다.
+조회·인증 성공은 실제 생성·번역·발송 흐름 전체의 성공이나 충분한 잔액을 보장하지 않는다. 이번 검증에서는 이메일·문자를 발송하거나 AI 생성·번역 요청을 보내지 않았다.
+
+위 표는 환경변수 최초 반영 시점의 기록이다. 이후 OpenAI 실제 테마·배경 추천은 별도로 검증했다. 현재까지의 성공 시간과 미확정 원인은 [AI 추천 진단 기록](azure-ai-recommendation-diagnostics.md)을 참고한다.
+
+### 외부 서비스 환경변수 입력과 반영
+
+1. `deploy/azure/external-services.env.example`을 **새 파일을 만들 때만** `deploy/azure/secrets/external-services.env`로 복사한다. 기존 비공개 파일을 덮어쓰지 않는다. 비밀값은 이 파일에서 직접 입력하며 Git·채팅에 넣지 않는다. 파일은 Git과 Docker 빌드 대상에서 제외된다.
+2. Octomo는 `OCTOMO_API_KEY`와 `OCTOMO_BASE_URL`을 함께 설정하고 수신 번호를 확인한다. 아직 연결하지 않을 때는 샘플 값을 유지한다. OpenAI는 `OPENAI_API_KEY`를 입력하고 모델을 확인한다. DeepL은 `DEEPL_API_KEY`를 입력하며 `DEEPL_API_URL`은 비워두면 Free/Pro를 자동 선택한다. 메일은 host·port·username·password·from을 함께 설정한다.
+3. 기본 동작에서는 **DeepL이 앱 시작 시 같은 이름의 용어집을 삭제하고 다시 만든다.** Azure Compose는 `TRANSLATION_GLOSSARY_SYNC_ON_STARTUP=false`로 이를 끄고, `TRANSLATION_BACKFILL_SCHEDULED_ENABLED=false`로 기존 게시물 자동 번역 보정도 끈다. 키를 반영해도 배포 자체가 기존 콘텐츠나 외부 용어집을 바꾸지 않도록 하기 위한 설정이다. 사용자가 실행하는 번역 기능과 수동 보정 API는 계속 동작하므로 별도 승인 없이 검증에 호출하지 않는다. 기존 운영 용어집에 영향을 주지 않도록 샘플의 Azure 시연 전용 이름을 사용하고, 같은 API 계정에 이미 사용하는 이름인지 확인한다. 외부 서비스 요금은 Azure 학생 크레딧과 별개다.
+4. Compose의 `env_file`은 `app.env` 다음에 `external-services.env`를 읽는다. Compose `environment`에 같은 키를 추가하면 비공개 파일보다 우선하므로 외부 API 키를 거기에 중복 선언하지 않는다. DB·JWT·인증코드 암호화 비밀값은 기존 `app.env`에 유지한다. FE에는 이 파일을 전달하지 않는다.
+5. VM에 기존 설정의 비공개 백업을 만든 뒤 SSH로 파일을 전달하고 권한을 `600`으로 제한한다. 반영 전에는 `docker compose ... config --quiet`로 검사한다. 확장된 `config`, `docker inspect`의 전체 환경변수, 비밀 파일 내용을 화면이나 로그에 출력하지 않는다.
+6. 키·외부 계정·요금·DeepL 용어집 변경 영향을 확인한 뒤 app만 재생성한다. 환경변수 변경은 단순 `restart`로 적용되지 않는다. 잠시 API가 중단되며 MySQL·Redis·Kafka·이미지 데이터는 수정하지 않는다.
+
+```bash
+sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
+  -f docker-compose.azure.yml config --quiet
+sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
+  -f docker-compose.azure.yml up -d --no-deps --force-recreate app
+```
+
+반영 후에는 health와 값이 아닌 설정 유무부터 확인한다. 실제 메일 발송·Octomo 인증·OpenAI 생성·DeepL 번역은 비용 및 외부 데이터 변경이 발생할 수 있으므로 승인된 테스트 계정과 데이터만 사용한다. 외부 API 성공 여부와 환경변수 주입 성공 여부는 구분해서 기록한다.
+
+## main 병합 코드와 환경변수 배포 기록 (2026-10-14)
+
+- BE 기준 커밋 `5fd9a4b`, FE 기준 커밋 `3bb6bf5d`를 반영했다. BE에는 배포 당시 미커밋 상태였던 외부 환경변수 분리와 자동 번역·시작 시 용어집 동기화 차단 코드도 포함됐다. 정확한 배포 파일은 VM의 `deployed-source-manifest.json`으로 구분한다.
+- 새 이미지를 먼저 빌드한 뒤 `app`, `frontend`만 `--no-deps --force-recreate`로 교체했다. MySQL·Redis·Kafka 컨테이너 ID와 기존 app/mysql/frontend-build 비공개 설정 파일은 배포 전후 동일했다. DB 스키마·볼륨·Blob 파일은 변경하지 않았다.
+- 배포 준비 경로: `/opt/danzzan/releases/20261014-main-env`. 이 경로의 `activation-complete`는 실제 HTTPS 확인 후 생성했다.
+- 비공개 복구 경로: `/opt/danzzan/deployment-backups/20261014-main-env` (디렉터리 `700`, 비공개 파일 `600`). 이전 소스·Compose·두 DB의 일관된 덤프와 검증 결과를 보관한다. 이 경로와 덤프를 Git이나 문서 첨부로 공유하지 않는다.
+- 이전 이미지 태그: `danzzan-be:rollback-20261014-main-env`, `danzzan-fe:rollback-20261014-main-env`.
+
+검증 결과:
+
+- BE 테스트 총 535개 중 522개 통과, 13개 건너뜀, 실패 0개 및 `bootJar` 성공. macOS의 한글 중첩 테스트 클래스 검색 문제를 피하기 위해 임시 Gradle init script로 직접 중첩 클래스 스캔만 제외했으며 JUnit의 중첩 테스트 실행은 유지했다.
+- FE는 직전 병합 검증에서 129개 파일·647개 테스트, lint/typecheck/build를 통과한 동일 소스를 사용했다. 이번 VM에서 BE·FE Docker 빌드가 모두 성공했다.
+- HTTPS 홈·공지·관리자 로그인 경로와 health·축제 설정·홈 이미지·공지·부스맵·날짜를 지정한 공연 조회 API가 HTTP 200을 반환했다. 실제 브라우저에서 공지 제목·목록·하단 메뉴 렌더링도 확인했다.
+- 기존 콘텐츠와 이미지 참조를 포함한 19개 테이블의 정규화 덤프 해시가 배포 전후 일치했다. Blob 업로드·삭제 요청은 수행하지 않았다.
+- 두 자동 실행 차단 플래그의 실제 컨테이너 값과 시작 로그를 확인했다. 이번 배포에서는 관리자 쓰기·로그인·발권·전체 이미지 로드·부하 테스트를 다시 실행하지 않았다.
+
+복구할 때는 먼저 현재 소스와 설정을 별도로 보존한다. 기존 Compose를 원래 위치로 복원하고 위 이전 이미지 태그를 지정한 override를 사용해 `app`, `frontend`만 `--no-build --no-deps --force-recreate`로 재생성한다. Compose의 상대 경로 기준은 `/opt/danzzan/Danzzan-BE`로 유지해야 한다. 이후 health와 HTTPS를 다시 확인한다. 이번 배포는 스키마 변경이 없으므로 애플리케이션 롤백을 위해 DB 덤프를 덮어쓰지 않는다. 소스까지 되돌릴 때는 백업의 이전 소스를 사용하고 비공개 설정은 별도로 비교한다.
+
+커밋 정리 시 외부 서비스 샘플에는 빈 자격 증명과 명시적인 테스트 값만 남겼다. 실제 `secrets/` 파일은 Git 제외를 확인했다. 로컬 Compose `config --quiet`와 번역 보정·용어집 대상 테스트 17건이 통과했다. 이 검증은 외부 API를 호출하거나 Azure를 다시 배포하지 않는다.
 
 ## 동료 계정 또는 다른 VM으로 옮길 때
 

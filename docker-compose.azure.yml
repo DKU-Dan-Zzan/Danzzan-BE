@@ -32,7 +32,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.azure
-    env_file: ./deploy/azure/secrets/app.env
+    env_file:
+      - ./deploy/azure/secrets/app.env
+      - ./deploy/azure/secrets/external-services.env
     environment:
       SPRING_PROFILES_ACTIVE: prod,azure
       DB_URL: jdbc:mysql://mysql:3306/danzzan_fall_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
@@ -60,17 +62,10 @@ services:
       TICKETING_ASYNC_RESERVE_ROLLOUT_PERCENT: 100
       TICKETING_KAFKA_CONSUMER_CONCURRENCY: 1
       STAFF_MANAGEMENT_ENABLED: "true"
-      # Demo accounts bypass no authentication; external vendor features stay unconfigured.
-      MAIL_HOST: 127.0.0.1
-      MAIL_PORT: 9
-      MAIL_USERNAME: ""
-      MAIL_PASSWORD: ""
-      PASSWORD_RESET_MAIL_FROM: noreply@danzzan.invalid
-      OCTOMO_BASE_URL: http://127.0.0.1:9
-      OCTOMO_API_KEY: demo-unconfigured
-      OPENAI_API_KEY: ""
-      DEEPL_API_KEY: ""
-      DEEPL_API_URL: ""
+      # Keep existing imported data and the external glossary unchanged on deployment.
+      TRANSLATION_BACKFILL_SCHEDULED_ENABLED: "false"
+      TRANSLATION_GLOSSARY_SYNC_ON_STARTUP: "false"
+      # External services are configured in the private external-services.env file.
     depends_on:
       mysql:
         condition: service_healthy

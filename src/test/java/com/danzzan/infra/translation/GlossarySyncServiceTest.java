@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -95,5 +96,34 @@ class GlossarySyncServiceTest {
 
         assertNull(service.getGlossaryId());
         assertEquals(0, server.getRequestCount());
+    }
+
+    @Test
+    void 기동_동기화가_비활성화되면_HTTP_호출을_하지_않는다() {
+        GlossarySyncService service =
+                new GlossarySyncService(properties, new ObjectMapper());
+        ReflectionTestUtils.setField(service, "syncOnStartup", false);
+
+        service.syncOnStartup();
+
+        assertNull(service.getGlossaryId());
+        assertEquals(0, server.getRequestCount());
+    }
+
+    @Test
+    void 기동_동기화는_기본값으로_실행된다() {
+        server.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"glossaries\":[]}"));
+        server.enqueue(new MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"glossary_id\":\"startup-id\"}"));
+
+        GlossarySyncService service =
+                new GlossarySyncService(properties, new ObjectMapper());
+        service.syncOnStartup();
+
+        assertEquals("startup-id", service.getGlossaryId());
+        assertEquals(2, server.getRequestCount());
     }
 }

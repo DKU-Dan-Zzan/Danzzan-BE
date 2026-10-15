@@ -8,7 +8,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 
-/** AI selects the focal point; this renderer deterministically performs a bounded cover crop. */
+/** Bounded image decoder and cover renderer shared by generated backgrounds and home previews. */
 @Component
 public class PosterBackgroundRenderer {
     public record Target(int width, int height) {

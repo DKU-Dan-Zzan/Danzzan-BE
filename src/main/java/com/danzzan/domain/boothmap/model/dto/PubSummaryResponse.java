@@ -1,5 +1,7 @@
 package com.danzzan.domain.boothmap.model.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -12,7 +14,9 @@ public class PubSummaryResponse {
     private String department;
     private Long collegeId;
     private String collegeName;
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String mainImageUrl;
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String thumbnailUrl;
     private String startTime;
     private String endTime;

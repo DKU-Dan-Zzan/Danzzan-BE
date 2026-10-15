@@ -1,5 +1,7 @@
 package com.danzzan.domain.festival.background;
 
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -15,7 +17,8 @@ public class PosterBackgroundController {
     private final PosterBackgroundService service;
     public record Request(@NotNull @Pattern(regexp = "ticket|closed") String target,
                           @Size(max = 2048)
-                          @Pattern(regexp = "https?://[^\\s]+") String sourcePosterUrl) {}
+                          @Pattern(regexp = "(?:https?://|azure:images/)[^\\s]+")
+                          @JsonDeserialize(using = ImageReferenceDeserializer.class) String sourcePosterUrl) {}
 
     @PostMapping("/recommend")
     @PreAuthorize("@userAdminAuthorizationService.hasTicketingRole(authentication)")

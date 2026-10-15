@@ -1,0 +1,13 @@
+# Enable with --spring.profiles.active=azure and image.storage.provider=azure.
+# Local developers authenticate through an existing `az login`; Azure VMs should set
+# AZURE_STORAGE_CREDENTIAL=managed-identity and receive RBAC roles instead of a key.
+image:
+  storage:
+    provider: ${IMAGE_STORAGE_PROVIDER:azure}
+
+azure:
+  storage:
+    endpoint: ${AZURE_STORAGE_ENDPOINT:https://danzzandemo2026.blob.core.windows.net}
+    container: ${AZURE_STORAGE_CONTAINER:images}
+    credential: ${AZURE_STORAGE_CREDENTIAL:managed-identity}
+    read-sas-expiration-seconds: ${AZURE_STORAGE_READ_SAS_EXPIRATION_SECONDS:300}

@@ -16,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
 import java.util.List;
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -113,5 +115,50 @@ class TranslationBackfillServiceTest {
                 .thenReturn(Arrays.asList(null, null));
 
         assertEquals(0, backfillService.backfillAll());
+    }
+
+    @Test
+    void 스케줄러가_비활성화되면_저장소나_번역을_호출하지_않는다() {
+        ReflectionTestUtils.setField(backfillService, "scheduledEnabled", false);
+
+        backfillService.scheduledBackfill();
+
+        verifyNoInteractions(
+                noticeBackfillService,
+                boothRepository,
+                pubRepository,
+                collegeRepository,
+                artistRepository,
+                performanceRepository,
+                emergencyNoticeRepository,
+                translationService,
+                writer);
+    }
+
+    @Test
+    void 스케줄러가_비활성화돼도_명시적_보정은_실행된다() {
+        ReflectionTestUtils.setField(backfillService, "scheduledEnabled", false);
+        Booth booth = untranslatedBooth();
+        when(boothRepository.findNeedingTranslation(any()))
+                .thenReturn(List.of(booth));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Experience Booth", "Booth Description"));
+        when(writer.applyBooth(any(), any(), any())).thenReturn(1);
+
+        assertEquals(1, backfillService.backfillAll());
+        verify(translationService).translateAll(any());
+    }
+
+    @Test
+    void 스케줄러는_기본값으로_보정을_실행한다() {
+        when(boothRepository.findNeedingTranslation(any()))
+                .thenReturn(List.of(untranslatedBooth()));
+        when(translationService.translateAll(any()))
+                .thenReturn(List.of("Experience Booth", "Booth Description"));
+        when(writer.applyBooth(any(), any(), any())).thenReturn(1);
+
+        backfillService.scheduledBackfill();
+
+        verify(translationService).translateAll(any());
     }
 }

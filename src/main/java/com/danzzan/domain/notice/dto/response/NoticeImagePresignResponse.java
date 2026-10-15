@@ -1,5 +1,7 @@
 package com.danzzan.domain.notice.dto.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.danzzan.infra.s3.S3PresignedPutResult;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -20,6 +22,7 @@ public class NoticeImagePresignResponse {
      * 업로드 완료 후 접근할 파일 URL.
      * 프론트에서 res.data.fileUrl 로 접근합니다.
      */
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String fileUrl;
 
     private String key;

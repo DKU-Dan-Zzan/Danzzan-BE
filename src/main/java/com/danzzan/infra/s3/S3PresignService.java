@@ -1,6 +1,8 @@
 package com.danzzan.infra.s3;
 
-import lombok.RequiredArgsConstructor;
+import com.danzzan.infra.azure.AzureBlobStorage;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -20,7 +22,6 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class S3PresignService {
 
@@ -36,7 +37,22 @@ public class S3PresignService {
     private final S3Client s3Client;
     private final S3PathGenerator s3PathGenerator;
 
-    @Value("${nhn.object-storage.container}")
+    private AzureBlobStorage azureStorage;
+
+    public S3PresignService(S3Presigner s3Presigner, S3Client s3Client, S3PathGenerator s3PathGenerator) {
+        this.s3Presigner = s3Presigner;
+        this.s3Client = s3Client;
+        this.s3PathGenerator = s3PathGenerator;
+    }
+
+    @Autowired
+    public S3PresignService(ObjectProvider<S3Client> clients, ObjectProvider<AzureBlobStorage> azure, ObjectProvider<S3Presigner> presigners, S3PathGenerator paths) {
+        this(presigners.getIfAvailable(), clients.getIfAvailable(), paths);
+        this.azureStorage = azure.getIfAvailable();
+    }
+
+
+    @Value("${nhn.object-storage.container:}")
     private String bucket;
 
     @Value("${nhn.object-storage.public-read:false}")
@@ -51,9 +67,8 @@ public class S3PresignService {
      * - fileSize가 있으면 5MB 제한 검증
      */
     public S3PresignedPutResult presignPutNoticeImage(String fileName, String contentType, Long fileSize) {
-        if (contentType != null && !contentType.isBlank()) {
-            validateImageContentType(contentType.trim());
-        }
+        rejectAzureDirectUpload();
+        validateImageContentType(contentType);
         validateMaxSize(fileSize);
         ensureBucketConfigured();
         String key = s3PathGenerator.generateNoticeImageKey(fileName);
@@ -63,7 +78,7 @@ public class S3PresignService {
             log.warn("공지 이미지 presign 실패 fileName={} contentType={}", fileName, contentType, e);
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "이미지 업로드 URL 발급에 실패했습니다. NHN Object Storage 설정(nhn.object-storage.container, endpoint) 및 자격 증명을 확인해 주세요."
+                    "이미지 업로드 URL 발급에 실패했습니다. 저장소 설정 및 접근 권한을 확인해 주세요."
             );
         }
     }
@@ -74,9 +89,8 @@ public class S3PresignService {
      * - 5MB 제한 (fileSize가 넘어오면 서버에서도 1차 필터링)
      */
     public S3PresignedPutResult presignPutAdImage(String fileName, String contentType, Long fileSize) {
-        if (contentType != null && !contentType.isBlank()) {
-            validateImageContentType(contentType.trim());
-        }
+        rejectAzureDirectUpload();
+        validateImageContentType(contentType);
         validateMaxSize(fileSize);
         ensureBucketConfigured();
         String key = s3PathGenerator.generateAdImageKey(fileName);
@@ -86,7 +100,7 @@ public class S3PresignService {
             log.warn("광고 이미지 presign 실패 fileName={} contentType={}", fileName, contentType, e);
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "이미지 업로드 URL 발급에 실패했습니다. NHN Object Storage 설정(nhn.object-storage.container, endpoint) 및 자격 증명을 확인해 주세요."
+                    "이미지 업로드 URL 발급에 실패했습니다. 저장소 설정 및 접근 권한을 확인해 주세요."
             );
         }
     }
@@ -103,9 +117,8 @@ public class S3PresignService {
             String contentType,
             Long fileSize
     ) {
-        if (contentType != null && !contentType.isBlank()) {
-            validateImageContentType(contentType.trim());
-        }
+        rejectAzureDirectUpload();
+        validateImageContentType(contentType);
         validateMaxSize(fileSize);
         ensureBucketConfigured();
         String key = s3PathGenerator.generateArtistImageKey(artistId, fileName);
@@ -115,7 +128,7 @@ public class S3PresignService {
             log.warn("아티스트 이미지 presign 실패 artistId={} fileName={} contentType={}", artistId, fileName, contentType, e);
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+                    "이미지 업로드 URL 발급에 실패했습니다. 저장소 설정 및 접근 권한을 확인해 주세요."
             );
         }
     }
@@ -127,9 +140,8 @@ public class S3PresignService {
             String contentType,
             Long fileSize
     ) {
-        if (contentType != null && !contentType.isBlank()) {
-            validateImageContentType(contentType.trim());
-        }
+        rejectAzureDirectUpload();
+        validateImageContentType(contentType);
         validateMaxSize(fileSize);
         ensureBucketConfigured();
         String key = s3PathGenerator.generatePubImageKey(collegeName, department, fileName);
@@ -146,7 +158,7 @@ public class S3PresignService {
             );
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "이미지 업로드 URL 발급에 실패했습니다. S3 설정(aws.s3.bucket, aws.region) 및 자격 증명을 확인해 주세요."
+                    "이미지 업로드 URL 발급에 실패했습니다. 저장소 설정 및 접근 권한을 확인해 주세요."
             );
         }
     }
@@ -199,7 +211,7 @@ public class S3PresignService {
         if (fileSize == null) {
             return;
         }
-        if (fileSize > MAX_IMAGE_SIZE_BYTES) {
+        if (fileSize <= 0 || fileSize > MAX_IMAGE_SIZE_BYTES) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "파일 크기가 5MB를 초과했습니다."
@@ -214,6 +226,13 @@ public class S3PresignService {
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Object Storage container가 설정되지 않았습니다. application 설정에 nhn.object-storage.container를 추가해 주세요."
             );
+        }
+    }
+
+    private void rejectAzureDirectUpload() {
+        if (azureStorage != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Azure 이미지 업로드는 multipart API를 사용해 주세요");
         }
     }
 }

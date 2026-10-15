@@ -1,5 +1,7 @@
 package com.danzzan.domain.timetable.dto.admin.request;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,6 +21,7 @@ public class UpdateArtistRequest {
 
     private String description;
 
+    @JsonDeserialize(using = ImageReferenceDeserializer.class)
     private String imageUrl;
 
     private String nameEn;

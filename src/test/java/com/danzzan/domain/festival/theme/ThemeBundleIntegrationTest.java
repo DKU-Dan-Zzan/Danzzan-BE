@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
@@ -284,13 +285,13 @@ class ThemeBundleIntegrationTest {
     @Test void previewContainsEntirePosterAndCoverRespectsFocusWithoutPublishing() throws Exception {
         String url = saveRealPoster();
         var response = preview(token(UserRole.ROLE_MANAGER, ManagerPermission.OPERATIONS), url, "contain", .5)
-                .andExpect(status().isOk()).andExpect(jsonPath("$.width").value(900))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.width").value(800))
                 .andExpect(jsonPath("$.height").value(1600)).andExpect(jsonPath("$.mimeType").value("image/jpeg"))
                 .andExpect(jsonPath("$.sourcePosterUrl").value(url)).andReturn();
         var json = mapper.readTree(response.getResponse().getContentAsString());
         var image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(Base64.getDecoder().decode(json.get("imageBase64").asText())));
-        // The portrait fits at x=50..849, full height. Its four red borders must survive contain.
-        for (int[] point : new int[][]{{450, 5}, {450, 1594}, {55, 800}, {844, 800}}) {
+        // The portrait is resized to its 1:2 aspect ratio without a generated 9:16 backdrop.
+        for (int[] point : new int[][]{{400, 5}, {400, 1594}, {5, 800}, {794, 800}}) {
             var color = new java.awt.Color(image.getRGB(point[0], point[1]));
             assertTrue(color.getRed() > 180 && color.getBlue() < 100);
         }
@@ -324,6 +325,37 @@ class ThemeBundleIntegrationTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
                 "/admin/festival/1/home-images/staged").file(posterFile()).header("Authorization", "Bearer " +
                 token(UserRole.ROLE_MANAGER, ManagerPermission.TICKETING))).andExpect(status().isForbidden());
+    }
+    @Test void independentHomeSaveAllowsOperationsOnlyAndRejectsStaleOrUnstagedImages() throws Exception {
+        String currentPoster = saveRealPoster();
+        var first = home("first", 4); var second = home("second", 8);
+        String staged = stagedHomeUrl();
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("imageUrl", staged); request.put("expectedFirstImageId", first.getId());
+        request.put("expectedFirstImageUrl", "first"); request.put("sourcePosterUrl", currentPoster);
+
+        mvc.perform(put("/admin/festival/1/home-images/first")
+                        .header("Authorization", "Bearer " + token(UserRole.ROLE_MANAGER, ManagerPermission.OPERATIONS))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(request)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(first.getId()))
+                .andExpect(jsonPath("$.imageUrl").value(staged));
+        assertEquals(staged, homeImages.findById(first.getId()).orElseThrow().getImageUrl());
+        assertEquals("second", homeImages.findById(second.getId()).orElseThrow().getImageUrl());
+
+        mvc.perform(put("/admin/festival/1/home-images/first")
+                        .header("Authorization", "Bearer " + token(UserRole.ROLE_MANAGER, ManagerPermission.TICKETING))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(request)))
+                .andExpect(status().isForbidden());
+
+        request.put("imageUrl", "https://example.invalid/not-staged.png");
+        mvc.perform(put("/admin/festival/1/home-images/first").header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(request)))
+                .andExpect(status().isBadRequest());
+
+        request.put("imageUrl", staged); request.put("sourcePosterUrl", currentPoster + "-stale");
+        mvc.perform(put("/admin/festival/1/home-images/first").header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(request)))
+                .andExpect(status().isConflict());
     }
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void bundleReplacesOnlyFirstOrCreatesWhenEmpty(boolean empty) throws Exception {

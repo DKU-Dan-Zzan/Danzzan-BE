@@ -2,6 +2,7 @@ package com.danzzan.infra.image;
 
 import com.danzzan.infra.s3.S3PosterImageReader;
 import com.danzzan.infra.s3.S3Uploader;
+import com.danzzan.infra.azure.AzureBlobStorage;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
@@ -98,5 +99,19 @@ class S3BackgroundValidationTest {
         when(client.headObject(any(HeadObjectRequest.class))).thenThrow(S3Exception.builder().statusCode(503).build());
         assertEquals(HttpStatus.BAD_GATEWAY, assertThrows(ResponseStatusException.class,
                 () -> storage.validateTicketingBackground(1L, url)).getStatusCode());
+    }
+
+    @Test void azureValidationUsesBlobStorageInsteadOfAnUnavailableS3Client() {
+        AzureBlobStorage azure = mock(AzureBlobStorage.class);
+        ReflectionTestUtils.setField(uploader, "azureStorage", azure);
+        String ticket = "azure:images/festival/ticketing-background/20261014/123e4567-e89b-12d3-a456-426614174000_bg.jpg";
+        String home = "azure:images/festival/1/home/20261014/123e4567-e89b-12d3-a456-426614174000_home.jpg";
+
+        storage.validateTicketingBackground(1L, ticket);
+        storage.validateHomeImage(1L, home);
+
+        verify(azure).validateTicketingBackground(ticket);
+        verify(azure).validateHomeImage(1L, home);
+        verify(client, never()).headObject(any(HeadObjectRequest.class));
     }
 }

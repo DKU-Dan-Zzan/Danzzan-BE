@@ -159,6 +159,8 @@ openai:
   api-key: ${OPENAI_API_KEY:}
   theme-model: ${OPENAI_THEME_MODEL:gpt-4o-mini}
   base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1/responses}
+  background-model: ${OPENAI_BACKGROUND_MODEL:gpt-image-1.5}
+  background-base-url: ${OPENAI_BACKGROUND_BASE_URL:https://api.openai.com/v1/images/edits}
 
 deepl:
   api-key: ${DEEPL_API_KEY:}

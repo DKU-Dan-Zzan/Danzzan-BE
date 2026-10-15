@@ -1,5 +1,6 @@
 package com.danzzan.domain.advertisement;
 
+import com.danzzan.infra.image.ImageUploadResponse;
 import com.danzzan.domain.advertisement.dto.AdvertisementResponse;
 import com.danzzan.domain.advertisement.dto.CreateAdvertisementRequest;
 import com.danzzan.domain.advertisement.dto.request.PresignAdvertisementImageRequest;
@@ -23,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/ads")
@@ -87,12 +87,9 @@ public class AdminAdvertisementController {
      * 광고 이미지 직접 업로드 (multipart). presign CORS 문제 우회용.
      */
     @PostMapping("/images/upload")
-    public ResponseEntity<Map<String, String>> uploadAdImage(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<ImageUploadResponse> uploadAdImage(@RequestParam("file") MultipartFile file) {
         S3UploadResult result = s3Uploader.uploadAdImage(file);
-        return ResponseEntity.ok(Map.of(
-                "imageUrl", result.url(),
-                "key", result.key()
-        ));
+        return ResponseEntity.ok(new ImageUploadResponse(result.url(), result.key()));
     }
 
     /**

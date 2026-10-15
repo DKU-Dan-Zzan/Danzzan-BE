@@ -9,6 +9,9 @@ public final class ThumbnailUrlResolver {
             return null;
         }
 
+        // Azure has no thumbnail worker; changing the path also invalidates a Blob-specific SAS.
+        if (imageUrl.startsWith("azure:") || imageUrl.contains(".blob.core.windows.net/")) return imageUrl;
+
         int queryIndex = imageUrl.indexOf('?');
         int hashIndex = imageUrl.indexOf('#');
         int suffixIndex = -1;

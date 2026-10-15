@@ -1,5 +1,6 @@
 package com.danzzan.domain.admin.map.controller;
 
+import com.danzzan.infra.image.ImageUploadResponse;
 import com.danzzan.domain.admin.map.dto.request.CreateAdminPubRequest;
 import com.danzzan.domain.admin.map.dto.request.CreateAdminBoothRequest;
 import com.danzzan.domain.admin.map.dto.request.PresignAdminPubImageRequest;
@@ -38,7 +39,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -147,12 +147,12 @@ public class AdminMapController {
 
     @PostMapping("/pubs/{pubId}/images/upload")
     @Operation(summary = "주점 이미지 직접 업로드", description = "주점 이미지를 서버를 통해 Object Storage에 직접 업로드합니다.")
-    public Map<String, String> uploadPubImage(
+    public ImageUploadResponse uploadPubImage(
             @PathVariable Long pubId,
             @RequestParam("file") MultipartFile file
     ) {
         S3UploadResult result = adminBoothManagementService.uploadPubImage(pubId, file);
-        return Map.of("imageUrl", result.url(), "key", result.key());
+        return new ImageUploadResponse(result.url(), result.key());
     }
 
     @PostMapping("/pubs/{pubId}/images")

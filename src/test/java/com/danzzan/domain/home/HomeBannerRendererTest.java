@@ -36,18 +36,16 @@ class HomeBannerRendererTest {
         assertArrayEquals(renderer.render(input, "cover", 0.0, .5), renderer.render(input, "cover", 0.0, .5));
     }
 
-    @Test void containKeepsLandscapeEdgesAndBlursBackdropWithoutBlurringForeground() throws Exception {
+    @Test void containKeepsTheOriginalAspectRatioWithoutGeneratingABackdrop() throws Exception {
         var source = new BufferedImage(60, 20, BufferedImage.TYPE_INT_RGB);
         for (int x = 0; x < 60; x++) for (int y = 0; y < 20; y++)
             source.setRGB(x, y, x % 2 == 0 ? Color.BLACK.getRGB() : Color.WHITE.getRGB());
         var output = render(png(source), "contain", null, null);
-        // Entire 60:20 poster fits at y=650..949; both outer edges survive as sharp foreground.
-        assertTrue(new Color(output.getRGB(3, 800)).getRed() < 50);
-        assertTrue(new Color(output.getRGB(896, 800)).getRed() > 200);
-        int backdropA = new Color(output.getRGB(450, 300)).getRed();
-        int backdropB = new Color(output.getRGB(465, 300)).getRed();
-        assertTrue(backdropA > 50 && backdropA < 205, "backdrop should blend the black/white stripes");
-        assertTrue(Math.abs(backdropA - backdropB) < 50, "backdrop should smooth adjacent stripes");
+        // The renderer bounds the image within 900×1600 but does not synthesize a fixed canvas or backdrop.
+        assertEquals(900, output.getWidth());
+        assertEquals(300, output.getHeight());
+        assertTrue(new Color(output.getRGB(3, 150)).getRed() < 50);
+        assertTrue(new Color(output.getRGB(896, 150)).getRed() > 200);
     }
 
     @Test void rejectsInvalidFocusAndImagesBeforeRendering() {

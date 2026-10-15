@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import java.net.URI;
 
 @Configuration
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "image.storage", name = "provider", havingValue = "s3", matchIfMissing = true)
 public class S3Config {
 
     @Value("${nhn.object-storage.endpoint}")

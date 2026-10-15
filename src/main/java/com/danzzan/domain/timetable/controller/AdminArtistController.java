@@ -1,5 +1,6 @@
 package com.danzzan.domain.timetable.controller;
 
+import com.danzzan.infra.image.ImageUploadResponse;
 import com.danzzan.domain.timetable.dto.admin.request.CreateArtistRequest;
 import com.danzzan.domain.timetable.dto.admin.request.PresignArtistImageRequest;
 import com.danzzan.domain.timetable.dto.admin.request.UpdateArtistRequest;
@@ -26,7 +27,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/timetable/artists")
@@ -74,11 +74,11 @@ public class AdminArtistController {
     }
 
     @PostMapping("/{artistId}/images/upload")
-    public ResponseEntity<Map<String, String>> uploadArtistImage(
+    public ResponseEntity<ImageUploadResponse> uploadArtistImage(
             @PathVariable Long artistId,
             @RequestParam("file") MultipartFile file
     ) {
         S3UploadResult result = s3Uploader.uploadArtistImage(artistId, file);
-        return ResponseEntity.ok(Map.of("imageUrl", result.url(), "key", result.key()));
+        return ResponseEntity.ok(new ImageUploadResponse(result.url(), result.key()));
     }
 }

@@ -4,6 +4,8 @@ import com.danzzan.domain.festival.theme.dto.ThemeRecommendationResponse;
 import com.danzzan.domain.festival.theme.exception.ThemeRecommendationException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -18,10 +20,12 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /** Responses API transport. Never logs the key, poster bytes, prompt, or upstream body. */
 @Component
 public class OpenAiThemeRecommendationClient implements ThemeRecommendationClient {
+    private static final Logger log = LoggerFactory.getLogger(OpenAiThemeRecommendationClient.class);
     private static final Duration TIMEOUT = Duration.ofSeconds(45);
     private static final int MAX_POSTER_BYTES = 5 * 1024 * 1024;
     private static final String INSTRUCTIONS = """
@@ -34,35 +38,21 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
             Each candidate must have its fixed id, a short name, a one- or two-sentence description (at most 160 characters),
             and exactly 14 #RRGGBB colors. Keep bright white/near-white surfaces in all three; none is a dark theme.
             Balanced (name it Original or Balanced): the production-ready primary recommendation. Reflect the selected base
-            color and extracted poster colors strongly in its four brand colors and keep its six map category colors within
-            the same festival palette whenever possible. Preserve palette cohesion while satisfying every validation rule.
+            color and extracted poster colors strongly in its four brand colors. The backend fixes status and most map
+            category colors, so focus the recommendation on a cohesive brand palette.
             Vibrant (name it Light): derive a secondary variation from valid Balanced, keeping its brand hue and visual identity,
             with modestly higher lightness and gently adjusted saturation for a brighter, softer feel.
             Deep: derive another secondary variation from valid Balanced, keeping its brand hue and visual identity, but
-            deepen primary, strong and selected category colors and improve contrast without making a dark theme.
+            deepen primary and strong colors and improve contrast without making a dark theme.
             Distinguish the three mainly by lightness, saturation and depth, not by different brand hue families.
             Use the administrator-selected base color as a central reference in every candidate. Keep brand palettes visibly
             different through those variations; do not repeat the same primary in all three or make nearly identical palettes.
             brand.primary: main identity and common active states. brand.secondary: harmonious supporting tone.
             brand.accent: distinct small indicators/icons/badges. brand.strong: a deeper or more intense brand tone
             for prominent CTAs, emphasized text, borders and glow, not simply near-black.
-            Status semantics take priority over brand palette harmony: success MUST be green (HSB hue 75..175), warning
-            yellow/amber/orange (20..65), danger red (345..360 or 0..15), each with HSB saturation at least 0.25.
-            Pending is more flexible but must remain visibly distinct from the other statuses. Harmonize status tones with
-            the festival only within those semantic hue families. Even when selectedBaseColor or poster colors are blue,
-            gray or purple, NEVER make success blue, gray or purple.
-            Category.pub, foodTruck, experience, event, restArea and facility must be distinct map marker/polygon colors,
-            but start within the poster-derived festival palette, especially for Balanced. Separate all six first by
-            (1) lightness, (2) saturation, (3) warm/cool bias, then (4) subtle hue shifts. For a violet/lavender poster,
-            try pale lavender, vivid violet, muted mauve, blue-violet, periwinkle and cool desaturated blue-purple, adjusted
-            far enough apart to pass RGB Euclidean distance at least 35 for every pair. Different HEX values alone are not
-            enough: check all 15 category pairs. If this palette family cannot meet the distance rule, add only the minimum
-            harmonious supporting hue needed as a last resort; unrelated yellow, coral, teal or green must not be the default.
-            Never weaken the distance rule, but do not turn a cohesive poster theme into a rainbow just to separate categories.
-            Light and Deep should vary category lightness, saturation and depth from Balanced rather than replace its palette.
-            Check all 15 category pairs before returning, without outputting calculations.
+            The backend overwrites status colors and all map categories except pub. Set category.pub equal to brand.primary;
+            values for the other category and status fields are accepted as placeholders and are not part of the design.
             In each candidate, primary must differ from accent or strong by RGB distance at least 20.
-            Do not merely copy a single brand color into all categories.
             Return candidate descriptions only, no extra explanation. Do not output page backgrounds, pure white/black,
             neutral gray, overlays or shadow opacity.
             """;
@@ -86,24 +76,28 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
 
     @Override
     public ThemeRecommendationResponse recommend(byte[] poster, List<String> sourceColors, String selectedBaseColor) {
-        if (apiKey == null || apiKey.isBlank()) throw failure(HttpStatus.SERVICE_UNAVAILABLE,
-                "OPENAI_KEY_MISSING", "AI recommendation is not configured. Set OPENAI_API_KEY on the backend.");
-        String mime = posterMime(poster);
-        String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(poster);
-        String userText = "Extracted poster colors: " + String.join(", ", sourceColors)
-                + ". Administrator-selected base color: " + selectedBaseColor + ".";
-        Map<String, Object> payload = Map.of(
-                "model", model,
-                "store", false,
-                "max_output_tokens", 2400,
-                "input", List.of(
-                        Map.of("role", "developer", "content", INSTRUCTIONS),
-                        Map.of("role", "user", "content", List.of(
-                                Map.of("type", "input_text", "text", userText),
-                                Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
-                "text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_candidates",
-                        "strict", true, "schema", schema())));
+        String correlationId = UUID.randomUUID().toString();
+        long startedAt = System.nanoTime();
+        log.info("AI recommendation start correlationId={} operation=theme imageBytes={} modelConfigured={} endpointConfigured={}",
+                correlationId, poster == null ? -1 : poster.length, model != null && !model.isBlank(), endpoint != null);
         try {
+            if (apiKey == null || apiKey.isBlank()) throw failure(HttpStatus.SERVICE_UNAVAILABLE,
+                    "OPENAI_KEY_MISSING", "AI recommendation is not configured. Set OPENAI_API_KEY on the backend.");
+            String mime = posterMime(poster);
+            String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(poster);
+            String userText = "Extracted poster colors: " + String.join(", ", sourceColors)
+                    + ". Administrator-selected base color: " + selectedBaseColor + ".";
+            Map<String, Object> payload = Map.of(
+                    "model", model,
+                    "store", false,
+                    "max_output_tokens", 2400,
+                    "input", List.of(
+                            Map.of("role", "developer", "content", INSTRUCTIONS),
+                            Map.of("role", "user", "content", List.of(
+                                    Map.of("type", "input_text", "text", userText),
+                                    Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
+                    "text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_candidates",
+                            "strict", true, "schema", schema())));
             HttpRequest request = HttpRequest.newBuilder(endpoint)
                     .timeout(TIMEOUT)
                     .header("Authorization", "Bearer " + apiKey)
@@ -111,6 +105,8 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)))
                     .build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            log.info("AI recommendation response correlationId={} operation=theme status={} protocol={} elapsedMs={}",
+                    correlationId, response.statusCode(), response.version(), elapsedMs(startedAt));
             if (response.statusCode() == 429) throw failure(HttpStatus.TOO_MANY_REQUESTS,
                     "OPENAI_RATE_LIMIT", "AI request limit reached. Please try again later.");
             if (response.statusCode() < 200 || response.statusCode() >= 300) throw failure(HttpStatus.BAD_GATEWAY,
@@ -128,7 +124,9 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
                 for (JsonNode content : output.path("content")) {
                     if ("output_text".equals(content.path("type").asText()) && content.path("text").isTextual()) {
                         try {
-                            return mapper.readValue(content.path("text").asText(), ThemeRecommendationResponse.class);
+                            ThemeRecommendationResponse recommendation = mapper.readValue(content.path("text").asText(), ThemeRecommendationResponse.class);
+                            logOutcome(correlationId, "SUCCESS", startedAt);
+                            return recommendation;
                         } catch (IOException malformed) {
                             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MALFORMED_OUTPUT",
                                     "AI returned an invalid theme structure.");
@@ -138,14 +136,34 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
             }
             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MALFORMED_OUTPUT",
                     "AI returned no theme data.");
+        } catch (ThemeRecommendationException failure) {
+            logOutcome(correlationId, failure.getCode(), startedAt);
+            throw failure;
         } catch (java.net.http.HttpTimeoutException timeout) {
+            logTransportFailure(correlationId, "OPENAI_TIMEOUT", timeout, startedAt);
             throw failure(HttpStatus.GATEWAY_TIMEOUT, "OPENAI_TIMEOUT", "AI recommendation timed out. Please try again.");
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
+            logOutcome(correlationId, "OPENAI_MODEL_ERROR", startedAt);
             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MODEL_ERROR", "AI recommendation was interrupted.");
         } catch (IOException transport) {
+            logTransportFailure(correlationId, "OPENAI_MODEL_ERROR", transport, startedAt);
             throw failure(HttpStatus.BAD_GATEWAY, "OPENAI_MODEL_ERROR", "AI recommendation service is unavailable.");
         }
+    }
+
+    private void logOutcome(String correlationId, String outcome, long startedAt) {
+        log.info("AI recommendation outcome correlationId={} operation=theme outcome={} elapsedMs={}",
+                correlationId, outcome, elapsedMs(startedAt));
+    }
+
+    private void logTransportFailure(String correlationId, String outcome, Exception exception, long startedAt) {
+        log.info("AI recommendation outcome correlationId={} operation=theme outcome={} exceptionClass={} elapsedMs={}",
+                correlationId, outcome, exception.getClass().getSimpleName(), elapsedMs(startedAt));
+    }
+
+    private long elapsedMs(long startedAt) {
+        return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
     }
 
     private String posterMime(byte[] bytes) {

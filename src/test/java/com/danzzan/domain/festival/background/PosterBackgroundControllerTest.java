@@ -13,7 +13,7 @@ class PosterBackgroundControllerTest {
     @Test void rejectsStaleSourceBeforeCallingStorageOrAi() throws Exception {
         var settings = mock(com.danzzan.domain.festival.repository.FestivalSettingRepository.class);
         var storage = mock(com.danzzan.infra.image.ImageStorage.class);
-        var ai = mock(OpenAiPosterFocusClient.class);
+        var ai = mock(OpenAiPosterBackgroundClient.class);
         var setting = com.danzzan.domain.festival.entity.FestivalSetting.create("school", "festival",
                 java.time.LocalDate.now(), java.time.LocalDate.now(), true);
         setting.updatePosterImageUrl("https://cdn/current.png");
@@ -29,7 +29,7 @@ class PosterBackgroundControllerTest {
     @Test void reportsActualSnapshotEvenIfSavedPosterChangesDuringGeneration() throws Exception {
         var settings = mock(com.danzzan.domain.festival.repository.FestivalSettingRepository.class);
         var storage = mock(com.danzzan.infra.image.ImageStorage.class);
-        var ai = mock(OpenAiPosterFocusClient.class);
+        var ai = mock(OpenAiPosterBackgroundClient.class);
         var setting = com.danzzan.domain.festival.entity.FestivalSetting.create("school", "festival",
                 java.time.LocalDate.now(), java.time.LocalDate.now(), true);
         setting.updatePosterImageUrl("https://cdn/current.png");
@@ -40,7 +40,7 @@ class PosterBackgroundControllerTest {
             setting.updatePosterImageUrl("https://cdn/new.png");
             return bytes.toByteArray();
         });
-        when(ai.recommend(any(), eq("ticket"))).thenReturn(new OpenAiPosterFocusClient.Focus(.5, .5, "center"));
+        when(ai.recommend(any(), eq("ticket"))).thenReturn(PosterBackgroundGenerationTest.solid(java.awt.Color.BLUE));
         var mvc = MockMvcBuilders.standaloneSetup(new PosterBackgroundController(
                 new PosterBackgroundService(settings, storage, ai, new PosterBackgroundRenderer()))).build();
         for (String guard : new String[]{"", ",\"sourcePosterUrl\":\"https://cdn/current.png\""}) {

@@ -13,8 +13,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-
 @Service
 @RequiredArgsConstructor
 public class SignupService {
@@ -54,6 +52,7 @@ public class SignupService {
         User user = User.builder()
                 .studentId(cache.studentId())
                 .password(encodedPassword)
+                .naverId(dto.getNaverId().trim())
                 .name(cache.name())
                 .college(cache.college())
                 .major(cache.major())

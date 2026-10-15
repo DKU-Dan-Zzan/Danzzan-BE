@@ -87,6 +87,8 @@ class SignupFlowE2ETest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "password", VALID_PASSWORD,
                                 "confirmPassword", VALID_PASSWORD,
+                                "naverId", "signup_test_id",
+                                "confirmNaverId", "signup_test_id",
                                 "phoneVerificationSessionId", "phone-session-123"
                         ))))
                 .andExpect(status().isOk());
@@ -95,6 +97,7 @@ class SignupFlowE2ETest {
                 .orElseThrow(() -> new AssertionError("회원이 생성되지 않았습니다."));
 
         assertThat(user.getStudentId()).isEqualTo("32100000");
+        assertThat(user.getNaverId()).isEqualTo("signup_test_id");
         assertThat(user.getName()).isEqualTo("테스트");
         assertThat(user.getCollege()).isEqualTo("공과대학");
         assertThat(user.getMajor()).isEqualTo("컴퓨터공학과");

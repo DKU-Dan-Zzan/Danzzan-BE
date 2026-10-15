@@ -10,6 +10,7 @@ import com.danzzan.domain.timetable.repository.PerformanceRepository;
 import com.danzzan.infra.translation.TranslationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -51,7 +52,22 @@ public class TranslationBackfillService {
     private final TranslationService translationService;
     private final TranslationBackfillWriter writer;
 
+    @Value("${translation.backfill.scheduled-enabled:true}")
+    private boolean scheduledEnabled = true;
+
     @Scheduled(fixedDelayString = "${translation.backfill.fixed-delay-ms:300000}")
+    public void scheduledBackfill() {
+        if (!scheduledEnabled) {
+            log.info("번역 보정 스케줄러가 비활성화되어 건너뜁니다.");
+            return;
+        }
+        backfillAll();
+    }
+
+    /**
+     * 번역 보정을 즉시 실행한다.
+     * 관리 API 등 명시적인 호출은 스케줄러 설정과 관계없이 실행한다.
+     */
     public int backfillAll() {
         int filled = 0;
 

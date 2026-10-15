@@ -1,5 +1,7 @@
 package com.danzzan.domain.advertisement.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.danzzan.domain.advertisement.Advertisement;
 import com.danzzan.domain.advertisement.AdvertisementPlacement;
 import lombok.Getter;
@@ -13,6 +15,7 @@ public class AdvertisementResponse {
 
     private Long id;
     private String title;
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String imageUrl;
     private String linkUrl;
     private AdvertisementPlacement placement;

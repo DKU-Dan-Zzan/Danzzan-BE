@@ -1,0 +1,172 @@
+name: danzzan-azure
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  frontend:
+    image: danzzan-fe:azure-demo
+    build:
+      context: ../Danzzan-FE
+      dockerfile: Dockerfile.azure
+      args:
+        VITE_KAKAO_MAP_JS_KEY: ${VITE_KAKAO_MAP_JS_KEY:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 256m
+    restart: unless-stopped
+    logging: *logging
+
+  app:
+    image: danzzan-be:azure-demo
+    build:
+      context: .
+      dockerfile: Dockerfile.azure
+    env_file:
+      - ./deploy/azure/secrets/app.env
+      - ./deploy/azure/secrets/external-services.env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,azure
+      DB_URL: jdbc:mysql://mysql:3306/danzzan_fall_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: danzzan
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SPRING_DATA_REDIS_DATABASE: 1
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: ticket-issue-fall-demo-20261014
+      IMAGE_STORAGE_PROVIDER: azure
+      AZURE_STORAGE_ENDPOINT: https://danzzandemo2026.blob.core.windows.net
+      AZURE_STORAGE_CONTAINER: images
+      AZURE_STORAGE_CREDENTIAL: managed-identity
+      AZURE_STORAGE_READ_SAS_EXPIRATION_SECONDS: 300
+      CORS_ALLOWED_ORIGINS: https://danzzan.koreacentral.cloudapp.azure.com
+      APP_CORS_ALLOWED_ORIGIN_PATTERNS: ""
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SERVER_TOMCAT_MAX_THREADS: 100
+      SERVER_TOMCAT_MIN_SPARE_THREADS: 10
+      SERVER_TOMCAT_ACCEPT_COUNT: 200
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 15
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 3
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx1280m -XX:MaxDirectMemorySize=256m
+      TICKETING_ASYNC_RESERVE_ENABLED: "true"
+      TICKETING_ASYNC_RESERVE_ROLLOUT_PERCENT: 100
+      TICKETING_KAFKA_CONSUMER_CONCURRENCY: 1
+      STAFF_MANAGEMENT_ENABLED: "true"
+      # Keep existing imported data and the external glossary unchanged on deployment.
+      TRANSLATION_BACKFILL_SCHEDULED_ENABLED: "false"
+      TRANSLATION_GLOSSARY_SYNC_ON_STARTUP: "false"
+      # External services are configured in the private external-services.env file.
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8080/health]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 90s
+    mem_limit: 2g
+    restart: unless-stopped
+    logging: *logging
+
+  mysql:
+    image: mysql:8.4
+    env_file: ./deploy/azure/secrets/mysql.env
+    environment:
+      MYSQL_DATABASE: danzzan_demo
+      MYSQL_USER: danzzan
+      TZ: Asia/Seoul
+    command: [--innodb-buffer-pool-size=256M, --max-connections=60, --character-set-server=utf8mb4, --collation-server=utf8mb4_0900_ai_ci]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./deploy/azure/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./deploy/azure/secrets/02-demo-seed.sql:/docker-entrypoint-initdb.d/02-demo-seed.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$${MYSQL_ROOT_PASSWORD}" mysql -h127.0.0.1 --protocol=TCP -uroot -Nse "SELECT 1 FROM danzzan_demo.festival_setting LIMIT 1" >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    mem_limit: 1g
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, "yes", --maxmemory, 192mb, --maxmemory-policy, noeviction]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 384m
+    restart: unless-stopped
+    logging: *logging
+
+  kafka:
+    image: apache/kafka:3.9.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 536870912
+      KAFKA_LOG_SEGMENT_BYTES: 67108864
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+      CLUSTER_ID: MDEyMzQ1Njc4OUFCQ0RFRg
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: [CMD-SHELL, '/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1']
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 45s
+    mem_limit: 1536m
+    restart: unless-stopped
+    logging: *logging
+
+  kafka-init:
+    image: apache/kafka:3.9.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [/bin/bash, -ec]
+    command:
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1 --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic ticket.issue.requested.v1.dlq --partitions 3 --replication-factor 1
+    mem_limit: 512m
+    restart: "no"
+    logging: *logging
+
+volumes:
+  mysql_data:
+  redis_data:
+  kafka_data:

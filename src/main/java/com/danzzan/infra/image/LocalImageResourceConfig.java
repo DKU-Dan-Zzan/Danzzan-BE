@@ -8,7 +8,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.resource.PathResourceResolver;
 
 @Configuration
-@Profile("local-storage & !prod")
+@Profile("local-storage & !prod & !azure")
 @RequiredArgsConstructor
 public class LocalImageResourceConfig implements WebMvcConfigurer {
     private final LocalImageStorage storage;

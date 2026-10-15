@@ -1,5 +1,7 @@
 package com.danzzan.domain.admin.map.dto.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.danzzan.domain.boothmap.model.entity.PubImage;
 import lombok.AllArgsConstructor;
@@ -11,6 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class AdminPubImageResponse {
     private Long id;
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String imageUrl;
     @JsonProperty("isMain")
     private boolean isMain;

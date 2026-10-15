@@ -265,3 +265,37 @@ Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·�
 - 20개 콘텐츠 테이블의 정규화 데이터 해시는 배포 전후 및 UI 확인 후 일치했다. 자동 번역 backfill·시작 시 glossary sync는 비활성 상태를 유지한다. Blob 쓰기·삭제, DB 스키마 변경은 수행하지 않았다.
 
 복구 자료는 `/opt/danzzan/deployment-backups/20261014-theme-policy/`(권한 700)에 보관한다. 이전 소스 `sources-before.tgz`, 변경/전체 manifest, `release-info.json`, 빌드·배포 로그와 데이터·설정 비교 결과를 포함한다. 이전 이미지는 `danzzan-be:rollback-20261014-theme-policy`, `danzzan-fe:rollback-20261014-theme-policy`다. 복구 시 해당 이미지를 지정해 app·frontend만 재생성한다. 소스 복구는 이전 아카이브로 삭제된 보정기를 복원하고 신규 `ThemeColorPolicy.java`도 manifest에 따라 구분한다. DB 복원이나 볼륨 삭제는 필요하지 않다.
+
+## 동료 변경 반영: AI 배경 생성·회원가입 복구 (2026-10-15)
+
+배포 ID는 `20261015-colleague-signup-background`이며 서비스 주소는 `https://danzzan.koreacentral.cloudapp.azure.com`이다. 두 저장소 모두 기존 작업 브랜치의 upstream을 fetch한 뒤 fast-forward로 반영했다. 충돌이나 로컬 코드 수정은 없었다.
+
+| 대상 | 이전 HEAD | 배포 HEAD | 반영 내용 |
+| --- | --- | --- | --- |
+| BE | `4e807f8` | `e16c05a559187a94c675aa629ab7a637c32819ab` | 공식 포스터 기반 AI 배경 이미지 생성, 회원가입 네이버 ID 검증·저장 복구 |
+| FE | `2ab73ad6` | `f1e0839da0e27e5391e25c166d99932dd8ffa8ed` | AI 배경 생성 대기·전체 적용 흐름 개선, 모바일 티켓팅 OFF 배경 암전 완화, 네이버 ID 입력 복구 |
+
+### 실행 계약과 사전 확인
+
+- 배경 추천은 공식 포스터를 OpenAI Images Edit API에 전달해 새 이미지를 생성한다. 단순 포스터 자르기를 대체하며, 결과는 티켓용 800×360 및 마감 안내용 720×1440 JPEG로 처리한다. 서버 시작만으로 AI를 호출하지 않는다.
+- 코드 기본값은 `OPENAI_BACKGROUND_MODEL=gpt-image-1.5`, `OPENAI_BACKGROUND_BASE_URL=https://api.openai.com/v1/images/edits`다. 기존 `OPENAI_API_KEY`가 설정되어 있는지만 확인했으며 값은 출력하지 않았다. 이번 배포에서 비공개 환경 파일은 수정하지 않았다.
+- BE 외부 요청 제한은 150초, FE 요청 대기와 Nginx의 배경 추천 전용 경로 `/api/admin/festival/ticketing-background/recommend`의 읽기 제한은 180초다. 일반 API 경로의 제한과 구분한다.
+- 회원가입은 네이버 ID와 재입력을 검증하고 공백을 정리한 값을 저장한다. 운영 DB `danzzan_fall_demo.users.naver_id`가 이미 nullable `varchar(100)`임을 확인했다. SQL 이관이나 `ddl-auto` 변경 없이 배포했다.
+- 자동 번역 backfill과 시작 시 glossary sync가 꺼져 있음을 확인하고 그대로 유지했다.
+
+### 이번 배포에서 확인한 증거
+
+1. 배포 HEAD와 PR HEAD가 같은 것을 확인한 뒤 [BE CI](https://github.com/DKU-Dan-Zzan/Danzzan-BE/actions/runs/38697437083/job/116297238200)의 Java 17 `clean test bootJar` 성공을 확인했다. 로컬 BE 전체 테스트를 새로 실행한 것은 아니다.
+2. FE는 로컬에서 lint, 앱·테스트 타입 검사, 전체 테스트 **131개 파일·679개**, 프로덕션 빌드를 새로 실행해 통과했다. [FE quality CI](https://github.com/DKU-Dan-Zzan/Danzzan-FE/actions/runs/38697435431/job/116297233294), [구조 검사 CI](https://github.com/DKU-Dan-Zzan/Danzzan-FE/actions/runs/38697435456/job/116297232958)와 두 저장소 GitGuardian 검사도 해당 HEAD에서 성공했다. 로컬 빌드에는 Browserslist 데이터 갱신 안내가 남았다.
+3. 전체 빌드 입력 979개 경로를 비교해 변경된 26개 파일과 더 이상 쓰지 않는 Java 소스 1개 삭제를 반영했다. 전송 후 및 배포 후 전체 입력 해시가 로컬과 일치했다. 이미지 파일·SQL·비공개 환경 파일은 변경하지 않았다.
+4. VM에서 BE와 FE 이미지를 순차 빌드했다. `app`을 `--no-build --no-deps --force-recreate --wait`로 교체해 healthy를 확인한 뒤 `frontend`를 교체했다. 실행 이미지와 빌드 이미지 ID 일치 및 Nginx 설정 검사 성공을 확인했다.
+5. HTTPS `/`, `/notice`, `/admin/theme`, `/admin/theme/select`, `/ticket/signup`, `/api/health`, `/api/festival/settings`, `/api/home/1/images`가 모두 200이었다. API 응답은 JSON 파싱도 확인했다. 실제 브라우저에서 홈의 로고·포스터 로드와 회원가입 첫 인증 화면 표시를 확인했다.
+6. 게시물·이미지 참조·축제 설정·테마 등 20개 콘텐츠 테이블의 데이터 해시가 배포 전후 일치했다. MySQL·Redis·Kafka 컨테이너 ID, Compose와 비공개 설정 파일 해시도 모두 유지됐다. Blob 업로드·삭제, 계정 생성 및 DB 초기화는 실행하지 않았다.
+
+실제 유료 AI 이미지 생성과 학교·SMS 인증을 거치는 회원가입 완료는 이번 운영 검증 범위에 포함하지 않았다. 따라서 배포·기본 조회 정상과 전체 사용자 흐름의 실서비스 성공을 구분한다. AI 모델 접근 권한·실제 생성 지연은 이후 실제 요청으로 확인해야 한다.
+
+### 복구 자료
+
+VM의 `/opt/danzzan/deployment-backups/20261015-colleague-signup-background/`에 권한 700으로 배포 전 변경 대상 소스 `sources-before.tgz`, 이전 경로 목록, 전체 입력 manifest, `release-info.json`, 빌드·배포 로그, 데이터·설정 비교 기록 및 `verification.json`을 보관했다. `rollout-success`는 배포 검증 완료 표식이다. 소스 아카이브는 전체 저장소 백업이 아니라 이번 변경 대상의 이전 버전이다.
+
+이전 실행 이미지 태그는 `danzzan-be:rollback-20261015-colleague-signup-background`와 `danzzan-fe:rollback-20261015-colleague-signup-background`다. 복구할 때는 해당 이미지로 app·frontend만 `--no-build --no-deps --force-recreate` 재생성하고 health를 확인한다. 소스도 되돌려야 하면 이전 경로 목록과 아카이브를 대조해 신규 파일과 삭제 파일을 구분한다. 이번 배포에는 스키마 변경이 없어 DB 복원이나 볼륨 삭제가 필요하지 않다.

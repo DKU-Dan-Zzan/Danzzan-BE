@@ -299,3 +299,41 @@ Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·�
 VM의 `/opt/danzzan/deployment-backups/20261015-colleague-signup-background/`에 권한 700으로 배포 전 변경 대상 소스 `sources-before.tgz`, 이전 경로 목록, 전체 입력 manifest, `release-info.json`, 빌드·배포 로그, 데이터·설정 비교 기록 및 `verification.json`을 보관했다. `rollout-success`는 배포 검증 완료 표식이다. 소스 아카이브는 전체 저장소 백업이 아니라 이번 변경 대상의 이전 버전이다.
 
 이전 실행 이미지 태그는 `danzzan-be:rollback-20261015-colleague-signup-background`와 `danzzan-fe:rollback-20261015-colleague-signup-background`다. 복구할 때는 해당 이미지로 app·frontend만 `--no-build --no-deps --force-recreate` 재생성하고 health를 확인한다. 소스도 되돌려야 하면 이전 경로 목록과 아카이브를 대조해 신규 파일과 삭제 파일을 구분한다. 이번 배포에는 스키마 변경이 없어 DB 복원이나 볼륨 삭제가 필요하지 않다.
+
+## FE 내 정보·로그인 안내 배경 분리 배포 (2026-10-21)
+
+배포 ID `20261021-account-background-48d0e8a0`으로 FE 커밋 `48d0e8a0f7ecca82c37165059030756625c5b9ce`를 반영했다. 티켓팅 OFF 배경을 내 정보·로그인 안내에도 공유하던 연결을 제거하고, 두 계정 화면은 공식 축제 포스터를 사용하도록 분리했다. 관리자 미리보기와 설명도 함께 수정했다. 상세 화면 변경과 로컬 테스트는 [FE Azure 이미지 연동 문서](../../Danzzan-FE/docs/azure-image-integration.md)의 같은 날짜 기록에 있다. 상대 링크는 두 저장소를 나란히 둔 로컬 배치용이다.
+
+### 배포와 검증
+
+- 기존 SSH 연결이 시간 초과되어 Azure VM Run Command로 진행했다. SSH 방화벽 규칙이나 인증 설정을 변경하지 않았다.
+- 이전 FE 이미지와 변경 대상 8개 파일을 백업한 뒤 같은 8개 파일만 전송했다. 사전 소스 해시 검사 557개 경로 중 `.env.example`, `nginx.conf`는 로컬 기준과 달랐으며 덮어쓰지 않았다. 수정 대상 파일의 변경 전·후 해시는 각각 기준 커밋·배포 커밋과 일치했다. Azure 런타임은 `Dockerfile.azure`와 `nginx.azure.conf`를 사용한다.
+- VM에서 FE Docker 이미지를 빌드하고 `frontend`만 `--no-build --no-deps --force-recreate`로 교체했다. `app`·MySQL·Redis·Kafka 컨테이너 ID와 Compose·기존 비공개 환경 파일 해시는 유지됐다. BE 코드·DB 스키마·Blob 파일 변경은 없었다. DB 덤프 해시 비교는 이번에 별도로 실행하지 않았다.
+- 로컬 관련 4개 파일·108개 테스트, 앱·테스트 타입 검사, 변경 파일 ESLint 및 프로덕션 빌드가 통과했다. VM Nginx 설정 검사와 HTTPS `/`, `/mypage`, `/ticket`, `/admin/theme`, `/api/health` 요청도 성공했다.
+- 외부 `/mypage`·`/api/health`의 HTTP 200과 실제 운영 비로그인 안내의 공식 포스터·로고 로드를 확인했다. 로그인 후 내 정보 화면은 자동 테스트 범위이며 이번 운영 브라우저에서는 재검증하지 않았다.
+
+실행 FE 이미지 ID는 `sha256:a0ef0b53323454ea78308f16492f66dc2aefe9e829f7fd9952d32d0287fe0182`다. 이미지 내부 `assets/MyPage-oes32tms.js`와 외부 HTTPS 응답의 SHA-256은 모두 `031054017d639930bdb5e1890c40933c4cb7d8123aff564a091ff5f76f4b6dde`로 일치했다.
+
+### 복구 자료와 절차
+
+VM `/opt/danzzan/deployment-backups/20261021-account-background-48d0e8a0/`에 다음 자료를 보관한다. 비밀값·환경 파일 내용·DB 덤프는 이 문서에 포함하지 않는다.
+
+- `sources-before.tgz`: 변경 대상 8개 파일의 배포 전 버전. 전체 저장소 백업이 아니다.
+- `changes.tgz`, `before.json`: 전송 파일과 배포 전 컨테이너 ID·설정 해시·배포 파일 기대 해시.
+- `rollback.yml`: 이전 FE 이미지 `danzzan-fe:rollback-20261021-account-background-48d0e8a0`를 지정한 override.
+- `deploy.sh`, `verify.py`, 빌드·활성화·Nginx 검사 로그, `deployed-image.txt`: 실행 및 확인 자료.
+- `status`: 배포 완료 시 `complete`. 이번 배포에서 자동 롤백은 실행되지 않았다.
+
+이미지 복구가 필요하면 VM에서 아래 명령으로 frontend만 교체한다. 실행 전에 이후 배포가 있는지 확인하고, 현재 이미지와 추가 소스 변경을 별도로 보존한다.
+
+```sh
+cd /opt/danzzan/Danzzan-BE
+sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
+  -f docker-compose.azure.yml \
+  -f /opt/danzzan/deployment-backups/20261021-account-background-48d0e8a0/rollback.yml \
+  up -d --no-build --no-deps --force-recreate frontend
+curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/mypage >/dev/null
+curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
+```
+
+이미지 복구만으로 VM 소스는 되돌아가지 않는다. 다음 빌드에서도 이전 동작을 유지해야 한다면 추가 변경을 보존한 후 `sources-before.tgz`의 8개 파일을 `/opt/danzzan/Danzzan-FE`에 복원한다. DB 복원이나 볼륨 삭제는 필요 없다. 이 절차는 복구용으로 기록했으며 이번 정상 배포 후 실행하지 않았다.

@@ -337,3 +337,52 @@ curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
 ```
 
 이미지 복구만으로 VM 소스는 되돌아가지 않는다. 다음 빌드에서도 이전 동작을 유지해야 한다면 추가 변경을 보존한 후 `sources-before.tgz`의 8개 파일을 `/opt/danzzan/Danzzan-FE`에 복원한다. DB 복원이나 볼륨 삭제는 필요 없다. 이 절차는 복구용으로 기록했으며 이번 정상 배포 후 실행하지 않았다.
+
+## AI 색상 시안 생성 시간 제한 연장 배포 (2026-10-21)
+
+배포 ID는 `20261021-theme-timeout`이다. BE `05b18bf`, FE `59690e20`을 각 기존 Azure 작업 브랜치에 커밋·푸시한 뒤 반영했다. main 병합은 실행하지 않았다.
+
+### 변경 이유와 적용 범위
+
+배포 전 최근 24시간의 운영 진단 로그에서 색상 추천은 OpenAI 응답 처리 성공 1건·시간 초과 11건, 배경 생성은 성공 2건·시간 초과 10건으로 집계됐다. 색상 실패는 약 45초의 `OPENAI_TIMEOUT`이며 해당 로그에는 색상 검증 탈락이 없었다. OpenAI 처리 지연과 전송·연결 지연 중 어느 것이 근본 원인인지는 확정하지 못했다. 사용자가 더 긴 대기를 허용해 색상 생성의 제한을 다음과 같이 조정했다.
+
+| 구간 | 이전 | 이번 배포 |
+| --- | --- | --- |
+| BE → OpenAI 색상 생성 요청 | 45초 | 150초 |
+| FE 색상 추천 중단 타이머 | 60초 | 180초 |
+| Nginx `/api/admin/festival/1/themes/recommend` | 일반 API 제한 75초 | 전용 경로 180초 |
+
+배경 생성은 기존 BE 150초·FE/Nginx 180초, 일반 Nginx API는 75초를 유지했다. 연결 수립 제한·모델·프롬프트·색상 검증 규칙·포스터 전송 방식은 변경하지 않았으며 자동 유료 재시도도 추가하지 않았다. 이번 배포는 더 오래 기다릴 수 있게 하는 변경이며 AI 성공률 개선을 입증한 결과는 아니다.
+
+### 배포와 검증
+
+- 로컬 BE `ThemeRecommendationTest` 24개, FE `AdminTheme.test.tsx` 64개가 통과했다. BE는 150초 요청 제한과 시간 초과 오류 반환·호출 1회를 확인했다. FE는 60초·150초에는 취소하지 않고 180초에 취소하는 가상 시간 테스트를 추가했다. FE 타입 검사·변경 파일 ESLint·프로덕션 빌드와 두 저장소의 diff 검사가 통과했다.
+- Azure VM Run Command로 기준 빌드 입력 969개 경로의 해시를 비교했고 모두 일치했다. 별도 전송 전 검사에서 VM의 BE 테스트 파일이 로컬과 달라, 테스트 파일은 덮어쓰지 않고 실행에 필요한 BE Java 소스·FE 화면 소스·Nginx 설정 3개만 전달했다. 테스트 변경은 Git에 포함돼 있다.
+- `application-prod.yml`의 `ddl-auto: validate`와 이를 덮어쓰는 환경 설정이 없음을 확인했다. SQL 이관·DB 복원·Blob 변경은 실행하지 않았다.
+- 이전 두 이미지를 보관한 뒤 VM에서 BE·FE Docker 빌드를 수행했다. `app`만 교체해 healthy를 기다린 다음 `frontend`를 교체했다. 실패 시 이전 app·frontend 이미지와 변경 전 소스를 복원하는 스크립트를 준비했다.
+- 실행 중인 BE JAR에서 색상 추천 클라이언트의 `TIMEOUT=Duration.ofSeconds(150)` 바이트코드를 확인했다. 실행 프론트의 AdminTheme 번들에서 180초 중단 설정, Nginx 실행 설정에서 색상·배경 전용 경로 180초와 일반 API 75초를 확인했다. 실행 이미지 ID는 빌드한 이미지와 일치했다.
+- Nginx 설정 검사와 HTTPS `/`, `/mypage`, `/admin/theme`, `/api/health` 요청이 성공했다. 외부에서 받은 AdminTheme 번들의 해시도 실행 이미지 내부 파일과 일치했다.
+- MySQL·Redis·Kafka 컨테이너 ID와 Compose·기존 비공개 환경 파일 해시는 유지됐다. 데이터 내용의 덤프 해시 비교는 별도로 수행하지 않았다.
+
+실제 유료 AI 생성 요청은 이번 배포 검증에서 보내지 않았다. 따라서 45초 이후의 실제 생성 성공, 전체 적용·이미지 업로드 성공 및 장기 실패율은 미검증이다. 후속 실제 요청의 처리 시간과 결과를 확인해야 한다.
+
+### 복구 자료와 절차
+
+VM `/opt/danzzan/deployment-backups/20261021-theme-timeout/`에 변경 전 실행 파일 3개의 `sources-before.tgz`, 컨테이너 ID·설정/파일 해시·코드 커밋을 담은 `before.json`, `rollback.yml`, 배포·검증 스크립트와 로그, 실행 이미지·제한값·프론트 번들 해시를 담은 `verification.json`을 보관한다. `status=complete`는 배포 검증 완료를 뜻한다.
+
+롤백 이미지 태그는 `danzzan-be:rollback-20261021-theme-timeout`, `danzzan-fe:rollback-20261021-theme-timeout`이다. 이후 배포가 없는지 확인하고 현재 이미지·추가 변경을 보존한 뒤, VM에서 아래 명령으로 BE를 healthy 상태까지 복구하고 FE를 재생성한다. FE 재생성은 복구한 BE의 내부 주소를 Nginx에 반영하는 데도 필요하다.
+
+```sh
+cd /opt/danzzan/Danzzan-BE
+sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
+  -f docker-compose.azure.yml \
+  -f /opt/danzzan/deployment-backups/20261021-theme-timeout/rollback.yml \
+  up -d --no-build --no-deps --force-recreate --wait --wait-timeout 180 app
+sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
+  -f docker-compose.azure.yml \
+  -f /opt/danzzan/deployment-backups/20261021-theme-timeout/rollback.yml \
+  up -d --no-build --no-deps --force-recreate frontend
+curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
+```
+
+소스까지 복구해야 하면 추가 변경을 보존한 후 `sources-before.tgz`를 `/opt/danzzan` 기준으로 복원한다. 아카이브는 전체 저장소 백업이 아니다. 스키마 변경이 없어 DB 복원이나 볼륨 삭제는 필요 없다. 이 롤백 명령은 복구용으로 기록했으며 정상 배포 후 실행하지 않았다.

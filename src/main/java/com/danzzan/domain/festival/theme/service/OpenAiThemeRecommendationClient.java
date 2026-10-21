@@ -61,16 +61,19 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
     private final HttpClient http;
     private final String apiKey;
     private final String model;
+    private final String themeReasoningEffort;
     private final URI endpoint;
 
     public OpenAiThemeRecommendationClient(ObjectMapper mapper,
                                            @Value("${openai.api-key:}") String apiKey,
                                            @Value("${openai.theme-model:gpt-4o-mini}") String model,
+                                           @Value("${openai.theme-reasoning-effort:}") String themeReasoningEffort,
                                            @Value("${openai.base-url:https://api.openai.com/v1/responses}") String endpoint) {
         this.mapper = mapper;
         this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
         this.apiKey = apiKey;
         this.model = model;
+        this.themeReasoningEffort = themeReasoningEffort;
         this.endpoint = URI.create(endpoint);
     }
 
@@ -87,17 +90,20 @@ public class OpenAiThemeRecommendationClient implements ThemeRecommendationClien
             String dataUrl = "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(poster);
             String userText = "Extracted poster colors: " + String.join(", ", sourceColors)
                     + ". Administrator-selected base color: " + selectedBaseColor + ".";
-            Map<String, Object> payload = Map.of(
-                    "model", model,
-                    "store", false,
-                    "max_output_tokens", 2400,
-                    "input", List.of(
-                            Map.of("role", "developer", "content", INSTRUCTIONS),
-                            Map.of("role", "user", "content", List.of(
-                                    Map.of("type", "input_text", "text", userText),
-                                    Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))),
-                    "text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_candidates",
-                            "strict", true, "schema", schema())));
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("model", model);
+            payload.put("store", false);
+            payload.put("max_output_tokens", 2400);
+            payload.put("input", List.of(
+                    Map.of("role", "developer", "content", INSTRUCTIONS),
+                    Map.of("role", "user", "content", List.of(
+                            Map.of("type", "input_text", "text", userText),
+                            Map.of("type", "input_image", "image_url", dataUrl, "detail", "high")))));
+            payload.put("text", Map.of("format", Map.of("type", "json_schema", "name", "festival_theme_candidates",
+                    "strict", true, "schema", schema())));
+            if (themeReasoningEffort != null && !themeReasoningEffort.isBlank()) {
+                payload.put("reasoning", Map.of("effort", themeReasoningEffort));
+            }
             HttpRequest request = HttpRequest.newBuilder(endpoint)
                     .timeout(TIMEOUT)
                     .header("Authorization", "Bearer " + apiKey)

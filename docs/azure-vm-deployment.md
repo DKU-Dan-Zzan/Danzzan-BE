@@ -386,3 +386,73 @@ curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
 ```
 
 소스까지 복구해야 하면 추가 변경을 보존한 후 `sources-before.tgz`를 `/opt/danzzan` 기준으로 복원한다. 아카이브는 전체 저장소 백업이 아니다. 스키마 변경이 없어 DB 복원이나 볼륨 삭제는 필요 없다. 이 롤백 명령은 복구용으로 기록했으며 정상 배포 후 실행하지 않았다.
+
+## OpenAI 키·색상 모델 교체 배포 (2026-10-21)
+
+배포 ID는 `20261021-theme-model-key`다. 색상 생성의 150초 시간 초과가 재발한 뒤 사용자 요청에 따라 OpenAI API 키를 교체하고 색상 추천 모델을 `gpt-6-luna`로 변경했다. 이번 기록은 설정 적용과 서버 상태 확인에 관한 것이며, 시간 초과의 근본 원인이나 장기 성공률 개선을 확정한 결과는 아니다.
+
+### 적용 설정과 코드
+
+VM `/opt/danzzan/Danzzan-BE/deploy/azure/secrets/external-services.env`에서 다음 항목만 변경했다. 실제 키는 Git과 문서에 포함하지 않는다.
+
+| 항목 | 배포 전 | 배포 후 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 기존 키 | 사용자가 새로 발급한 키 |
+| `OPENAI_THEME_MODEL` | `gpt-4o-mini` | `gpt-6-luna` |
+| `OPENAI_THEME_REASONING_EFFORT` | 미설정 | `none` |
+
+- `OpenAiThemeRecommendationClient`에 선택적인 `openai.theme-reasoning-effort` 설정을 추가했다. 값이 있을 때만 Responses API 요청에 `reasoning.effort`를 보낸다. 빈 값이면 기존 요청 형식을 유지한다.
+- `application.yml`에서 `OPENAI_THEME_REASONING_EFFORT`를 연결했다. 공통 모델 기본값은 기존 `gpt-4o-mini`로 유지하고, Azure의 명시적인 환경 설정으로 `gpt-6-luna`를 선택한다. 로컬에서 같은 모델을 쓰려면 모델과 추론 설정을 함께 지정해야 한다.
+- Azure 환경 파일 예시는 `gpt-6-luna`와 `none` 조합으로 갱신했다. 기존 모델로 되돌릴 때는 추론 설정도 해당 모델 지원 여부에 맞게 비워야 한다.
+- 색상 요청의 150초 제한, FE·Nginx의 180초 제한, 프롬프트·포스터 입력·JSON Schema·2,400 출력 토큰 한도와 팔레트 검증 규칙은 유지했다. 자동 재시도는 추가하지 않았다.
+- 배경 생성 모델과 엔드포인트는 변경하지 않았다. 두 클라이언트가 같은 `OPENAI_API_KEY` 설정을 사용하므로 새 키는 배경 생성에도 적용된다.
+
+### 배포 절차와 확인 결과
+
+1. 로컬 비공개 환경 파일의 키 존재 여부, 모델·추론 설정과 공식 엔드포인트를 확인했다. 새 키로 OpenAI `GET /v1/models/gpt-6-luna`를 조회해 HTTP 200과 대상 모델 ID를 확인했다. 이는 모델 조회 권한 확인이며 생성 요청의 성공이나 계정 한도를 입증하지 않는다.
+2. Azure VM Run Command로 기존 컨테이너 ID와 소스·설정 파일 해시를 기록했다. 수정할 Java 클라이언트와 `application.yml`의 VM 내용이 로컬 HEAD 기준과 같은지 확인하고, 전송 직전 변경 여부를 다시 검사했다.
+3. VM에서 일회용 RSA 공개키를 생성하고 새 API 키를 OAEP/SHA-256으로 암호화해 전달했다. 평문 키를 명령 출력이나 전송 스크립트에 넣지 않았다. VM의 비공개 환경 파일은 권한 `600`으로 갱신했고, 정상 배포 후 일회용 개인키를 삭제했다.
+4. 변경 전 소스 2개·비공개 환경 파일·BE 이미지를 보관한 뒤 소스 2개만 전달해 `app` 이미지를 빌드했다. 빌드 성공 후 환경 설정을 갱신하고 `app`만 재생성해 healthy를 기다렸다. FE 이미지는 유지하고 Nginx 설정 검사와 reload로 새 BE 주소를 반영했다.
+5. 배포 스크립트의 `status=complete`, 실행 컨테이너의 `gpt-6-luna`·`none`, 키가 이전 값과 다르고 새 환경 파일과 일치함을 확인했다. 실행 BE 이미지 ID는 `sha256:e7a7a1ae3038d05c9e9bc868884ee37a025f5dcad89adc8b076d9afe5f1eea59`다.
+6. MySQL·Redis·Kafka 컨테이너 ID, Compose와 다른 비공개 환경 파일의 해시를 비교해 유지됨을 확인했다. 외부 서비스 환경 파일에서도 위 3개 항목 외의 값은 같았다. SQL 적용·DB 복원·Blob 저장/삭제는 수행하지 않았으며 데이터 내용 전체의 해시 비교는 하지 않았다.
+
+로컬 `ThemeRecommendationTest`는 26개 통과했다. 추가 테스트는 `gpt-6-luna`·`none` 요청에서도 이미지 입력과 strict JSON Schema가 유지되는지, 추론 설정이 비어 있으면 해당 필드가 빠지는지를 확인한다. 배포 전 동일 코드로 Gradle 테스트 명령을 다시 실행했으며 기존 성공 결과를 `UP-TO-DATE`로 재사용했다. VM의 Docker 빌드·Nginx 설정 검사·app health도 통과했다. 배포 진행 중 공개 HTTPS `/api/health`에서 HTTP 200을 확인했으며 이를 새 이미지 교체 후 확인으로 혼동하지 않는다.
+
+### 실제 시안 검증의 범위
+
+사용자는 실제 시안 생성 성공을 알렸고 관리자 화면에서 추천 완료·원본형 시안을 확인했다. 다만 당시 배포 상태 조회는 빌드 중이었으므로, 이 결과를 새 키·모델 적용 후의 성공으로 귀속하지 않았다. 새 컨테이너 적용 확인 후 별도 검증 화면에서 대표색 추출을 시작했지만 사용자가 검증 중단을 요청해 기준색 선택·추가 AI 생성·저장·전체 적용은 실행하지 않았다.
+
+따라서 **새 키·모델의 운영 적용과 서버 정상 상태는 확인했고, 새 설정을 사용하는 실제 시안 생성과 두 배경 생성의 성공 여부는 이번 배포 검증 범위에 포함하지 않는다.** `verification.json`의 `generationVerified`도 `false`다. 이후 문서화·커밋 과정에서도 추가 시안 생성 검증을 하지 않았다.
+
+### 복구 자료와 절차
+
+VM `/opt/danzzan/deployment-backups/20261021-theme-model-key/`에 다음 자료를 보관한다. 디렉터리는 권한 `700`이며 비공개 환경 백업은 권한 `600`이다.
+
+- `before.json`: 변경 전 컨테이너 ID와 소스·설정 해시.
+- `sources-before.tgz`: Java 클라이언트와 `application.yml`의 변경 전 내용. 전체 저장소 백업이 아니다.
+- `external-services.env.before`: 변경 전 비공개 환경 파일. 기존 API 키가 포함되므로 출력·공유·Git 추가를 하지 않는다.
+- `rollback.yml`: `danzzan-be:rollback-20261021-theme-model-key` 이미지를 지정한 override.
+- `payload.json`: 전송 소스와 암호화된 키. 평문 키는 포함하지 않는다.
+- `deploy.sh`, `activate.py`, `verify.py`, 빌드·활성화·설정 검사 로그, `verification.json`, `status`: 배포와 확인 자료.
+
+정상 배포 시 자동 복구는 실행되지 않았다. 아래는 **실행하지 않은 복구 절차**다. 이후 배포·설정 변경을 먼저 확인하고 현재 상태를 별도로 보관한 뒤 사용한다. 전체 환경 파일 복원은 다른 외부 서비스의 이후 변경도 되돌리므로, 후속 변경이 있다면 필요한 OpenAI 항목만 복원한다. 기존 키가 폐기됐다면 백업의 키를 복원하지 말고 유효한 새 키를 유지하면서 모델을 `gpt-4o-mini`, 추론 설정을 빈 값으로 조정해야 한다.
+
+후속 변경이 없고 기존 키도 유효하여 전체 복원이 적절한 경우:
+
+```sh
+cd /opt/danzzan/Danzzan-BE
+sudo cp /opt/danzzan/deployment-backups/20261021-theme-model-key/external-services.env.before \
+  deploy/azure/secrets/external-services.env
+sudo chmod 600 deploy/azure/secrets/external-services.env
+sudo tar -xzf /opt/danzzan/deployment-backups/20261021-theme-model-key/sources-before.tgz \
+  -C /opt/danzzan/Danzzan-BE
+sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
+  -f docker-compose.azure.yml \
+  -f /opt/danzzan/deployment-backups/20261021-theme-model-key/rollback.yml \
+  up -d --no-build --no-deps --force-recreate --wait --wait-timeout 180 app
+sudo docker exec danzzan-azure-frontend-1 nginx -t
+sudo docker exec danzzan-azure-frontend-1 nginx -s reload
+curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
+```
+
+DB 복원이나 볼륨 삭제는 필요 없다. 이 복구 명령은 AI 생성 요청을 보내지 않는다.

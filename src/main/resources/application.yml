@@ -158,6 +158,7 @@ octomo:
 openai:
   api-key: ${OPENAI_API_KEY:}
   theme-model: ${OPENAI_THEME_MODEL:gpt-4o-mini}
+  theme-reasoning-effort: ${OPENAI_THEME_REASONING_EFFORT:}
   base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1/responses}
   background-model: ${OPENAI_BACKGROUND_MODEL:gpt-image-1.5}
   background-base-url: ${OPENAI_BACKGROUND_BASE_URL:https://api.openai.com/v1/images/edits}

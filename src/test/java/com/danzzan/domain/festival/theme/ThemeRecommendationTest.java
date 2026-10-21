@@ -50,6 +50,7 @@ class ThemeRecommendationTest {
 
     @Test void allows150SecondsForThemeGenerationAndStillReportsTimeout() throws Exception {
         var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "test-model",
+                "",
                 "https://api.openai.com/v1/responses");
         var http = mock(java.net.http.HttpClient.class);
         ReflectionTestUtils.setField(client, "http", http);
@@ -501,7 +502,8 @@ class ThemeRecommendationTest {
     }
 
     @Test void missingKeyDoesNotCallOpenAi() {
-        var client = new OpenAiThemeRecommendationClient(mapper, "", "gpt-4o-mini", "https://api.openai.com/v1/responses");
+        var client = new OpenAiThemeRecommendationClient(mapper, "", "gpt-4o-mini", "",
+                "https://api.openai.com/v1/responses");
         assertEquals("OPENAI_KEY_MISSING", assertThrows(ThemeRecommendationException.class,
                 () -> client.recommend(png, input.sourceColors(), input.selectedBaseColor())).getCode());
     }
@@ -512,6 +514,7 @@ class ThemeRecommendationTest {
         try (MockWebServer server = new MockWebServer()) {
             server.enqueue(new MockResponse().setResponseCode(500).setBody("SENTINEL_UPSTREAM_BODY"));
             var client = new OpenAiThemeRecommendationClient(mapper, "sentinel-secret-key", "test-model",
+                    "",
                     server.url("/v1/responses").toString());
 
             assertEquals("OPENAI_MODEL_ERROR", assertThrows(ThemeRecommendationException.class,
@@ -533,6 +536,7 @@ class ThemeRecommendationTest {
         try (MockWebServer server = new MockWebServer()) {
             server.enqueue(new MockResponse().setResponseCode(200).setBody(completed(mapper.writeValueAsString(response()))));
             var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "gpt-4o-mini",
+                    "",
                     server.url("/v1/responses").toString());
             assertEquals(response(), client.recommend(png, input.sourceColors(), input.selectedBaseColor()));
             var request = server.takeRequest();
@@ -568,10 +572,43 @@ class ThemeRecommendationTest {
         }
     }
 
+    @Test void sendsConfiguredReasoningEffortWithoutChangingThemeSchemaOrImage() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse().setResponseCode(200).setBody(completed(mapper.writeValueAsString(response()))));
+            var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "gpt-6-luna",
+                    "none",
+                    server.url("/v1/responses").toString());
+
+            assertEquals(response(), client.recommend(png, input.sourceColors(), input.selectedBaseColor()));
+
+            JsonNode body = mapper.readTree(server.takeRequest().getBody().readUtf8());
+            assertEquals("gpt-6-luna", body.path("model").asText());
+            assertEquals("none", body.at("/reasoning/effort").asText());
+            assertTrue(body.at("/input/1/content/1/image_url").asText().startsWith("data:image/png;base64,"));
+            assertEquals("json_schema", body.at("/text/format/type").asText());
+            assertTrue(body.at("/text/format/strict").asBoolean());
+        }
+    }
+
+    @Test void omitsReasoningWhenNoEffortIsConfigured() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            server.enqueue(new MockResponse().setResponseCode(200).setBody(completed(mapper.writeValueAsString(response()))));
+            var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "gpt-4o-mini",
+                    "",
+                    server.url("/v1/responses").toString());
+
+            assertEquals(response(), client.recommend(png, input.sourceColors(), input.selectedBaseColor()));
+
+            JsonNode body = mapper.readTree(server.takeRequest().getBody().readUtf8());
+            assertTrue(body.path("reasoning").isMissingNode());
+        }
+    }
+
     @Test void monochromaticPosterStillGuidesBrandColors() throws Exception {
         try (MockWebServer server = new MockWebServer()) {
             server.enqueue(new MockResponse().setResponseCode(200).setBody(completed(mapper.writeValueAsString(response()))));
             var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "gpt-4o-mini",
+                    "",
                     server.url("/v1/responses").toString());
             var violetColors = List.of("#B6A9D8", "#A896E5", "#D9D6E8", "#776AA6", "#7D6CD6", "#7BA6D8");
 
@@ -595,6 +632,7 @@ class ThemeRecommendationTest {
     @Test void separatesRateLimitModelAndMalformedOutput() throws Exception {
         try (MockWebServer server = new MockWebServer()) {
             var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "gpt-4o-mini",
+                    "",
                     server.url("/v1/responses").toString());
             server.enqueue(new MockResponse().setResponseCode(429).setBody("rate limit"));
             assertEquals("OPENAI_RATE_LIMIT", assertThrows(ThemeRecommendationException.class,

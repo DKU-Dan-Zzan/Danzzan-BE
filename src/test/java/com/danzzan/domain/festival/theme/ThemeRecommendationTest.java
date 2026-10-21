@@ -48,6 +48,26 @@ class ThemeRecommendationTest {
     private final ThemeRecommendationRequest input = new ThemeRecommendationRequest(
             List.of("#4EB15E", "#13730C"), "#4EB15E");
 
+    @Test void allows150SecondsForThemeGenerationAndStillReportsTimeout() throws Exception {
+        var client = new OpenAiThemeRecommendationClient(mapper, "test-secret", "test-model",
+                "https://api.openai.com/v1/responses");
+        var http = mock(java.net.http.HttpClient.class);
+        ReflectionTestUtils.setField(client, "http", http);
+        when(http.send(any(java.net.http.HttpRequest.class),
+                org.mockito.ArgumentMatchers.<java.net.http.HttpResponse.BodyHandler<String>>any()))
+                .thenAnswer(invocation -> {
+                    java.net.http.HttpRequest request = invocation.getArgument(0);
+                    assertEquals(java.time.Duration.ofSeconds(150), request.timeout().orElseThrow());
+                    throw new java.net.http.HttpTimeoutException("test timeout");
+                });
+
+        var failure = assertThrows(ThemeRecommendationException.class,
+                () -> client.recommend(png, input.sourceColors(), input.selectedBaseColor()));
+        assertEquals("OPENAI_TIMEOUT", failure.getCode());
+        verify(http, times(1)).send(any(java.net.http.HttpRequest.class),
+                org.mockito.ArgumentMatchers.<java.net.http.HttpResponse.BodyHandler<String>>any());
+    }
+
     @Test void validatesRecommendationRequest() {
         try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
             var validator = factory.getValidator();

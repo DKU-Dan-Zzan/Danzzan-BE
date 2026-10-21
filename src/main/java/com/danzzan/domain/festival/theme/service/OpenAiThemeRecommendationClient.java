@@ -26,7 +26,7 @@ import java.util.UUID;
 @Component
 public class OpenAiThemeRecommendationClient implements ThemeRecommendationClient {
     private static final Logger log = LoggerFactory.getLogger(OpenAiThemeRecommendationClient.class);
-    private static final Duration TIMEOUT = Duration.ofSeconds(45);
+    private static final Duration TIMEOUT = Duration.ofSeconds(150);
     private static final int MAX_POSTER_BYTES = 5 * 1024 * 1024;
     private static final String INSTRUCTIONS = """
             Analyze the supplied official festival poster image itself, not only the supplied swatches.

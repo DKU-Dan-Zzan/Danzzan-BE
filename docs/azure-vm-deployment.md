@@ -81,7 +81,7 @@ Compose의 `mysql_data`, `redis_data`, `kafka_data` 명명 볼륨은 VM OS 영�
 
 임시 공지 **ID 2 한 건**과 해당 테스트 Blob도 정리했다. API 삭제 뒤 정확한 ID와 UUID 제목을 함께 확인하여 해당 테스트 공지와 이미지 참조 행만 물리 삭제했고, VM 관리 ID로 새 테스트 Blob 한 개를 HTTP 202로 삭제했다. Blob soft delete 3일 설정은 유지된다. seed DB는 공지 1행·계정 2행·이미지 참조 0행으로 돌아갔다. Azure `images` 컨테이너의 활성 Blob 이름과 ETag도 전후 모두 0개로 완전히 일치했다.
 
-MySQL·Redis·Kafka를 실제로 재시작한 뒤에도 MySQL 행 수, Redis AOF 테스트 키, Kafka 독립 테스트 topic의 메시지 보존을 각각 확인했다. 검증용 Redis 키와 Kafka topic은 이후 정리했다. VM을 Azure에서 할당 취소한 뒤 다시 시작하는 수준의 보존 검증은 아직 실행하지 않았다.
+MySQL·Redis·Kafka를 실제로 재시작한 뒤에도 MySQL 행 수, Redis AOF 테스트 키, Kafka 독립 테스트 topic의 메시지 보존을 각각 확인했다. 검증용 Redis 키와 Kafka topic은 이후 정리했다. 이 최초 배포 검증 당시에는 VM 할당 취소 후 재시작을 시험하지 않았다. 이후 2026-10-22 수행한 점검과 최종 상태는 [VM 중지·재시작 안내](azure-vm-stop-start.md)를 참고한다.
 
 ## HTTPS와 갱신
 

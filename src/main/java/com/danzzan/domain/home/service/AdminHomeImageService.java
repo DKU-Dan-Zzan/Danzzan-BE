@@ -2,6 +2,7 @@ package com.danzzan.domain.home.service;
 
 import com.danzzan.domain.festival.repository.FestivalSettingRepository;
 import com.danzzan.domain.home.model.dto.AdminHomeImageDto;
+import com.danzzan.domain.home.model.dto.HomeImageFirstReplaceRequest;
 import com.danzzan.domain.home.repository.HomeImageRepository;
 import com.danzzan.infra.image.ImageStorage;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +54,15 @@ public class AdminHomeImageService {
     public AdminHomeImageDto upload(Long festivalSettingId, MultipartFile file) {
         String url = stage(festivalSettingId, file).url();
         return writer.append(festivalSettingId, url);
+    }
+
+    /** Verifies the staged file before the writer locks and atomically replaces only banner zero. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public AdminHomeImageDto replaceFirst(Long festivalSettingId, HomeImageFirstReplaceRequest request) {
+        requireFestival(festivalSettingId);
+        storage.validateHomeImage(festivalSettingId, request.imageUrl());
+        return writer.replaceFirst(festivalSettingId, request.imageUrl(), request.expectedFirstImageId(),
+                request.expectedFirstImageUrl(), request.sourcePosterUrl());
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

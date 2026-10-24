@@ -1,5 +1,7 @@
 package com.danzzan.domain.festival.theme.dto;
 
+import com.danzzan.infra.image.json.ImageReferenceDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,17 +14,18 @@ import java.util.List;
 public record ThemeBundleRequest(
         @NotBlank @Size(max = 100) String name,
         @NotNull @Valid ThemeData themeData,
-        @NotBlank @Size(max = 2048) @Pattern(regexp = "https?://[^\\s]+") String sourcePosterUrl,
+        @NotBlank @Size(max = 2048) @Pattern(regexp = "(?:https?://|azure:images/)[^\\s]+")
+        @JsonDeserialize(using = ImageReferenceDeserializer.class) String sourcePosterUrl,
         @NotNull @Size(min = 1, max = 8) List<@NotBlank @Pattern(regexp = "#[0-9A-Fa-f]{6}") String> sourceColors,
         @NotBlank @Pattern(regexp = "#[0-9A-Fa-f]{6}") String selectedBaseColor,
-        @NotBlank @Size(max = 2048) String ticketCardBackgroundImageUrl,
-        @NotBlank @Size(max = 2048) String ticketingBackgroundImageUrl,
+        @NotBlank @Size(max = 2048) @JsonDeserialize(using = ImageReferenceDeserializer.class) String ticketCardBackgroundImageUrl,
+        @NotBlank @Size(max = 2048) @JsonDeserialize(using = ImageReferenceDeserializer.class) String ticketingBackgroundImageUrl,
         @Valid HomeBanner homeBanner
 ) {
     public record HomeBanner(
-            @NotBlank @Size(max = 2048) String imageUrl,
+            @NotBlank @Size(max = 2048) @JsonDeserialize(using = ImageReferenceDeserializer.class) String imageUrl,
             @Positive Long expectedFirstImageId,
-            @Size(max = 2048) String expectedFirstImageUrl
+            @Size(max = 2048) @JsonDeserialize(using = ImageReferenceDeserializer.class) String expectedFirstImageUrl
     ) {}
 
     public ThemeBundleRequest(String name, ThemeData themeData, String sourcePosterUrl, List<String> sourceColors,

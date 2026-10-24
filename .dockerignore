@@ -13,3 +13,5 @@ src/test
 .env
 .env.*
 !.env.example
+deploy/azure/secrets
+*.pem

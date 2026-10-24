@@ -2,6 +2,7 @@ package com.danzzan.domain.home.controller;
 
 import com.danzzan.domain.home.model.dto.AdminHomeImageDto;
 import com.danzzan.domain.home.model.dto.HomeBannerPreviewRequest;
+import com.danzzan.domain.home.model.dto.HomeImageFirstReplaceRequest;
 import com.danzzan.domain.home.service.HomeBannerPreviewService;
 import jakarta.validation.Valid;
 import com.danzzan.domain.home.model.dto.HomeImageOrderRequest;
@@ -42,6 +43,12 @@ public class AdminHomeImageController {
     @ResponseStatus(HttpStatus.CREATED)
     public AdminHomeImageDto upload(@PathVariable Long festivalSettingId, @RequestPart("file") MultipartFile file) {
         return service.upload(festivalSettingId, file);
+    }
+
+    @PutMapping("/first")
+    public AdminHomeImageDto replaceFirst(@PathVariable Long festivalSettingId,
+                                          @Valid @RequestBody HomeImageFirstReplaceRequest request) {
+        return service.replaceFirst(festivalSettingId, request);
     }
 
     @DeleteMapping("/{imageId}")

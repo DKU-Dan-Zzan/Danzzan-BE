@@ -17,7 +17,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Component
-@Profile("local-storage & !prod")
+@Profile("local-storage & !prod & !azure")
 public class LocalImageStorage implements ImageStorage {
     private static final int MAX_IMAGE_BYTES = 5 * 1024 * 1024;
     private static final Pattern POSTER_SUFFIX = Pattern.compile(

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpHeaders;
@@ -28,6 +29,9 @@ public class GlossarySyncService {
 
     private final AtomicReference<String> glossaryId = new AtomicReference<>();
 
+    @Value("${translation.glossary.sync-on-startup:true}")
+    private boolean syncOnStartup = true;
+
     public String getGlossaryId() {
         return glossaryId.get();
     }
@@ -37,6 +41,18 @@ public class GlossarySyncService {
      * 실패해도 예외를 밖으로 던지지 않는다. 용어집 없이도 번역은 동작해야 한다.
      */
     @EventListener(ApplicationReadyEvent.class)
+    public void syncOnStartup() {
+        if (!syncOnStartup) {
+            log.info("DeepL 용어집 기동 동기화가 비활성화되어 건너뜁니다.");
+            return;
+        }
+        sync();
+    }
+
+    /**
+     * 용어집을 즉시 동기화한다.
+     * 관리 작업 등 명시적인 호출은 기동 동기화 설정과 관계없이 실행한다.
+     */
     public void sync() {
         if (!properties.isConfigured()) {
             log.info("DEEPL_API_KEY 미설정. 용어집 동기화를 건너뜁니다.");

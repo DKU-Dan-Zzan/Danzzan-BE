@@ -40,18 +40,6 @@ public class ThemeRecommendationValidator {
         checkStatus(failures, "warning", data.status().warning(), 20, 65);
         checkStatus(failures, "danger", data.status().danger(), 345, 15);
 
-        List<String> categories = List.of(data.category().pub(), data.category().foodTruck(),
-                data.category().experience(), data.category().event(), data.category().restArea(),
-                data.category().facility());
-        List<String> categoryNames = List.of("pub", "foodTruck", "experience", "event", "restArea", "facility");
-        for (int i = 0; i < categories.size(); i++) {
-            for (int j = i + 1; j < categories.size(); j++) {
-                double distance = distance(categories.get(i), categories.get(j));
-                if (distance < 35) failures.add(new Failure("CATEGORY_DISTANCE_TOO_SMALL",
-                        Map.of(categoryNames.get(i), categories.get(i), categoryNames.get(j), categories.get(j)),
-                        Map.of("distance", distance), "distance>=35"));
-            }
-        }
         double accentDistance = distance(data.brand().primary(), data.brand().accent());
         double strongDistance = distance(data.brand().primary(), data.brand().strong());
         if (accentDistance < 20 && strongDistance < 20) failures.add(new Failure("BRAND_PRIMARY_NOT_DISTINCT",

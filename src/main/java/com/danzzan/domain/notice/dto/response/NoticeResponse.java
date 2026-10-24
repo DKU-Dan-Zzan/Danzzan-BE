@@ -1,5 +1,7 @@
 package com.danzzan.domain.notice.dto.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.danzzan.domain.notice.entity.Notice;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
@@ -25,12 +27,14 @@ public class NoticeResponse {
     /**
      * 썸네일 이미지 URL (없을 수 있음).
      */
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String thumbnailImageUrl;
 
     /**
      * 본문 이미지 URL 배열.
      * 관리자/클라이언트 공지 모두 동일하게 사용합니다.
      */
+    @JsonSerialize(contentUsing = ImageUrlSerializer.class)
     private List<String> imageUrls = new ArrayList<>();
 
     private LocalDateTime createdAt;

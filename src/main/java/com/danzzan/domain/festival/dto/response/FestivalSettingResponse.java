@@ -1,5 +1,7 @@
 package com.danzzan.domain.festival.dto.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.danzzan.domain.festival.entity.FestivalSetting;
 
 import java.time.LocalDate;
@@ -19,8 +21,8 @@ public record FestivalSettingResponse(
         List<LocalDate> operationDates,
         boolean ticketingEnabled,
         List<TicketingRoundResponse> ticketingRounds,
-        String ticketingBackgroundImageUrl,
-        String ticketCardBackgroundImageUrl
+        @JsonSerialize(using = ImageUrlSerializer.class) String ticketingBackgroundImageUrl,
+        @JsonSerialize(using = ImageUrlSerializer.class) String ticketCardBackgroundImageUrl
 ) {
 
     public static FestivalSettingResponse of(

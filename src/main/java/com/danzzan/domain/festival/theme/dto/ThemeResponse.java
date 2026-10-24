@@ -1,5 +1,7 @@
 package com.danzzan.domain.festival.theme.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.danzzan.domain.festival.theme.entity.Theme;
 
 import java.time.LocalDateTime;
@@ -11,7 +13,7 @@ public record ThemeResponse(
         Long festivalSettingId,
         String name,
         ThemeData themeData,
-        String sourcePosterUrl,
+        @JsonSerialize(using = ImageUrlSerializer.class) String sourcePosterUrl,
         String selectedBaseColor,
         List<String> sourceColors,
         LocalDateTime createdAt,

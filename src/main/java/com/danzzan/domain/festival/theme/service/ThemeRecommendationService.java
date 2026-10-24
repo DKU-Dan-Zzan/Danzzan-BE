@@ -32,7 +32,6 @@ public class ThemeRecommendationService {
     private final ThemeRecommendationClient client;
     private final ThemeRecommendationValidator validator;
     private final Environment environment;
-    private final AiThemePaletteAdjuster paletteAdjuster = new AiThemePaletteAdjuster();
 
     public ThemeRecommendationResponse recommend(Long festivalSettingId, ThemeRecommendationRequest request) {
         var setting = settings.findById(festivalSettingId).orElseThrow(() ->
@@ -68,7 +67,7 @@ public class ThemeRecommendationService {
         }));
         List<ThemeRecommendationCandidate> validCandidates = new ArrayList<>();
         for (ThemeRecommendationCandidate candidate : prioritizedCandidates) {
-            ThemeData adjusted = paletteAdjuster.adjust(candidate.themeData(), selectedBaseColor);
+            ThemeData adjusted = ThemeColorPolicy.normalize(candidate.themeData());
             ThemeRecommendationCandidate finalCandidate = adjusted == candidate.themeData() ? candidate
                     : new ThemeRecommendationCandidate(candidate.id(), candidate.name(), candidate.description(), adjusted);
             boolean nameValid = candidate.name() != null && !candidate.name().isBlank() && candidate.name().length() <= 60;
@@ -87,12 +86,6 @@ public class ThemeRecommendationService {
                 logFailure(candidate, failure);
             }
             if (!valid && detailedLogsEnabled()) {
-                boolean categoryUnresolved = failures.stream().anyMatch(f -> f.rule().equals("CATEGORY_DISTANCE_TOO_SMALL"));
-                if (categoryUnresolved && adjusted != null && adjusted.category() != null && candidate.themeData() != null
-                        && candidate.themeData().category() != null) {
-                    log.warn("AI theme exclusion candidate={} stage=PALETTE_ADJUSTMENT reason=CATEGORY_DISTANCE_UNRESOLVED",
-                            candidate.id());
-                }
                 log.warn("AI theme exclusion candidate={} stage=CANDIDATE_VALIDATION failureCount={}", candidate.id(),
                         failures.size() + (nameValid ? 0 : 1) + (descriptionValid ? 0 : 1));
             }

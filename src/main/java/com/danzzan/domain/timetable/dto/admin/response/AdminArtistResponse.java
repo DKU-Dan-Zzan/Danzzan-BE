@@ -1,5 +1,7 @@
 package com.danzzan.domain.timetable.dto.admin.response;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.danzzan.infra.image.json.ImageUrlSerializer;
 import com.danzzan.domain.timetable.model.entity.Artist;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -10,6 +12,7 @@ public class AdminArtistResponse {
     private Integer artistId;
     private String name;
     private String description;
+    @JsonSerialize(using = ImageUrlSerializer.class)
     private String imageUrl;
     private String nameEn;
     private String descriptionEn;

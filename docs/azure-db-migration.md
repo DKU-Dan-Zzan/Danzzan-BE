@@ -1,5 +1,7 @@
 # 로컬 festival_test → Azure 시연 DB 이관
 
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
 실행일: 2026-10-14 KST. 로컬 원본을 변경하지 않고 기존 Azure VM의 MySQL 컨테이너 안에 별도 DB를 복원한 뒤 앱 연결을 전환했다. Azure 관리형 MySQL 리소스를 새로 만든 작업은 아니다.
 
 ## 현재 연결과 보존한 데이터
@@ -56,16 +58,18 @@
 
 ## 이전 DB로 되돌리는 절차
 
-현재 VM에는 `/opt/danzzan/db-migration-backup-20261014/docker-compose.before-db-switch.yml`을 보관했다(디렉터리 700, 파일 600). 앱만 이전 DB로 연결하며 두 DB나 볼륨을 삭제하지 않는다. 전환 이후 새 DB에 작성한 내용은 이전 DB로 자동 합쳐지지 않는다.
+현재 VM에는 `${BACKUP_DB_MIGRATION_BACKUP_20261014_DIR}/docker-compose.before-db-switch.yml`을 보관했다(디렉터리 700, 파일 600). 앱만 이전 DB로 연결하며 두 DB나 볼륨을 삭제하지 않는다. 전환 이후 새 DB에 작성한 내용은 이전 DB로 자동 합쳐지지 않는다.
 
 이 백업은 **2026-10-14 전환 직전 설정**이다. 이후 API 키·서비스 설정을 바꿨다면 전체 사본 복원 대신 현재 Compose의 DB URL·Redis DB·Kafka 그룹 세 항목을 검토해 되돌린다. 아래 전체 사본 복원은 다른 설정 변경이 없는 경우에만 사용한다.
 
 ```bash
-cd /opt/danzzan/Danzzan-BE
+: "${BACKUP_DB_MIGRATION_BACKUP_20261014_DIR:?Set BACKUP_DB_MIGRATION_BACKUP_20261014_DIR from the private operations guide}"
+: "${DEPLOY_ROOT:?Set DEPLOY_ROOT from the private operations guide}"
+cd "${DEPLOY_ROOT}/Danzzan-BE"
 sudo cp -p docker-compose.azure.yml \
-  /opt/danzzan/db-migration-backup-20261014/docker-compose.before-rollback.yml
-sudo chmod 600 /opt/danzzan/db-migration-backup-20261014/docker-compose.before-rollback.yml
-sudo cp /opt/danzzan/db-migration-backup-20261014/docker-compose.before-db-switch.yml \
+  "${BACKUP_DB_MIGRATION_BACKUP_20261014_DIR}/docker-compose.before-rollback.yml"
+sudo chmod 600 "${BACKUP_DB_MIGRATION_BACKUP_20261014_DIR}/docker-compose.before-rollback.yml"
+sudo cp "${BACKUP_DB_MIGRATION_BACKUP_20261014_DIR}/docker-compose.before-db-switch.yml" \
   docker-compose.azure.yml
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml config --quiet
@@ -103,7 +107,7 @@ curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health
 
 1. 실행 중 app의 DB URL에서 실제 대상 DB 이름만 확인했다. 비밀번호나 전체 환경변수는 출력하지 않았다.
 2. 대상 날짜에 이미 존재하는 일정이 없고, 기존 날짜별 건수가 위 표와 일치하는지 확인했다. 40개 테이블 모두 InnoDB이며 트리거는 없었다.
-3. VM의 `/opt/danzzan/deployment-backups/date-shift-20261014T091408Z/`에 일관된 전체 DB 덤프 `before.sql`, 전후 테이블 해시, 적용 SQL, ID와 변경 후 날짜를 조건으로 하는 `rollback-dates.sql`, 검증 결과를 보관했다. 디렉터리 권한 700, 파일 600이며 Git에 포함하지 않았다.
+3. VM의 `${BACKUP_DATE_SHIFT_20261014T091408Z_DIR}/`에 일관된 전체 DB 덤프 `before.sql`, 전후 테이블 해시, 적용 SQL, ID와 변경 후 날짜를 조건으로 하는 `rollback-dates.sql`, 검증 결과를 보관했다. 디렉터리 권한 700, 파일 600이며 Git에 포함하지 않았다.
 4. 한 트랜잭션에서 대상 세 테이블의 행을 잠그고 사전 해시·변경 건수를 검사했다. 날짜만 치환한 예상 전체 행 해시와 실제 변경 결과가 일치한 뒤 COMMIT했다. 실패 시 연결 종료로 미커밋 변경이 롤백되도록 구성했다.
 5. 전체 40개 테이블의 행 수가 유지됐고, 대상 외 37개 테이블은 전후 데이터 해시가 모두 일치했다. 대상 세 테이블도 날짜 외 값이 보존됐음을 전체 행 해시로 검증했다.
 6. 공개 HTTPS API 14개 조회가 모두 200이었다. 11/27·28 공연은 각각 7·9건, 부스는 58·57건, 주점은 5·5건이었다. 기존 9/9·10 조회에서는 세 종류 모두 0건이었다. health와 축제 설정 조회도 정상이다.

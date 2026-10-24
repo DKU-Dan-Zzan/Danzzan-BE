@@ -1,28 +1,30 @@
 # Azure VM·네트워크·관리 ID 생성 기록
 
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
 확인일: **2026-10-14 KST**. 사용자가 기존 학생 구독에 아래 구성의 생성을 승인한 후 실행했다. 인프라 생성과 VM 관리 ID 인증 검증을 마친 뒤, 새 DB를 사용한 FE·BE·MySQL·Redis·Kafka 배포와 HTTPS 구성을 진행했다. 현재 앱 배포 상태와 운영 절차는 [Azure VM 시연 배포 기록](azure-vm-deployment.md)을 따른다.
 
 ## 1. 생성된 구성
 
-모든 리소스는 `rg-danzzan-demo`, `koreacentral`에 있다. 구독은 기존 Azure for Students이며 ID는 `16b07b93-080f-4cd2-a347-227e45ac17a7`이다.
+모든 리소스는 `${AZURE_RESOURCE_GROUP}`, `koreacentral`에 있다. 구독은 기존 Azure for Students이며 ID는 `${AZURE_SUBSCRIPTION_ID}`이다.
 
-| 대상 | 실제 값 |
+| 대상 | 구성 / 운영 변수 |
 | --- | --- |
-| VM | `vm-danzzan-demo` |
+| VM | `${VM_NAME}` |
 | 크기 | `Standard_D2as_v4`, 2 vCPU / 8 GiB, x64 |
 | OS | Ubuntu 22.04.5 LTS |
 | 이미지 | `Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202608060` |
 | 보안 유형 | Standard |
-| 영구 OS 디스크 | `disk-danzzan-demo-os`, 64 GiB, `StandardSSD_LRS`, 삭제 옵션 `Detach` |
-| VNet / 서브넷 | `vnet-danzzan-demo` / `snet-danzzan-demo` |
-| 주소 범위 | VNet `10.20.0.0/16`, 서브넷 `10.20.1.0/24` |
-| NIC | `nic-danzzan-demo`, 현재 사설 IP `10.20.1.4` |
-| NSG | `nsg-danzzan-demo`, NIC에 연결 |
-| 공인 IP | `pip-danzzan-demo`, Standard / Regional / Static IPv4 |
-| 현재 공인 주소 | `20.214.148.172` |
+| 영구 OS 디스크 | `${OS_DISK_NAME}`, 64 GiB, `StandardSSD_LRS`, 삭제 옵션 `Detach` |
+| VNet / 서브넷 | `${VNET_NAME}` / `${SUBNET_NAME}` |
+| 주소 범위 | VNet `${VNET_CIDR}`, 서브넷 `${SUBNET_CIDR}` |
+| NIC | `${NIC_NAME}`, 현재 사설 IP `${VM_PRIVATE_IP}` |
+| NSG | `${NSG_NAME}`, NIC에 연결 |
+| 공인 IP | `${PUBLIC_IP_NAME}`, Standard / Regional / Static IPv4 |
+| 현재 공인 주소 | `${VM_PUBLIC_IP}` |
 | Azure DNS | `danzzan.koreacentral.cloudapp.azure.com` |
 | 관리 ID | SystemAssigned |
-| 관리 ID principal ID | `a72053fb-3109-4281-86bc-17f702e937fa` |
+| 관리 ID principal ID | `${VM_PRINCIPAL_ID}` |
 | SSH 사용자 | `danzzan`, 공개 키 인증 |
 
 `Microsoft.Compute`와 `Microsoft.Network` 공급자가 Registered 상태임을 확인했다. 생성 직전 지역 전체 vCPU 쿼터는 6, DASv4 제품군은 4였다. D2as_v5/D2s_v5 제품군은 쿼터가 0이어서 D2as_v4로 변경하고 승인받았다. 동료 구독에서는 공급자 등록·쿼터·SKU 가용성을 다시 확인한다.
@@ -39,9 +41,9 @@
 | --- | ---: | --- | --- |
 | `Allow-Web` | 100 | Internet | 80, 443 |
 | `Allow-SSH-Operator` | 110 | 생성 시 작업자 공인 IPv4 한 개(`/32`) | 22 |
-| `Allow-SSH-Teammate` | 120 | `61.254.29.153/32` (2026-10-15 승인·추가) | 22 |
+| `Allow-SSH-Teammate` | 120 | `${TEAMMATE_PUBLIC_IP}/32` (2026-10-15 승인·추가) | 22 |
 
-2026-10-15 동료 DB 접속을 위해 SSH 규칙 한 개만 추가했다. 기존 웹 규칙과 작업자 SSH 출발지 `61.254.29.164/32`를 유지했고, NIC의 실제 적용 규칙에서 추가를 확인했다. DB 포트는 공개하지 않았다. 동료의 접속 절차와 검증 범위는 [VS Code DB 연결 안내](azure-db-vscode-connection.md)를 따른다.
+2026-10-15 동료 DB 접속을 위해 SSH 규칙 한 개만 추가했다. 기존 웹 규칙과 작업자 SSH 출발지 `${OPERATOR_PUBLIC_IP}/32`를 유지했고, NIC의 실제 적용 규칙에서 추가를 확인했다. DB 포트는 공개하지 않았다. 동료의 접속 절차와 검증 범위는 [VS Code DB 연결 안내](azure-db-vscode-connection.md)를 따른다.
 
 DB 3306, Redis 6379, Kafka 9092/9094, Spring 8080을 인터넷에 허용하는 규칙은 만들지 않았다. 이후 Compose에서도 내부 서비스의 호스트 포트를 공개하지 않도록 별도로 구성해야 한다.
 
@@ -50,13 +52,14 @@ DB 3306, Redis 6379, Kafka 9092/9094, Spring 8080을 인터넷에 허용하는 �
 현재 작업자의 접속 명령:
 
 ```bash
-ssh -i ~/.ssh/danzzan-azure-demo \
+: "${SSH_KEY_PATH:?Set SSH_KEY_PATH from the private operations guide}"
+ssh -i "${SSH_KEY_PATH}" \
   danzzan@danzzan.koreacentral.cloudapp.azure.com
 ```
 
 접속 네트워크의 공인 IP가 바뀌면 SSH가 막힐 수 있다. 이때 NSG의 작업자 `/32` 주소를 확인하고 승인된 새 주소로 변경한다. SSH를 `0.0.0.0/0`으로 열어 해결하지 않는다.
 
-VM에는 64 GiB OS 디스크 외에 **16 GiB 임시 디스크 `/mnt`**도 보였다. MySQL·Redis·Kafka 영속 데이터는 `/mnt`에 두지 않는다. Docker 볼륨은 영구 OS 디스크 `/dev/sda1`에 두었고, 서비스 재시작 후 보존을 확인했다. Azure 할당 취소·재시작 후 보존은 아직 실행하지 않았다.
+VM에는 64 GiB OS 디스크 외에 **16 GiB 임시 디스크 `/mnt`**도 보였다. MySQL·Redis·Kafka 영속 데이터는 `/mnt`에 두지 않는다. Docker 볼륨은 영구 OS 디스크 `/dev/sda1`에 두었고, 서비스 재시작 후 보존을 확인했다. 이 절의 10월 14일 점검 당시에는 Azure 할당 취소·재시작 후 보존을 확인하지 않았다. 이후 [10월 22일 재시작 검증](azure-vm-stop-start.md)에서 보존을 확인했다.
 
 ## 3. VM 관리 ID 권한
 
@@ -70,7 +73,7 @@ VM에는 64 GiB OS 디스크 외에 **16 GiB 임시 디스크 `/mnt`**도 보였
 컨테이너 범위는 다음과 같다. Delegator는 이 경로의 `/blobServices/default/containers/images`를 제외한 저장소 계정 범위다.
 
 ```text
-/subscriptions/16b07b93-080f-4cd2-a347-227e45ac17a7/resourceGroups/rg-danzzan-demo/providers/Microsoft.Storage/storageAccounts/danzzandemo2026/blobServices/default/containers/images
+/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Storage/storageAccounts/danzzandemo2026/blobServices/default/containers/images
 ```
 
 향후 BE 실행 설정:
@@ -100,7 +103,7 @@ AZURE_STORAGE_READ_SAS_EXPIRATION_SECONDS=300
 
 이번 검증에서는 **게시물·이미지를 생성·수정·삭제하지 않았다.** Blob 목록 조회와 인증용 위임 키 발급만 수행했다. 계정 키와 익명 공개 접근도 활성화하지 않았다.
 
-이후 실제 앱 배포에서 Docker 내부 Azure SDK 인증, 새 `danzzan_demo`의 `ddl-auto: validate`, FE/BE 실행, HTTPS, 합성 공지를 통한 이미지 업로드·읽기 SAS 갱신과 만료 후 재발급을 확인했다. 임시 공지 ID 2와 테스트 Blob은 정리했고, MySQL·Redis·Kafka 서비스 재시작 뒤 보존도 확인했다. Azure 할당 취소·재시작은 아직 실행하지 않았다. 상세 범위는 [Azure VM 시연 배포 기록](azure-vm-deployment.md)에 분리한다. 이전 로컬 이미지 연동 검증과 VM 배포 검증은 구분한다.
+이후 실제 앱 배포에서 Docker 내부 Azure SDK 인증, 새 `danzzan_demo`의 `ddl-auto: validate`, FE/BE 실행, HTTPS, 합성 공지를 통한 이미지 업로드·읽기 SAS 갱신과 만료 후 재발급을 확인했다. 임시 공지 ID 2와 테스트 Blob은 정리했고, MySQL·Redis·Kafka 서비스 재시작 뒤 보존도 확인했다. 10월 14일 당시 Azure 할당 취소·재시작은 미검증이었으며, 이후 결과는 [10월 22일 검증 기록](azure-vm-stop-start.md)을 따른다. 상세 범위는 [Azure VM 시연 배포 기록](azure-vm-deployment.md)에 분리한다. 이전 로컬 이미지 연동 검증과 VM 배포 검증은 구분한다.
 
 ## 5. 비용과 운영
 
@@ -112,18 +115,21 @@ AZURE_STORAGE_READ_SAS_EXPIRATION_SECONDS=300
 - 일주일 기본 합계 약 **$21.77**. Blob·디스크 I/O·송신·사전 준비 가동 시간 등은 별도이며, $25~30은 계획 예산이지 상한이 아니다.
 - 할당 취소 후에도 디스크와 IP를 유지하면 월 약 **$8.45 + Blob** 비용이 남는다.
 
-VM은 현재 시연 배포·최종 검증을 위해 **실행 중인 상태**다. 자동 종료/할당 취소 일정은 만들지 않았다. 평가 외 기간에는 아래와 같이 포털 또는 CLI에서 실제로 할당 취소해야 컴퓨팅 과금이 멈춘다.
+VM은 10월 14일 기록 당시 시연 배포·최종 검증을 위해 실행 중이었다. 10월 22일 최종 확인은 할당 취소 상태이며 [중지·재시작 안내](azure-vm-stop-start.md)를 따른다. 자동 종료/할당 취소 일정은 만들지 않았다. 평가 외 기간에는 아래와 같이 포털 또는 CLI에서 실제로 할당 취소해야 컴퓨팅 과금이 멈춘다.
 
 ```bash
+: "${AZURE_RESOURCE_GROUP:?Set AZURE_RESOURCE_GROUP from the private operations guide}"
+: "${AZURE_SUBSCRIPTION_ID:?Set AZURE_SUBSCRIPTION_ID from the private operations guide}"
+: "${VM_NAME:?Set VM_NAME from the private operations guide}"
 # 컴퓨팅 할당 취소. 디스크·IP·Blob은 보존된다.
-az vm deallocate --subscription 16b07b93-080f-4cd2-a347-227e45ac17a7 \
-  --resource-group rg-danzzan-demo --name vm-danzzan-demo
+az vm deallocate --subscription "${AZURE_SUBSCRIPTION_ID}" \
+  --resource-group "${AZURE_RESOURCE_GROUP}" --name "${VM_NAME}"
 
 # 평가 준비 시 시작
-az vm start --subscription 16b07b93-080f-4cd2-a347-227e45ac17a7 \
-  --resource-group rg-danzzan-demo --name vm-danzzan-demo
+az vm start --subscription "${AZURE_SUBSCRIPTION_ID}" \
+  --resource-group "${AZURE_RESOURCE_GROUP}" --name "${VM_NAME}"
 ```
 
-평가 전 남은 운영 검증은 Azure 할당 취소·재시작 후에도 서비스와 영구 볼륨이 보존되는지 확인하는 일이다. 기존 DB 덤프 전체나 실제 게시물·이미지를 자동 이관하지 않는다. `ddl-auto: validate`는 빈 DB에 테이블을 생성하지 않으며, 기존 데이터를 삭제하는 로컬 seed SQL을 그대로 사용하면 안 된다.
+10월 22일에 Azure 할당 취소·재시작 후 서비스와 영구 볼륨 보존을 확인했다. 평가 전에는 해당 안내에 따라 다시 기동하고 기능을 점검한다. 기존 DB 덤프 전체나 실제 게시물·이미지를 자동 이관하지 않는다. `ddl-auto: validate`는 빈 DB에 테이블을 생성하지 않으며, 기존 데이터를 삭제하는 로컬 seed SQL을 그대로 사용하면 안 된다.
 
 참고: [공인 IP](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-addresses), [VM 상태별 과금](https://learn.microsoft.com/en-us/azure/virtual-machines/states-billing), [DNS 이름 가용성 API](https://learn.microsoft.com/en-us/rest/api/virtualnetwork/check-dns-name-availability/check-dns-name-availability?view=rest-virtualnetwork-2025-05-01).

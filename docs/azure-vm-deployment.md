@@ -1,6 +1,8 @@
 # Azure VM 시연 배포 기록
 
-기준일: **2026-10-14 KST**. 이 문서는 `vm-danzzan-demo`에서 실제로 실행 중인 단짠 시연 환경을 기록한다. 최초 배포는 합성 데이터가 있는 `danzzan_demo`로 진행했다. 10월 14일 로컬 `festival_test`를 별도 `danzzan_fall_demo`로 복원하고 앱 연결을 전환했다. 로컬 원본과 기존 Azure DB는 보존했으며 Blob은 변경하지 않았다.
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
+기준일: **2026-10-14 KST**. 이 문서는 `${VM_NAME}`에서 실제로 실행 중인 단짠 시연 환경을 기록한다. 최초 배포는 합성 데이터가 있는 `danzzan_demo`로 진행했다. 10월 14일 로컬 `festival_test`를 별도 `danzzan_fall_demo`로 복원하고 앱 연결을 전환했다. 로컬 원본과 기존 Azure DB는 보존했으며 Blob은 변경하지 않았다.
 
 ## 현재 상태
 
@@ -19,7 +21,7 @@
 
 ## DNS 이름 변경 기록 (2026-10-14)
 
-기존 `danzzan-demo-2026.koreacentral.cloudapp.azure.com`에서 **`danzzan.koreacentral.cloudapp.azure.com`**으로 변경했다. Azure 이름 가용성 API의 `available: true`를 확인한 뒤 기존 `pip-danzzan-demo`의 DNS label만 `danzzan`으로 갱신했다. 공인 IP `20.214.148.172`와 VM·데이터 볼륨·Blob 저장소는 그대로다. 이전 이름은 Azure DNS에서 해제되므로 이전 주소의 리디렉션을 보장하지 않는다.
+기존 `danzzan-demo-2026.koreacentral.cloudapp.azure.com`에서 **`danzzan.koreacentral.cloudapp.azure.com`**으로 변경했다. Azure 이름 가용성 API의 `available: true`를 확인한 뒤 기존 `${PUBLIC_IP_NAME}`의 DNS label만 `danzzan`으로 갱신했다. 공인 IP `${VM_PUBLIC_IP}`와 VM·데이터 볼륨·Blob 저장소는 그대로다. 이전 이름은 Azure DNS에서 해제되므로 이전 주소의 리디렉션을 보장하지 않는다.
 
 새 이름으로 Let's Encrypt 인증서를 발급하고 Nginx의 `server_name`·인증서 경로 및 BE의 `CORS_ALLOWED_ORIGINS`를 변경했다. FE 이미지를 다시 빌드하고 `app`·`frontend`만 재생성했다. MySQL·Redis·Kafka 컨테이너와 기존 게시물·이미지는 변경하지 않았다.
 
@@ -31,13 +33,13 @@
 - 실제 브라우저에서 새 주소의 공지 목록 표시 확인.
 - 새 인증서의 `certbot renew --cert-name danzzan.koreacentral.cloudapp.azure.com --dry-run --no-random-sleep-on-renew` 성공, Nginx 검사·reload 후크 별도 성공.
 
-이전 도메인 갱신 설정은 `/etc/letsencrypt/renewal-retired/`로 옮겨 자동 갱신 대상에서 제외했고, 이전 인증서·개인 키는 삭제하지 않았다. 이전 Compose/Nginx 사본은 VM의 `/opt/danzzan/dns-change-backup-20261014/`에 보관했다. 이름을 되돌리려면 이전 DNS label의 가용성을 다시 확인해야 한다.
+이전 도메인 갱신 설정은 `/etc/letsencrypt/renewal-retired/`로 옮겨 자동 갱신 대상에서 제외했고, 이전 인증서·개인 키는 삭제하지 않았다. 이전 Compose/Nginx 사본은 VM의 `${BACKUP_DNS_CHANGE_BACKUP_20261014_DIR}/`에 보관했다. 이름을 되돌리려면 이전 DNS label의 가용성을 다시 확인해야 한다.
 
 로컬 비공개 시연 로그인 안내의 URL도 갱신했다. 주소 변경으로 브라우저 로그인 상태가 이어지지 않을 수 있으므로 새 주소에서 다시 로그인한다. 카카오 앱 관리자는 **새 짧은 주소**를 JavaScript SDK 도메인에 등록해야 한다.
 
 ## 실제 구성
 
-배포 루트는 VM의 `/opt/danzzan/Danzzan-BE`이며, Compose 파일은 `docker-compose.azure.yml`이다. `frontend`가 정적 FE를 제공하고 `/api/` 요청을 내부 `app:8080`으로 프록시한다. `app`은 MySQL·Redis·Kafka와 같은 Compose 네트워크에만 연결한다.
+배포 루트는 VM의 `${DEPLOY_ROOT}/Danzzan-BE`이며, Compose 파일은 `docker-compose.azure.yml`이다. `frontend`가 정적 FE를 제공하고 `/api/` 요청을 내부 `app:8080`으로 프록시한다. `app`은 MySQL·Redis·Kafka와 같은 Compose 네트워크에만 연결한다.
 
 ```text
 브라우저 ─ HTTPS ─ frontend (Nginx)
@@ -98,7 +100,8 @@ Nginx 컨테이너가 Certbot의 `live/` 심볼릭 링크가 가리키는 인증
 외부 서비스 환경변수 분리 이후에는 아래의 `external-services.env`도 반드시 준비한다. 기존 VM에 새 Compose만 먼저 복사하면 이 파일이 없어 Compose 실행이 실패한다. 새 비공개 파일을 먼저 준비하고 Compose를 반영한다.
 
 ```bash
-cd /opt/danzzan/Danzzan-BE
+: "${DEPLOY_ROOT:?Set DEPLOY_ROOT from the private operations guide}"
+cd "${DEPLOY_ROOT}/Danzzan-BE"
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml config >/dev/null
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
@@ -130,7 +133,8 @@ sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
 ## 실행 중 확인 항목
 
 ```bash
-cd /opt/danzzan/Danzzan-BE
+: "${DEPLOY_ROOT:?Set DEPLOY_ROOT from the private operations guide}"
+cd "${DEPLOY_ROOT}/Danzzan-BE"
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml ps
 curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/ >/dev/null
@@ -180,8 +184,8 @@ sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
 
 - BE 기준 커밋 `5fd9a4b`, FE 기준 커밋 `3bb6bf5d`를 반영했다. BE에는 배포 당시 미커밋 상태였던 외부 환경변수 분리와 자동 번역·시작 시 용어집 동기화 차단 코드도 포함됐다. 정확한 배포 파일은 VM의 `deployed-source-manifest.json`으로 구분한다.
 - 새 이미지를 먼저 빌드한 뒤 `app`, `frontend`만 `--no-deps --force-recreate`로 교체했다. MySQL·Redis·Kafka 컨테이너 ID와 기존 app/mysql/frontend-build 비공개 설정 파일은 배포 전후 동일했다. DB 스키마·볼륨·Blob 파일은 변경하지 않았다.
-- 배포 준비 경로: `/opt/danzzan/releases/20261014-main-env`. 이 경로의 `activation-complete`는 실제 HTTPS 확인 후 생성했다.
-- 비공개 복구 경로: `/opt/danzzan/deployment-backups/20261014-main-env` (디렉터리 `700`, 비공개 파일 `600`). 이전 소스·Compose·두 DB의 일관된 덤프와 검증 결과를 보관한다. 이 경로와 덤프를 Git이나 문서 첨부로 공유하지 않는다.
+- 배포 준비 경로: `${RELEASE_PREPARATION_DIR}`. 이 경로의 `activation-complete`는 실제 HTTPS 확인 후 생성했다.
+- 비공개 복구 경로: `${BACKUP_20261014_MAIN_ENV_DIR}` (디렉터리 `700`, 비공개 파일 `600`). 이전 소스·Compose·두 DB의 일관된 덤프와 검증 결과를 보관한다. 이 경로와 덤프를 Git이나 문서 첨부로 공유하지 않는다.
 - 이전 이미지 태그: `danzzan-be:rollback-20261014-main-env`, `danzzan-fe:rollback-20261014-main-env`.
 
 검증 결과:
@@ -192,7 +196,7 @@ sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
 - 기존 콘텐츠와 이미지 참조를 포함한 19개 테이블의 정규화 덤프 해시가 배포 전후 일치했다. Blob 업로드·삭제 요청은 수행하지 않았다.
 - 두 자동 실행 차단 플래그의 실제 컨테이너 값과 시작 로그를 확인했다. 이번 배포에서는 관리자 쓰기·로그인·발권·전체 이미지 로드·부하 테스트를 다시 실행하지 않았다.
 
-복구할 때는 먼저 현재 소스와 설정을 별도로 보존한다. 기존 Compose를 원래 위치로 복원하고 위 이전 이미지 태그를 지정한 override를 사용해 `app`, `frontend`만 `--no-build --no-deps --force-recreate`로 재생성한다. Compose의 상대 경로 기준은 `/opt/danzzan/Danzzan-BE`로 유지해야 한다. 이후 health와 HTTPS를 다시 확인한다. 이번 배포는 스키마 변경이 없으므로 애플리케이션 롤백을 위해 DB 덤프를 덮어쓰지 않는다. 소스까지 되돌릴 때는 백업의 이전 소스를 사용하고 비공개 설정은 별도로 비교한다.
+복구할 때는 먼저 현재 소스와 설정을 별도로 보존한다. 기존 Compose를 원래 위치로 복원하고 위 이전 이미지 태그를 지정한 override를 사용해 `app`, `frontend`만 `--no-build --no-deps --force-recreate`로 재생성한다. Compose의 상대 경로 기준은 `${DEPLOY_ROOT}/Danzzan-BE`로 유지해야 한다. 이후 health와 HTTPS를 다시 확인한다. 이번 배포는 스키마 변경이 없으므로 애플리케이션 롤백을 위해 DB 덤프를 덮어쓰지 않는다. 소스까지 되돌릴 때는 백업의 이전 소스를 사용하고 비공개 설정은 별도로 비교한다.
 
 커밋 정리 시 외부 서비스 샘플에는 빈 자격 증명과 명시적인 테스트 값만 남겼다. 실제 `secrets/` 파일은 Git 제외를 확인했다. 로컬 Compose `config --quiet`와 번역 보정·용어집 대상 테스트 17건이 통과했다. 이 검증은 외부 API를 호출하거나 Azure를 다시 배포하지 않는다.
 
@@ -207,7 +211,7 @@ sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
 - 기존 게시물·이미지 참조·축제 설정·테마를 포함한 20개 테이블의 정규화 데이터 덤프 해시가 배포 전후 및 UI 확인 후 일치했다. 덤프 내용은 출력·전송하지 않고 VM에서 해시로 비교했다. Blob 업로드·삭제는 실행하지 않았다.
 - HTTPS 홈·공지·관리자 테마 페이지·health HTTP 200, 내부 health와 Nginx 설정 검사 성공. 실제 관리자 브라우저에서 두 이름·미리보기·읽기 전용 색상 입력을 확인했다. 기존 활성 테마는 유지했다. 운영 환경의 활성화·복제·삭제 요청은 실행하지 않았다.
 
-복구 자료는 `/opt/danzzan/deployment-backups/20261014-theme-presets`에 권한 700으로 보관한다. `sources-before.tar.gz`, `source-manifest.json`, `deployed-images.txt`, 배포 로그와 콘텐츠 해시 비교 결과가 있다. 이전 실행 이미지 태그는 `danzzan-be:rollback-20261014-theme-presets`, `danzzan-fe:rollback-20261014-theme-presets`다. 롤백은 이 이미지로 `app`·`frontend`만 교체하며 DB 복원이나 볼륨 삭제는 필요 없다. SSH는 DNS 변경 전부터 보관한 호스트 키를 `HostKeyAlias=danzzan-demo-2026.koreacentral.cloudapp.azure.com`, `StrictHostKeyChecking=yes`로 검증했다.
+복구 자료는 `${BACKUP_20261014_THEME_PRESETS_DIR}`에 권한 700으로 보관한다. `sources-before.tar.gz`, `source-manifest.json`, `deployed-images.txt`, 배포 로그와 콘텐츠 해시 비교 결과가 있다. 이전 실행 이미지 태그는 `danzzan-be:rollback-20261014-theme-presets`, `danzzan-fe:rollback-20261014-theme-presets`다. 롤백은 이 이미지로 `app`·`frontend`만 교체하며 DB 복원이나 볼륨 삭제는 필요 없다. SSH는 DNS 변경 전부터 보관한 호스트 키를 `HostKeyAlias=danzzan-demo-2026.koreacentral.cloudapp.azure.com`, `StrictHostKeyChecking=yes`로 검증했다.
 
 커밋 정리 시 BE `ThemeServiceTest` 14건을 다시 실행해 통과했다. 기본 테마 활성화는 HTTP 204를 반환하며, 활성 테마 ID만 해제한다. 저장된 테마 레코드와 이미지 참조는 유지한다. 관련 API·프리셋의 FE 변경과 함께 사용해야 관리자 화면에서 기본 색상을 다시 선택할 수 있다.
 
@@ -236,7 +240,7 @@ Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·�
 
 실제 관리자 브라우저에서 기본 Coastal Sunset의 새 HEX를 확인했고 기존 활성 저장 테마는 유지했다. 적용 버튼은 누르지 않았다. 이미지 4개 HTTPS 응답과 로컬 파일 해시가 일치했다. Nginx 설정·HTTPS 주요 경로 정상, BE/MySQL/Redis/Kafka 컨테이너 ID 및 20개 콘텐츠 테이블의 데이터 해시가 배포 전후 동일했다. 앞서 옮긴 11/27·28 일정 조회도 정상이다.
 
-복구 위치: `/opt/danzzan/deployment-backups/20261014-coastal-sunset/` (권한 700). 이전 소스 아카이브·전송 파일 해시·비공개 빌드 및 검증 로그를 보관했다. 이전 이미지 `danzzan-fe:rollback-20261014-coastal-sunset`을 FE 이미지로 지정하고 frontend만 재생성하면 애플리케이션 복구가 가능하다. DB 덮어쓰기·데이터 컨테이너 재시작은 필요하지 않다. 상세 자산과 UI 확인 기록은 FE `docs/azure-image-integration.md` 10절에 있다.
+복구 위치: `${BACKUP_20261014_COASTAL_SUNSET_DIR}/` (권한 700). 이전 소스 아카이브·전송 파일 해시·비공개 빌드 및 검증 로그를 보관했다. 이전 이미지 `danzzan-fe:rollback-20261014-coastal-sunset`을 FE 이미지로 지정하고 frontend만 재생성하면 애플리케이션 복구가 가능하다. DB 덮어쓰기·데이터 컨테이너 재시작은 필요하지 않다. 상세 자산과 UI 확인 기록은 FE `docs/azure-image-integration.md` 10절에 있다.
 
 ## 홈 이미지 단독 저장·테마 선택 화면 배포 (2026-10-14)
 
@@ -249,7 +253,7 @@ Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·�
 - 홈페이지, 공지, 관리자 테마, 별도 테마 선택, `/api/health` HTTPS 200과 Nginx 설정 검사를 확인했다. 실제 관리자 브라우저에서 새 버튼·편집/취소·테마 선택 목록을 확인했다. 실제 파일 업로드·저장·테마 적용·AI 생성 요청은 수행하지 않았다.
 - 게시물·이미지 참조·축제 설정·테마 등 기존 20개 콘텐츠 테이블의 정규화 데이터 해시가 배포 전후 동일했다. Blob 업로드·삭제 및 데이터 초기화는 실행하지 않았다.
 
-복구 자료는 `/opt/danzzan/deployment-backups/20261014-home-theme/`(권한 700)에 보관한다. 이전 소스 `sources-before.tgz`, 변경/전체 파일 해시, 기준 버전 `release-info.json`, 빌드·배포 로그, 콘텐츠·컨테이너·설정 해시 비교 결과를 포함한다. 이전 실행 이미지는 `danzzan-be:rollback-20261014-home-theme`, `danzzan-fe:rollback-20261014-home-theme`다. 복구 시 이 이미지를 지정해 app·frontend만 재생성한다. 데이터베이스 복원이나 볼륨 삭제는 필요하지 않다. 소스를 되돌릴 때는 이전 소스 아카이브와 manifest를 함께 확인하며, 이번 신규 DTO 파일도 구분한다.
+복구 자료는 `${BACKUP_20261014_HOME_THEME_DIR}/`(권한 700)에 보관한다. 이전 소스 `sources-before.tgz`, 변경/전체 파일 해시, 기준 버전 `release-info.json`, 빌드·배포 로그, 콘텐츠·컨테이너·설정 해시 비교 결과를 포함한다. 이전 실행 이미지는 `danzzan-be:rollback-20261014-home-theme`, `danzzan-fe:rollback-20261014-home-theme`다. 복구 시 이 이미지를 지정해 app·frontend만 재생성한다. 데이터베이스 복원이나 볼륨 삭제는 필요하지 않다. 소스를 되돌릴 때는 이전 소스 아카이브와 manifest를 함께 확인하며, 이번 신규 DTO 파일도 구분한다.
 
 
 ## 테마 색상 고정·기본 펼침·홈 표시 방식 배포 (2026-10-14)
@@ -264,7 +268,7 @@ Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·�
 - 실제 관리자 화면에서 기본 펼침과 읽기 전용 고정 색상을 확인했다. 새 테마 초안에서 Primary를 바꾸면 주점도 같이 바뀌는 것을 확인하고 저장 없이 새로고침했다. 기존 활성 테마를 유지했고 실제 AI 호출·테마 저장·활성화는 수행하지 않았다. 홈 이미지의 정상 로드와 부모 영역 전체 높이를 채우는 cover 표시도 확인했다.
 - 20개 콘텐츠 테이블의 정규화 데이터 해시는 배포 전후 및 UI 확인 후 일치했다. 자동 번역 backfill·시작 시 glossary sync는 비활성 상태를 유지한다. Blob 쓰기·삭제, DB 스키마 변경은 수행하지 않았다.
 
-복구 자료는 `/opt/danzzan/deployment-backups/20261014-theme-policy/`(권한 700)에 보관한다. 이전 소스 `sources-before.tgz`, 변경/전체 manifest, `release-info.json`, 빌드·배포 로그와 데이터·설정 비교 결과를 포함한다. 이전 이미지는 `danzzan-be:rollback-20261014-theme-policy`, `danzzan-fe:rollback-20261014-theme-policy`다. 복구 시 해당 이미지를 지정해 app·frontend만 재생성한다. 소스 복구는 이전 아카이브로 삭제된 보정기를 복원하고 신규 `ThemeColorPolicy.java`도 manifest에 따라 구분한다. DB 복원이나 볼륨 삭제는 필요하지 않다.
+복구 자료는 `${BACKUP_20261014_THEME_POLICY_DIR}/`(권한 700)에 보관한다. 이전 소스 `sources-before.tgz`, 변경/전체 manifest, `release-info.json`, 빌드·배포 로그와 데이터·설정 비교 결과를 포함한다. 이전 이미지는 `danzzan-be:rollback-20261014-theme-policy`, `danzzan-fe:rollback-20261014-theme-policy`다. 복구 시 해당 이미지를 지정해 app·frontend만 재생성한다. 소스 복구는 이전 아카이브로 삭제된 보정기를 복원하고 신규 `ThemeColorPolicy.java`도 manifest에 따라 구분한다. DB 복원이나 볼륨 삭제는 필요하지 않다.
 
 ## 동료 변경 반영: AI 배경 생성·회원가입 복구 (2026-10-15)
 
@@ -296,7 +300,7 @@ Azure 제공 DNS 이름은 공인 IP 리소스에 연결된다. 다른 구독·�
 
 ### 복구 자료
 
-VM의 `/opt/danzzan/deployment-backups/20261015-colleague-signup-background/`에 권한 700으로 배포 전 변경 대상 소스 `sources-before.tgz`, 이전 경로 목록, 전체 입력 manifest, `release-info.json`, 빌드·배포 로그, 데이터·설정 비교 기록 및 `verification.json`을 보관했다. `rollout-success`는 배포 검증 완료 표식이다. 소스 아카이브는 전체 저장소 백업이 아니라 이번 변경 대상의 이전 버전이다.
+VM의 `${BACKUP_20261015_COLLEAGUE_SIGNUP_BACKGROUND_DIR}/`에 권한 700으로 배포 전 변경 대상 소스 `sources-before.tgz`, 이전 경로 목록, 전체 입력 manifest, `release-info.json`, 빌드·배포 로그, 데이터·설정 비교 기록 및 `verification.json`을 보관했다. `rollout-success`는 배포 검증 완료 표식이다. 소스 아카이브는 전체 저장소 백업이 아니라 이번 변경 대상의 이전 버전이다.
 
 이전 실행 이미지 태그는 `danzzan-be:rollback-20261015-colleague-signup-background`와 `danzzan-fe:rollback-20261015-colleague-signup-background`다. 복구할 때는 해당 이미지로 app·frontend만 `--no-build --no-deps --force-recreate` 재생성하고 health를 확인한다. 소스도 되돌려야 하면 이전 경로 목록과 아카이브를 대조해 신규 파일과 삭제 파일을 구분한다. 이번 배포에는 스키마 변경이 없어 DB 복원이나 볼륨 삭제가 필요하지 않다.
 
@@ -316,7 +320,7 @@ VM의 `/opt/danzzan/deployment-backups/20261015-colleague-signup-background/`에
 
 ### 복구 자료와 절차
 
-VM `/opt/danzzan/deployment-backups/20261021-account-background-48d0e8a0/`에 다음 자료를 보관한다. 비밀값·환경 파일 내용·DB 덤프는 이 문서에 포함하지 않는다.
+VM `${BACKUP_20261021_ACCOUNT_BACKGROUND_48D0E8A0_DIR}/`에 다음 자료를 보관한다. 비밀값·환경 파일 내용·DB 덤프는 이 문서에 포함하지 않는다.
 
 - `sources-before.tgz`: 변경 대상 8개 파일의 배포 전 버전. 전체 저장소 백업이 아니다.
 - `changes.tgz`, `before.json`: 전송 파일과 배포 전 컨테이너 ID·설정 해시·배포 파일 기대 해시.
@@ -327,16 +331,18 @@ VM `/opt/danzzan/deployment-backups/20261021-account-background-48d0e8a0/`에 �
 이미지 복구가 필요하면 VM에서 아래 명령으로 frontend만 교체한다. 실행 전에 이후 배포가 있는지 확인하고, 현재 이미지와 추가 소스 변경을 별도로 보존한다.
 
 ```sh
-cd /opt/danzzan/Danzzan-BE
+: "${BACKUP_20261021_ACCOUNT_BACKGROUND_48D0E8A0_DIR:?Set BACKUP_20261021_ACCOUNT_BACKGROUND_48D0E8A0_DIR from the private operations guide}"
+: "${DEPLOY_ROOT:?Set DEPLOY_ROOT from the private operations guide}"
+cd "${DEPLOY_ROOT}/Danzzan-BE"
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml \
-  -f /opt/danzzan/deployment-backups/20261021-account-background-48d0e8a0/rollback.yml \
+  -f "${BACKUP_20261021_ACCOUNT_BACKGROUND_48D0E8A0_DIR}/rollback.yml" \
   up -d --no-build --no-deps --force-recreate frontend
 curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/mypage >/dev/null
 curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
 ```
 
-이미지 복구만으로 VM 소스는 되돌아가지 않는다. 다음 빌드에서도 이전 동작을 유지해야 한다면 추가 변경을 보존한 후 `sources-before.tgz`의 8개 파일을 `/opt/danzzan/Danzzan-FE`에 복원한다. DB 복원이나 볼륨 삭제는 필요 없다. 이 절차는 복구용으로 기록했으며 이번 정상 배포 후 실행하지 않았다.
+이미지 복구만으로 VM 소스는 되돌아가지 않는다. 다음 빌드에서도 이전 동작을 유지해야 한다면 추가 변경을 보존한 후 `sources-before.tgz`의 8개 파일을 `${DEPLOY_ROOT}/Danzzan-FE`에 복원한다. DB 복원이나 볼륨 삭제는 필요 없다. 이 절차는 복구용으로 기록했으며 이번 정상 배포 후 실행하지 않았다.
 
 ## AI 색상 시안 생성 시간 제한 연장 배포 (2026-10-21)
 
@@ -368,24 +374,26 @@ curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
 
 ### 복구 자료와 절차
 
-VM `/opt/danzzan/deployment-backups/20261021-theme-timeout/`에 변경 전 실행 파일 3개의 `sources-before.tgz`, 컨테이너 ID·설정/파일 해시·코드 커밋을 담은 `before.json`, `rollback.yml`, 배포·검증 스크립트와 로그, 실행 이미지·제한값·프론트 번들 해시를 담은 `verification.json`을 보관한다. `status=complete`는 배포 검증 완료를 뜻한다.
+VM `${BACKUP_20261021_THEME_TIMEOUT_DIR}/`에 변경 전 실행 파일 3개의 `sources-before.tgz`, 컨테이너 ID·설정/파일 해시·코드 커밋을 담은 `before.json`, `rollback.yml`, 배포·검증 스크립트와 로그, 실행 이미지·제한값·프론트 번들 해시를 담은 `verification.json`을 보관한다. `status=complete`는 배포 검증 완료를 뜻한다.
 
 롤백 이미지 태그는 `danzzan-be:rollback-20261021-theme-timeout`, `danzzan-fe:rollback-20261021-theme-timeout`이다. 이후 배포가 없는지 확인하고 현재 이미지·추가 변경을 보존한 뒤, VM에서 아래 명령으로 BE를 healthy 상태까지 복구하고 FE를 재생성한다. FE 재생성은 복구한 BE의 내부 주소를 Nginx에 반영하는 데도 필요하다.
 
 ```sh
-cd /opt/danzzan/Danzzan-BE
+: "${BACKUP_20261021_THEME_TIMEOUT_DIR:?Set BACKUP_20261021_THEME_TIMEOUT_DIR from the private operations guide}"
+: "${DEPLOY_ROOT:?Set DEPLOY_ROOT from the private operations guide}"
+cd "${DEPLOY_ROOT}/Danzzan-BE"
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml \
-  -f /opt/danzzan/deployment-backups/20261021-theme-timeout/rollback.yml \
+  -f "${BACKUP_20261021_THEME_TIMEOUT_DIR}/rollback.yml" \
   up -d --no-build --no-deps --force-recreate --wait --wait-timeout 180 app
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml \
-  -f /opt/danzzan/deployment-backups/20261021-theme-timeout/rollback.yml \
+  -f "${BACKUP_20261021_THEME_TIMEOUT_DIR}/rollback.yml" \
   up -d --no-build --no-deps --force-recreate frontend
 curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
 ```
 
-소스까지 복구해야 하면 추가 변경을 보존한 후 `sources-before.tgz`를 `/opt/danzzan` 기준으로 복원한다. 아카이브는 전체 저장소 백업이 아니다. 스키마 변경이 없어 DB 복원이나 볼륨 삭제는 필요 없다. 이 롤백 명령은 복구용으로 기록했으며 정상 배포 후 실행하지 않았다.
+소스까지 복구해야 하면 추가 변경을 보존한 후 `sources-before.tgz`를 `${DEPLOY_ROOT}` 기준으로 복원한다. 아카이브는 전체 저장소 백업이 아니다. 스키마 변경이 없어 DB 복원이나 볼륨 삭제는 필요 없다. 이 롤백 명령은 복구용으로 기록했으며 정상 배포 후 실행하지 않았다.
 
 ## OpenAI 키·색상 모델 교체 배포 (2026-10-21)
 
@@ -393,7 +401,7 @@ curl -fsS https://danzzan.koreacentral.cloudapp.azure.com/api/health >/dev/null
 
 ### 적용 설정과 코드
 
-VM `/opt/danzzan/Danzzan-BE/deploy/azure/secrets/external-services.env`에서 다음 항목만 변경했다. 실제 키는 Git과 문서에 포함하지 않는다.
+VM `${DEPLOY_ROOT}/Danzzan-BE/deploy/azure/secrets/external-services.env`에서 다음 항목만 변경했다. 실제 키는 Git과 문서에 포함하지 않는다.
 
 | 항목 | 배포 전 | 배포 후 |
 | --- | --- | --- |
@@ -426,7 +434,7 @@ VM `/opt/danzzan/Danzzan-BE/deploy/azure/secrets/external-services.env`에서 �
 
 ### 복구 자료와 절차
 
-VM `/opt/danzzan/deployment-backups/20261021-theme-model-key/`에 다음 자료를 보관한다. 디렉터리는 권한 `700`이며 비공개 환경 백업은 권한 `600`이다.
+VM `${BACKUP_20261021_THEME_MODEL_KEY_DIR}/`에 다음 자료를 보관한다. 디렉터리는 권한 `700`이며 비공개 환경 백업은 권한 `600`이다.
 
 - `before.json`: 변경 전 컨테이너 ID와 소스·설정 해시.
 - `sources-before.tgz`: Java 클라이언트와 `application.yml`의 변경 전 내용. 전체 저장소 백업이 아니다.
@@ -440,15 +448,17 @@ VM `/opt/danzzan/deployment-backups/20261021-theme-model-key/`에 다음 자료�
 후속 변경이 없고 기존 키도 유효하여 전체 복원이 적절한 경우:
 
 ```sh
-cd /opt/danzzan/Danzzan-BE
-sudo cp /opt/danzzan/deployment-backups/20261021-theme-model-key/external-services.env.before \
+: "${BACKUP_20261021_THEME_MODEL_KEY_DIR:?Set BACKUP_20261021_THEME_MODEL_KEY_DIR from the private operations guide}"
+: "${DEPLOY_ROOT:?Set DEPLOY_ROOT from the private operations guide}"
+cd "${DEPLOY_ROOT}/Danzzan-BE"
+sudo cp "${BACKUP_20261021_THEME_MODEL_KEY_DIR}/external-services.env.before" \
   deploy/azure/secrets/external-services.env
 sudo chmod 600 deploy/azure/secrets/external-services.env
-sudo tar -xzf /opt/danzzan/deployment-backups/20261021-theme-model-key/sources-before.tgz \
-  -C /opt/danzzan/Danzzan-BE
+sudo tar -xzf "${BACKUP_20261021_THEME_MODEL_KEY_DIR}/sources-before.tgz" \
+  -C "${DEPLOY_ROOT}/Danzzan-BE"
 sudo docker compose --env-file deploy/azure/secrets/frontend-build.env \
   -f docker-compose.azure.yml \
-  -f /opt/danzzan/deployment-backups/20261021-theme-model-key/rollback.yml \
+  -f "${BACKUP_20261021_THEME_MODEL_KEY_DIR}/rollback.yml" \
   up -d --no-build --no-deps --force-recreate --wait --wait-timeout 180 app
 sudo docker exec danzzan-azure-frontend-1 nginx -t
 sudo docker exec danzzan-azure-frontend-1 nginx -s reload

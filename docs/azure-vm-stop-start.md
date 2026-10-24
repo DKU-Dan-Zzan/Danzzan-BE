@@ -1,6 +1,8 @@
 # Azure 시연 VM 중지·재시작 안내
 
-대상: `vm-danzzan-demo`, 리소스 그룹 `rg-danzzan-demo`.
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
+대상: `${VM_NAME}`, 리소스 그룹 `${AZURE_RESOURCE_GROUP}`.
 서비스 주소: **https://danzzan.koreacentral.cloudapp.azure.com**.
 
 이 문서는 VM 컴퓨팅 비용을 멈추면서 기존 주소·데이터·배포 이미지를 보존하는 절차다. VM이나 리소스 그룹을 삭제하는 절차가 아니다.
@@ -10,8 +12,8 @@
 | 리소스 | 처리 | 이유 |
 | --- | --- | --- |
 | VM | 사용하지 않을 때 할당 취소 | 컴퓨팅 과금 중지 |
-| `pip-danzzan-demo` | 유지 | 정적 IP `20.214.148.172`와 DNS label `danzzan` 보존 |
-| `disk-danzzan-demo-os` | 유지 | 배포 파일·설정·인증서·MySQL/Redis/Kafka 영구 볼륨 보존 |
+| `${PUBLIC_IP_NAME}` | 유지 | 정적 IP `${VM_PUBLIC_IP}`와 DNS label `danzzan` 보존 |
+| `${OS_DISK_NAME}` | 유지 | 배포 파일·설정·인증서·MySQL/Redis/Kafka 영구 볼륨 보존 |
 | `danzzandemo2026` | 유지 | 비공개 `images` Blob 보존 |
 | NIC·VNet·NSG·관리 ID | 유지 | 기존 접속·내부 네트워크·Blob 접근 권한 보존 |
 
@@ -22,10 +24,13 @@
 Azure Portal에서 해당 VM → **시작**을 누른다. CLI로 실행하려면 같은 구독에 로그인한 후 아래 명령을 사용한다. CLI가 끝나도 애플리케이션 준비 시간이 더 필요할 수 있다.
 
 ```bash
+: "${AZURE_RESOURCE_GROUP:?Set AZURE_RESOURCE_GROUP from the private operations guide}"
+: "${AZURE_SUBSCRIPTION_ID:?Set AZURE_SUBSCRIPTION_ID from the private operations guide}"
+: "${VM_NAME:?Set VM_NAME from the private operations guide}"
 az vm start \
-  --subscription 16b07b93-080f-4cd2-a347-227e45ac17a7 \
-  --resource-group rg-danzzan-demo \
-  --name vm-danzzan-demo
+  --subscription "${AZURE_SUBSCRIPTION_ID}" \
+  --resource-group "${AZURE_RESOURCE_GROUP}" \
+  --name "${VM_NAME}"
 ```
 
 Docker 서비스는 부팅 시 자동 시작하도록 설정되어 있다. frontend·app·mysql·redis·kafka는 `restart: unless-stopped`를 사용한다. 단발 초기화용 kafka-init의 종료 코드 0은 정상이다. 단, 컨테이너를 별도로 수동 중지해두면 `unless-stopped` 때문에 다음 부팅에서 자동 시작하지 않을 수 있으므로 이 절차에서는 컨테이너를 개별적으로 중지하지 않는다.
@@ -57,15 +62,18 @@ docker exec danzzan-azure-frontend-1 nginx -t
 작업자들이 사용을 마쳤는지 확인하고 VM을 할당 취소한다. 디스크·공인 IP·Blob은 유지한다.
 
 ```bash
+: "${AZURE_RESOURCE_GROUP:?Set AZURE_RESOURCE_GROUP from the private operations guide}"
+: "${AZURE_SUBSCRIPTION_ID:?Set AZURE_SUBSCRIPTION_ID from the private operations guide}"
+: "${VM_NAME:?Set VM_NAME from the private operations guide}"
 az vm deallocate \
-  --subscription 16b07b93-080f-4cd2-a347-227e45ac17a7 \
-  --resource-group rg-danzzan-demo \
-  --name vm-danzzan-demo
+  --subscription "${AZURE_SUBSCRIPTION_ID}" \
+  --resource-group "${AZURE_RESOURCE_GROUP}" \
+  --name "${VM_NAME}"
 
 az vm get-instance-view \
-  --subscription 16b07b93-080f-4cd2-a347-227e45ac17a7 \
-  --resource-group rg-danzzan-demo \
-  --name vm-danzzan-demo \
+  --subscription "${AZURE_SUBSCRIPTION_ID}" \
+  --resource-group "${AZURE_RESOURCE_GROUP}" \
+  --name "${VM_NAME}" \
   --query 'instanceView.statuses[].code' -o tsv
 ```
 
@@ -78,7 +86,7 @@ az vm get-instance-view \
 - VM에서 Docker enabled/active와 주요 5개 컨테이너의 자동 재시작 정책을 확인했다.
 - MySQL·Redis·Kafka 데이터 볼륨이 `/var/lib/docker/volumes/`에 있고 해당 파일시스템은 OS 영구 디스크 `/dev/sda1`임을 확인했다.
 - HTTPS 인증서 만료일은 2027-01-12로 확인했다.
-- 사전 백업: `/opt/danzzan/maintenance-backups/20261022-deallocate-restart/` (디렉터리 700, 파일은 root 전용). `databases.sql.gz`는 현재 DB와 이전 시연 DB의 일관된 덤프이며 gzip 무결성 검사를 통과했다. `config-private.tar.gz`에는 비공개 설정·인증서가 포함되어 있으므로 Git이나 공개 자료에 넣지 않는다.
+- 사전 백업: `${BACKUP_20261022_DEALLOCATE_RESTART_DIR}/` (디렉터리 700, 파일은 root 전용). `databases.sql.gz`는 현재 DB와 이전 시연 DB의 일관된 덤프이며 gzip 무결성 검사를 통과했다. `config-private.tar.gz`에는 비공개 설정·인증서가 포함되어 있으므로 Git이나 공개 자료에 넣지 않는다.
 - `containers.before.json`, `config-hashes.before.json`, `content-hash.before`는 복구 전후 비교용이다. 기존 DB·Blob 콘텐츠를 수정하거나 공개하지 않았다.
 
 ### 실제 할당 취소 후 재시작 시험 결과
@@ -87,7 +95,7 @@ az vm get-instance-view \
 - app·mysql·redis·kafka는 healthy, frontend는 running이었다. Nginx 설정 검사, Redis PONG, Kafka 기존 topic 목록 조회가 성공했다.
 - 주요 5개 컨테이너의 ID·실행 이미지·마운트·재시작 정책이 모두 기존과 동일했다. Compose·비공개 설정·인증서 해시도 그대로였다.
 - 기존 20개 콘텐츠 테이블의 정규화 데이터 해시가 재시작 전후 동일했다. 두 DB 백업을 복원할 필요는 없었다.
-- 고정 IP `20.214.148.172`, DNS `danzzan.koreacentral.cloudapp.azure.com` 유지 확인. 외부에서도 같은 주소의 `/api/health` 응답 `{"status":"ok"}`를 확인했다.
+- 고정 IP `${VM_PUBLIC_IP}`, DNS `danzzan.koreacentral.cloudapp.azure.com` 유지 확인. 외부에서도 같은 주소의 `/api/health` 응답 `{"status":"ok"}`를 확인했다.
 - HTTPS `/`, `/notice`, `/admin/login`, `/admin/theme`, `/ticket/signup`, `/api/health`, `/api/festival/settings`, `/api/home/1/images` 모두 200, API 응답 JSON 파싱 성공. 홈 이미지 API가 반환한 새 SAS URL로 비공개 Blob 이미지 1개의 실제 바이트를 읽는 데 성공했다. URL이나 SAS 서명은 기록하지 않았다.
 - 이번 검증은 자동 기동·조회·이미지 읽기까지다. 로그인 제출, 발권, SMS·유료 AI 생성, 관리자 저장은 실행하지 않았다. Kafka는 기존 topic 조회와 health를 확인했으며 신규 발권 메시지를 생성하지 않았다.
 - 기록 파일: 백업 디렉터리의 `restart-verification.json`, `content-hash.after`, `restart-verified`. 전체 DB 덤프·비공개 설정 백업은 VM 내부에만 보관했다.
@@ -95,6 +103,6 @@ az vm get-instance-view \
 
 ### 최종 상태
 
-2026-10-22 재시작 검증 후 다시 할당 취소했다. Azure에서 `ProvisioningState/succeeded`, **`PowerState/deallocated`**를 확인했다. 최종 중지 이후에도 공인 IP는 Static `20.214.148.172`, DNS는 `danzzan.koreacentral.cloudapp.azure.com`으로 유지됐다.
+2026-10-22 재시작 검증 후 다시 할당 취소했다. Azure에서 `ProvisioningState/succeeded`, **`PowerState/deallocated`**를 확인했다. 최종 중지 이후에도 공인 IP는 Static `${VM_PUBLIC_IP}`, DNS는 `danzzan.koreacentral.cloudapp.azure.com`으로 유지됐다.
 
 현재 사이트와 DB 접속 중단은 의도한 상태다. VM 컴퓨팅 과금은 멈추지만 보존한 디스크·공인 IP·Blob 요금은 남는다. 자동 시작 예약은 만들지 않았으므로 필요할 때 VM을 시작해야 한다. VM과 보존 리소스는 삭제하지 않았다. VM 전원 상태만 변경했으며 DNS·NSG·관리 ID 설정은 유지했다.

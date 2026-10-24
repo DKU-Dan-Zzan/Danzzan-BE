@@ -1,12 +1,14 @@
 # 졸업작품 Azure 이미지 저장소
 
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
 포털에서 직접 올린 이미지를 DB에 연결할 때는 **[이미지 종류별 폴더·테이블·컬럼·수동 교체 안내](azure-image-manual-mapping.md)**를 참고한다. DB 저장 경로, 파일명 검증, 조회·교체 SQL 예시를 정리했다.
 
 동료 계정에서 재현할 때는 **[Azure 준비·이미지 연동 인수인계](azure-demo-handoff.md)**부터 읽는다. 포털 단계별 설정, 테넌트·구독 분기, IAM, 로컬 인증, 검증·정리, 미실행 VM 계획을 포함한다. 이 문서는 코드 계약과 실제 검증 기록을 유지한다.
 
 ## 확정한 범위
 
-- 학생 구독의 `rg-danzzan-demo` / `danzzandemo2026` / 비공개 `images` 컨테이너를 사용한다.
+- 학생 구독의 `${AZURE_RESOURCE_GROUP}` / `danzzandemo2026` / 비공개 `images` 컨테이너를 사용한다.
 - 기존 NHN 파일은 이관하지 않고 새 시연 이미지부터 Azure에 올린다. 기존 DB·파일은 삭제하지 않는다.
 - 프론트의 multipart → BE 업로드 API와 JSON 이미지 필드 이름은 유지한다.
 - DB에는 `azure:images/<blob-key>`를 저장한다. 응답 직렬화 시 기본 300초 읽기 SAS를 발급한다.

@@ -1,5 +1,7 @@
 # Azure 시연 DB에 VS Code로 접속하기
 
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
 확인일: **2026-10-15 KST**. 대상은 Azure VM 안의 Docker MySQL이다. Azure Database for MySQL 관리형 서비스가 아니다. 아래 절차는 동료 PC에서 SSH 터널을 열고, VS Code의 MySQL 연결 기능으로 현재 서비스 DB에 접속하는 방법이다.
 
 ## 1. 접속 정보와 준비물
@@ -7,10 +9,10 @@
 | 항목 | 값 |
 | --- | --- |
 | SSH 서버 | `danzzan.koreacentral.cloudapp.azure.com` |
-| 현재 공인 IP | `20.214.148.172` |
+| 현재 공인 IP | `${VM_PUBLIC_IP}` |
 | SSH 포트 / 사용자 | `22` / `danzzan` |
 | SSH 인증 | 별도로 전달받은 개인 키 파일 |
-| VM 내부 MySQL 주소 | `172.18.0.3:3306` — 아래 재확인 방법 참고 |
+| VM 내부 MySQL 주소 | `${MYSQL_CONTAINER_IP}:3306` — 아래 재확인 방법 참고 |
 | 현재 서비스 DB | `danzzan_fall_demo` |
 | DB 사용자 | `danzzan` |
 | DB 비밀번호 | 운영자에게 별도 보안 채널로 전달받은 DB 비밀번호 |
@@ -39,7 +41,7 @@ ssh -i "/실제/경로/키파일" -o IdentitiesOnly=yes -o ConnectTimeout=10 dan
 처음 접속할 때 표시되는 서버 ED25519 키 지문은 다음과 비교한다. 일치하면 서버 등록을 진행한다. 다른 키 종류가 표시되거나 지문이 다르면 운영자에게 확인한다.
 
 ```text
-SHA256:/WoY9fAxsMBDUhccNsD+a7F5UcC7PPfNctkYKupxSeo
+${SSH_HOST_KEY_FINGERPRINT}
 ```
 
 접속에 성공하면 서버 터미널에서 `exit`로 나온다. 다음 터널 명령은 다시 **동료 PC의 로컬 터미널**에서 실행한다. VS Code Remote-SSH로 원격 창을 열 필요는 없다.
@@ -47,7 +49,8 @@ SHA256:/WoY9fAxsMBDUhccNsD+a7F5UcC7PPfNctkYKupxSeo
 ## 3. SSH 터널 열기
 
 ```bash
-ssh -N -i "/실제/경로/키파일" -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:13306:172.18.0.3:3306 danzzan@danzzan.koreacentral.cloudapp.azure.com
+: "${MYSQL_CONTAINER_IP:?Set MYSQL_CONTAINER_IP from the private operations guide}"
+ssh -N -i "/실제/경로/키파일" -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L "127.0.0.1:13306:${MYSQL_CONTAINER_IP}:3306" danzzan@danzzan.koreacentral.cloudapp.azure.com
 ```
 
 연결 후 화면에 아무 출력 없이 계속 실행되는 것이 정상이다. 터미널을 열어 둔 채 DB에 접속한다. `Ctrl+C` 또는 터미널 종료로 터널을 닫으면 DB 연결도 끊긴다.
@@ -56,7 +59,7 @@ ssh -N -i "/실제/경로/키파일" -o IdentitiesOnly=yes -o ExitOnForwardFailu
 VS Code MySQL 연결
   → 동료 PC 127.0.0.1:13306
   → SSH 암호화 터널 (Azure VM TCP 22)
-  → VM 내부 MySQL 172.18.0.3:3306
+  → VM 내부 MySQL ${MYSQL_CONTAINER_IP}:3306
 ```
 
 `127.0.0.1`에만 바인딩하므로 동료 PC의 다른 네트워크 장치에 포워딩 포트를 공개하지 않는다. Azure NSG나 Docker에 DB 3306 공개 설정을 추가할 필요가 없다.
@@ -105,12 +108,12 @@ Docker 컨테이너 IP는 재생성 시 바뀔 수 있다. 운영자는 VM에서
 sudo docker inspect --format '{{.Name}} {{.State.Status}} {{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}} {{json .NetworkSettings.Ports}}' danzzan-azure-mysql-1
 ```
 
-2026-10-15 결과는 `running`, `172.18.0.3`, `3306/tcp: null`이었다. `null`은 호스트에 포트가 게시되지 않았다는 뜻이며, VM에서 컨테이너 IP로 접근하는 터널 방식에서는 정상이다. IP가 바뀌면 터널 명령의 `172.18.0.3` 부분만 실제 값으로 바꾼다.
+2026-10-15 결과는 `running`, `${MYSQL_CONTAINER_IP}`, `3306/tcp: null`이었다. `null`은 호스트에 포트가 게시되지 않았다는 뜻이며, VM에서 컨테이너 IP로 접근하는 터널 방식에서는 정상이다. IP가 바뀌면 터널 명령의 `${MYSQL_CONTAINER_IP}` 부분만 실제 값으로 바꾼다.
 
 ## 6. 이번 접속 허용과 검증 범위
 
-- NSG `nsg-danzzan-demo`에 `Allow-SSH-Teammate`, 우선순위 `120`, Inbound Allow TCP, 출발지 `61.254.29.153/32`, 목적지 포트 `22`를 추가했다.
-- 기존 `Allow-Web`(100, Internet → TCP 80/443), `Allow-SSH-Operator`(110, `61.254.29.164/32` → TCP 22)는 설정을 보존했다. Azure가 갱신한 `etag` 메타데이터 외 변경이 없음을 비교했다.
+- NSG `${NSG_NAME}`에 `Allow-SSH-Teammate`, 우선순위 `120`, Inbound Allow TCP, 출발지 `${TEAMMATE_PUBLIC_IP}/32`, 목적지 포트 `22`를 추가했다.
+- 기존 `Allow-Web`(100, Internet → TCP 80/443), `Allow-SSH-Operator`(110, `${OPERATOR_PUBLIC_IP}/32` → TCP 22)는 설정을 보존했다. Azure가 갱신한 `etag` 메타데이터 외 변경이 없음을 비교했다.
 - NIC의 실제 적용 규칙에도 동료 허용 규칙이 나타남을 확인했다. DB 3306은 공개하지 않았다.
 - 운영자 SSH 접속, 현재 앱 DB URL·사용자, MySQL 컨테이너 실행 상태와 VM 내부 TCP 연결을 확인했다. 비밀번호와 개인 키는 출력하지 않았다.
 - **동료 PC의 실제 SSH 키 인증 및 VS Code DB 로그인은 아직 확인 전이다.** 위 절차로 동료가 접속한 결과를 확인해야 한다.

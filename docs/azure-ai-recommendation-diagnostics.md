@@ -1,5 +1,7 @@
 # Azure AI 추천 진단 (2026-10-14)
 
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
 ## 증상과 확인 결과
 
 관리자 테마 화면에서 색상 추천과 두 배경 추천이 HTTP 504로 실패했다. 백엔드 OpenAI 요청 제한은 45초, 브라우저는 60초, Nginx는 75초였다. 같은 VM의 별도 Java 요청은 성공했지만, 실행 중인 애플리케이션의 실패 원인을 설명할 로그가 없었다.
@@ -42,7 +44,7 @@ sudo docker logs --since 10m danzzan-azure-app-1 2>&1 | grep 'AI recommendation'
 - MySQL·Redis·Kafka 컨테이너 ID가 유지됐고, 새 배포 직전과 실제 화면 검증 후의 콘텐츠·이미지 참조·설정·테마 20개 테이블 해시가 일치했다. Blob 쓰기·삭제나 DB 변경은 수행하지 않았다.
 - 최초 보호 검사에서는 준비 이후 별도로 실행된 홈 이미지 추가·순서 변경 요청 때문에 해시가 달랐다. 백엔드 이미지만 자동 롤백했으며 DB를 되돌리지 않았다. 최신 저장 상태를 기준으로 재배포한 이후 비교는 일치했다.
 - 비밀값 노출 방지 회귀 테스트를 포함해 `ThemeRecommendationTest` 23건, `OpenAiPosterFocusClientTest` 4건이 통과했다. Docker 빌드, app health, 공개 HTTPS `/api/health`, `git diff --check`도 통과했다.
-- 복구 경로: `/opt/danzzan/deployment-backups/20261014-ai-diagnostics`. 이전 소스는 `sources-before.tar.gz`, 이전 이미지 태그는 `danzzan-be:rollback-20261014-ai-diagnostics`다. 스키마 변경이 없으므로 애플리케이션 롤백에 DB 복원은 필요 없다.
+- 복구 경로: `${BACKUP_20261014_AI_DIAGNOSTICS_DIR}`. 이전 소스는 `sources-before.tar.gz`, 이전 이미지 태그는 `danzzan-be:rollback-20261014-ai-diagnostics`다. 스키마 변경이 없으므로 애플리케이션 롤백에 DB 복원은 필요 없다.
 
 재발하면 먼저 발생 시각과 위 로그의 호출 UUID/시간/상태를 확인한다. 원인 증거 없이 타임아웃 연장이나 자동 유료 재시도를 추가하지 않는다.
 

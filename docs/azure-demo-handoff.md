@@ -1,5 +1,7 @@
 # 단짠 Azure 준비·이미지 연동 인수인계
 
+> 공개 문서의 `${...}`는 실제 값 대신 사용하는 변수입니다. 실행 전 [비공개 운영 값 사용 안내](azure-operations-values.md)를 읽고 본인 환경의 값을 설정하세요.
+
 기준일: **2026-10-14, 한국 시간**. 현재까지 실제 수행한 작업과 동료 계정에서 재현할 절차를 정리한다. VM·네트워크·관리 ID, 새 DB 기반 앱 배포와 HTTPS 설정까지 진행했다. 이 문서는 리소스 생성이나 권한 변경을 자동 실행하지 않는다.
 
 ## 1. 현재 어디까지 완료했는가
@@ -7,7 +9,7 @@
 | 항목 | 확인된 상태 | 근거·주의점 |
 | --- | --- | --- |
 | 학생 구독 | Azure for Students 사용 | 잔액은 사용자가 `US$136,475/US$136,475`, 만료일은 2027-10-12로 전달. 금액의 쉼표 의미는 확정하지 않음 |
-| 리소스 그룹 | `rg-danzzan-demo`, Korea Central | 10-13 CLI 재조회 |
+| 리소스 그룹 | `${AZURE_RESOURCE_GROUP}`, Korea Central | 10-13 CLI 재조회 |
 | 스토리지 계정 | `danzzandemo2026`, Korea Central | StorageV2 / Standard_LRS / Hot |
 | 이미지 컨테이너 | `images`, 비공개 | CLI의 `publicAccess: null` 및 계정 익명 접근 비활성 확인 |
 | 계정 키·익명 공개 | 둘 다 비활성 | Entra ID + 사용자 위임 SAS 사용 |
@@ -54,8 +56,8 @@ VM 관리 ID의 교차 디렉터리 사용은 지원되지 않는다. 외부 사
 
 | 저장소 | 현재 로컬 경로 | 작업 브랜치·티켓 |
 | --- | --- | --- |
-| BE | `/Users/juhee/CAPSTONE_ROOT_DIR/GITHUB_REPO/Danzzan-BE` | `DANZ-372-be-azure배포용-이미지저장소-blob-storage전환` / DANZ-372 |
-| FE | `/Users/juhee/CAPSTONE_ROOT_DIR/GITHUB_REPO/Danzzan-FE` | `DANZ-373-fe-azure-blob-storage-전환에-따른-이미지-업로드-연동-수정` / DANZ-373 |
+| BE | `${LOCAL_REPO_ROOT}/Danzzan-BE` | `DANZ-372-be-azure배포용-이미지저장소-blob-storage전환` / DANZ-372 |
+| FE | `${LOCAL_REPO_ROOT}/Danzzan-FE` | `DANZ-373-fe-azure-blob-storage-전환에-따른-이미지-업로드-연동-수정` / DANZ-373 |
 
 저장소: [BE](https://github.com/DKU-Dan-Zzan/Danzzan-BE), [FE](https://github.com/DKU-Dan-Zzan/Danzzan-FE).
 
@@ -87,7 +89,7 @@ VM 관리 ID의 교차 디렉터리 사용은 지원되지 않는다. 외부 사
 | 항목 | 선택값 | 의미 |
 | --- | --- | --- |
 | 구독 | 본인이 사용할 Azure for Students | 비용·크레딧이 차감되는 구독 |
-| 리소스 그룹 | 기존 그룹 또는 새 `rg-danzzan-demo` | 관련 리소스를 묶는 관리 단위. 그룹의 지역과 각 리소스 지역은 별도 확인 |
+| 리소스 그룹 | 기존 그룹 또는 새 `${AZURE_RESOURCE_GROUP}` | 관련 리소스를 묶는 관리 단위. 그룹의 지역과 각 리소스 지역은 별도 확인 |
 | 계정 이름 | 현재 `danzzandemo2026`; 동료는 새 고유 이름 | 전역 고유, 소문자·숫자 3~24자. 현재 이름을 다시 만들 수 없음 |
 | 지역 | Korea Central | 현재 선택 지역. 동료 구독의 사용 가능 지역은 다시 확인 |
 | 기본 서비스 | Azure Blob Storage 또는 Azure Data Lake Storage | 이미지 파일 저장에 사용할 서비스 |
